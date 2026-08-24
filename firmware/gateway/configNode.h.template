@@ -1,0 +1,110 @@
+// ============================================================================
+// configNode.h.template
+// ============================================================================
+// Copie este arquivo para configNode.h e preencha com suas configurações.
+// NÃO compartilhe o configNode.h original — ele contém credenciais reais.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// 1. MODO GATEWAY COMO NÓ SENSOR (opcional)
+//    Descomente _GATEWAYNODE se quiser que o gateway também transmita dados.
+// ----------------------------------------------------------------------------
+//#define _GATEWAYNODE 1
+#if _GATEWAYNODE==1
+#	define _LCODE 1
+#	define _CHECK_MIC 1
+#	define _SENSOR_INTERVAL 300               // Intervalo entre transmissões (s)
+
+#	define _DEVADDR  { 0x00, 0x00, 0x00, 0x00 }
+#	define _APPSKEY { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+#	define _NWKSKEY { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+
+#	define _GPS 1
+#	define _BATTERY 1
+#endif
+
+// ----------------------------------------------------------------------------
+// 2. LISTA DE NÓS CONHECIDOS (opcional)
+//    Usado para exibir nomes amigáveis no servidor web do gateway.
+//    Aumente _TRUSTED_NODES conforme necessário.
+// ----------------------------------------------------------------------------
+#if _TRUSTED_NODES >= 1
+struct nodex {
+	uint32_t id;
+	char nm[32];
+};
+
+nodex nodes[] = {
+	{ 0x260417AD , "sensor-quarto" },
+	{ 0x260417AE , "sensor-quintal" },
+	// Adicione mais nós conforme necessário
+};
+#endif
+
+// ----------------------------------------------------------------------------
+// 3. DECODIFICAÇÃO LOCAL (opcional)
+//    Permite decodificar pacotes diretamente no gateway (útil para debug).
+//    Requer _LOCALSERVER ativado em configGway.h
+// ----------------------------------------------------------------------------
+#if _LOCALSERVER>=1
+struct codex {
+	uint32_t id;
+	unsigned char nm[32];
+	uint8_t nwkKey[16];
+	uint8_t appKey[16];
+};
+
+codex decodes[] = {
+	{	0x260417AD , "sensor-quarto",
+		{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 },
+		{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+	},
+};
+#endif
+
+// ----------------------------------------------------------------------------
+// 4. REDES WI-FI (OBRIGATÓRIO)
+//    Adicione ao menos uma rede para o gateway se conectar.
+// ----------------------------------------------------------------------------
+struct wpas {
+	char login[32];
+	char passw[64];
+};
+
+wpas wpa[] = {
+	{ "MINHA_REDE_SSID" , "MINHA_SENHA" },
+	// { "REDE_VISITANTE_SSID" , "SENHA_VISITANTE" },
+};
+
+// ----------------------------------------------------------------------------
+// 5. SERVIDOR SECUNDÁRIO (opcional)
+//    Descomente se usar um backend alternativo (ex.: loriot.io).
+// ----------------------------------------------------------------------------
+//#define _THINGSERVER "meu.servidor.com"
+//#define _THINGPORT 1700
+
+// ----------------------------------------------------------------------------
+// 6. ACCESS POINT (opcional)
+//    Nome e senha do AP do WiFiManager para configuração inicial.
+// ----------------------------------------------------------------------------
+//#define AP_NAME "MeuGateway"
+//#define AP_PASSWD "senha_ap"
+
+// ----------------------------------------------------------------------------
+// 7. IDENTIFICAÇÃO DO GATEWAY
+// ----------------------------------------------------------------------------
+#define _DESCRIPTION "Meu-Gateway-LoRa"
+#define _EMAIL "meu@email.com"
+#define _PLATFORM "ESP32"
+#define _LAT -22.820923
+#define _LON -47.066795
+#define _ALT 625
+
+// ----------------------------------------------------------------------------
+// 8. ASSERT (não altere)
+// ----------------------------------------------------------------------------
+#if !defined(CFG_noassert)
+#define ASSERT(cond) if(!(cond)) gway_failed(__FILE__, __LINE__)
+#else
+#define ASSERT(cond) /**/
+#endif

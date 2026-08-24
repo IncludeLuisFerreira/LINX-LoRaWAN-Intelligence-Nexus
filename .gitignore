@@ -1,0 +1,55 @@
+# === Credenciais e Segredos ===
+configNode.h
+*.key
+*.pem
+*.cert
+*.crt
+.env
+.env.local
+.env.*.local
+# Chaves OTAA do End Device (NAO versionar)
+nvs_secrets.h
+
+# === Build / Compilação ===
+node_modules/
+*.o
+*.a
+*.elf
+*.bin
+*.hex
+*.eep
+*.map
+*.out
+.pio/
+.pioenvs/
+.piolibdeps/
+build/
+dist/
+out/
+__pycache__/
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# === Sistema Operacional ===
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# === Docker (volumes locais) ===
+postgresqldata/
+redisdata/
+data/
+lorawan-devices/
+
+# === Logs ===
+*.log
+
+# === Temporários ===
+tmp/
+temp/
