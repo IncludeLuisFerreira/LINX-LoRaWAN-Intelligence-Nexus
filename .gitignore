@@ -53,3 +53,5 @@ lorawan-devices/
 # === Temporários ===
 tmp/
 temp/
+
+firmware/
