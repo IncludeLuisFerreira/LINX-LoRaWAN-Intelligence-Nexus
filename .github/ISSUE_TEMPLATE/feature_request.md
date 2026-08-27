@@ -1,16 +1,16 @@
 ---
-name: Feature request
-about: Sugira uma ideia para este projeto
-title: '[FEATURE] '
+name: feature
+about: Tarefa a ser implementada
+title: '[nome_feature] '
 labels: enhancement
 assignees: ''
 ---
 
 **Motivação**
-Descreva o problema que você está tentando resolver.
+Descreva a task e como ela impacta o sistema no geral
 
 **Solução desejada**
-Descreva de forma clara e objetiva o que você gostaria que fosse implementado.
+Descreva a task que deverá ser desenvolvida, métodos e ferramentas.
 
 **Alternativas consideradas**
 Descreva alternativas que você já considerou.

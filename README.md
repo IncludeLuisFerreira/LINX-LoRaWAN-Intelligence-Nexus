@@ -17,7 +17,7 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 - `client_agent_api/` — Middleware de segurança e roteamento: valida JWT e direciona requisições ao contêiner isolado correto.
 - `tenant_app_template/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
 - `frontend/` — Dashboard React consumindo dados via `client_agent_api` e WebSocket.
-- `infrastructure/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
+- `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
 
 > Documentação completa do produto: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md)
 
@@ -31,7 +31,7 @@ LINX/
 ├── client_agent_api/       # Middleware: autenticação JWT + roteamento multi-tenant
 ├── tenant_app_template/    # Template do Docker Cliente (motor de regras + TimescaleDB)
 ├── frontend/               # Dashboard web (React + Vite + TailwindCSS)
-├── infrastructure/         # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
+├── infra/                  # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
 │   ├── docker-compose.yml
 │   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
 ├── docs/
@@ -56,7 +56,12 @@ O ChirpStack é a base de toda a infraestrutura LoRaWAN. Siga estes passos para 
 ### 1. Subir os serviços
 
 ```bash
-cd infrastructure
+make up
+```
+ou
+
+```bash
+cd infra
 docker compose up -d
 ```
 
