@@ -1,6 +1,6 @@
 # O .PHONY avisa ao Make que essas palavras são nomes de comandos, e não nomes de arquivos físicos na pasta.
 # Isso evita conflitos caso você crie um arquivo chamado "build" ou "logs" no futuro.
-.PHONY: up down logs build stop-all
+.PHONY: up down logs build stop-all progress
 
 # COMANDO PARA PARAR TODOS OS CONTAINERS E SUBIR O NOVO
 # O "up: stop-all" diz que o comando "stop-all" deve rodar ANTES do "up".
@@ -32,3 +32,8 @@ stop-all:
 	# | (pipe): pega o resultado do comando anterior e passa para o próximo.
 	# xargs -r: pega os IDs e joga para o "docker stop". O "-r" diz para não fazer nada se a lista estiver vazia.
 	docker ps -q | xargs -r docker stop
+
+# COMANDO PARA ATUALIZAR O PROGRESS.MD COM O ESTADO ATUAL DAS ISSUES
+# Rode após fechar/abrir issues para refletir o progresso (checkboxes [x]/[ ]).
+progress:
+	python3 scripts/update_progress.py
