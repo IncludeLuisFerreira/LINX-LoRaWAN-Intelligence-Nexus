@@ -27,6 +27,7 @@ build/
 dist/
 out/
 __pycache__/
+.venv/
 
 # === IDE / Editor ===
 .vscode/
