@@ -9,7 +9,8 @@ requires-python = ">=3.12,<4.0"
 dependencies = [
     "fastapi (>=0.141.1,<0.142.0)",
     "uvicorn[standard] (>=0.52.4,<0.53.0)",
-    "pydantic-settings (>=2.15.0,<3.0.0)"
+    "pydantic-settings (>=2.15.0,<3.0.0)",
+    "jinja2 (>=3.1.6,<4.0.0)"
 ]
 
 
@@ -44,4 +45,5 @@ line_length = 79
 [tool.taskipy.tasks]
 lint-check = "black --check --diff . && isort --check --diff ."
 lint = "black . && isort ."
-test = "pytest -s -x --cov=src -vv && coverage html  "
+mypy = "mypy . "
+test = "pytest -s -x --cov=src -vv && coverage html && coverage report -m"

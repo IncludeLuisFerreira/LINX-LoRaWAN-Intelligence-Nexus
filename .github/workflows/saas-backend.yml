@@ -1,0 +1,78 @@
+name: SaaS Backend CI
+
+on:
+  pull_request:
+    paths:
+      - "saas_backend/**"
+      - ".github/workflows/saas-backend.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "saas_backend/**"
+      - ".github/workflows/saas-backend.yml"
+
+env:
+  PYTHON_VERSION: "3.13"
+  POETRY_VERSION: "2.4.1"
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: saas_backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Black (format check)
+        run: poetry run black --check src tests
+
+      - name: isort (import order check)
+        run: poetry run isort --check-only src tests
+
+      - name: Flake8 (lint)
+        run: poetry run flake8 src tests
+
+      - name: Mypy (type check)
+        run: poetry run mypy src tests
+
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: saas_backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Pytest (cobertura >= 70%)
+        run: poetry run pytest --cov=src --cov-report=term-missing --cov-fail-under=70

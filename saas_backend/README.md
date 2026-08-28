@@ -10,7 +10,18 @@ Backend do SaaS desenvolvido em Python utilizando FastAPI, com gerenciamento de 
 * [x] Configuração do ambiente de testes.
 * [x] Configuração de coverage de testes.
 * [x] Configuração do Isort.
-* [ ] Inicio da API -> **Próximos passos**
+* [x] Início da API FastAPI (`linx.main:app`).
+* [x] Endpoint de health check (`/health`).
+* [x] Página inicial servida via Jinja2 + arquivos estáticos (`/`).
+
+## 📍 Endpoints disponíveis
+
+| Método | Rota      | Descrição                                  |
+| ------ | --------- | ------------------------------------------ |
+| GET    | `/`       | Página inicial "Em Construção" (HTML).     |
+| GET    | `/health` | Health check retornando `{"status": "ok"}`. |
+| GET    | `/docs`   | Documentação interativa (Swagger UI).      |
+| GET    | `/redoc`  | Documentação alternativa (ReDoc).          |
 
 ## ⚙️ Instalação
 
@@ -49,7 +60,7 @@ pytest
 Para testar um endpoint diretamente pelo terminal:
 
 ```bash
-curl http://localhost:8000/<endpoint>
+curl http://localhost:8000/health
 ```
 
 ## 🛠️ Dependências de desenvolvimento
@@ -69,6 +80,10 @@ Linter para Python que realiza análise estática do código, identificando prob
 ### Mypy
 
 Verificador estático de tipos para Python. Analisa as anotações de tipo (*type hints*) para identificar possíveis erros de compatibilidade e problemas de lógica antes da execução do código.
+
+### httpx2
+
+Client HTTP de próxima geração, utilizado pelo `TestClient` do FastAPI/Starlette para os testes de endpoints. Este projeto usa `httpx2` (sucessor do `httpx`), que é a dependência exigida pela versão atual do Starlette para o módulo `starlette.testclient`.
 
 ### Taskipy
 
