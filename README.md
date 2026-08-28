@@ -32,7 +32,8 @@ LINX/
 ├── tenant_app_template/    # Template do Docker Cliente (motor de regras + TimescaleDB)
 ├── frontend/               # Dashboard web (React + Vite + TailwindCSS)
 ├── infra/                  # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml         # Stack completa ChirpStack v4
+│   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
 │   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
 ├── docs/
 │   ├── estrutura_de_pastas/
