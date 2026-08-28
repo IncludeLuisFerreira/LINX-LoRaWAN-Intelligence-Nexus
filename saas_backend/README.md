@@ -1,17 +1,76 @@
-# Documentação do SaaS Backend
+# SaaS Backend
 
+Backend do SaaS desenvolvido em Python utilizando FastAPI, com gerenciamento de dependências através do Poetry e ferramentas de qualidade e testes.
 
+## 📋 O que foi feito
 
-## O que foi feito
+* [x] Instalação do Poetry.
+* [x] Instalação das dependências Python.
+* [x] Configuração das ferramentas de qualidade de código.
+* [x] Configuração do ambiente de testes.
+* [x] Configuração de coverage de testes.
+* [x] Configuração do Isort.
+* [ ] Inicio da API -> **Próximos passos**
 
-[X] Instalado poetry e as dependências de bibliotecas python
+## ⚙️ Instalação
 
+Instale as dependências:
 
-## Comandos úteis
+```bash
+poetry install
+```
 
+## ▶️ Executando o projeto
 
-### Poetry 
+Para iniciar o servidor FastAPI utilizando o Uvicorn:
 
-poetry install -> instala e atualiza os pacotes
-poetry run uvicorn linx.main:app --reload  -> execução do fastapi pelo uvicorn
-curl url/endpoint -> comando para teste no terminal do endpoint
+```bash
+poetry run uvicorn linx.main:app --reload
+```
+
+O parâmetro `--reload` habilita o recarregamento automático do servidor durante o desenvolvimento.
+
+## 🧪 Testes
+
+Para executar os testes:
+
+```bash
+task test
+```
+
+Também é possível executar o Pytest diretamente:
+
+```bash
+pytest
+```
+
+### Testando endpoints
+
+Para testar um endpoint diretamente pelo terminal:
+
+```bash
+curl http://localhost:8000/<endpoint>
+```
+
+## 🛠️ Dependências de desenvolvimento
+
+### Pytest
+
+Framework para testes automatizados em Python. Permite escrever e executar testes unitários e de integração de forma simples e escalável.
+
+### Black
+
+Formatador automático de código Python (*uncompromising code formatter*). Aplica regras consistentes de formatação ao código.
+
+### Flake8
+
+Linter para Python que realiza análise estática do código, identificando problemas como erros de sintaxe, variáveis não utilizadas e violações das convenções da PEP 8.
+
+### Mypy
+
+Verificador estático de tipos para Python. Analisa as anotações de tipo (*type hints*) para identificar possíveis erros de compatibilidade e problemas de lógica antes da execução do código.
+
+### Taskipy
+
+Task runner para Python que permite criar atalhos para comandos utilizados frequentemente no projeto.
+
