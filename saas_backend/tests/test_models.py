@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from linx.models import Application, Base, Tenant, TenantUser, User
@@ -32,3 +35,31 @@ def test_application_tenant_foreign_key():
 def test_tenant_application_relationship():
     assert Tenant.applications.property.mapper.class_ is Application
     assert Application.tenant.property.mapper.class_ is Tenant
+
+
+def test_tenant_user_relationships():
+    assert TenantUser.tenant.property.mapper.class_ is Tenant
+    assert TenantUser.user.property.mapper.class_ is User
+    assert Tenant.tenant_users.property.mapper.class_ is TenantUser
+    assert User.tenant_users.property.mapper.class_ is TenantUser
+
+
+def test_db_base_reexports_base_and_session():
+    from linx.db.base import Base as DBBase
+    from linx.db.base import SessionLocal, engine
+
+    assert DBBase is Base
+    assert engine is not None
+    assert SessionLocal is not None
+
+
+def test_db_base_import_registers_models():
+    code = "from linx.db.base import Base; print(sorted(Base.metadata.tables))"
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    expected = "['application', 'tenant', 'tenant_user', 'user']"
+    assert result.stdout.strip() == expected

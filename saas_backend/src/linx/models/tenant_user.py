@@ -1,11 +1,16 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from linx.db.base import Base
+from linx.db.base_class import Base
+
+if TYPE_CHECKING:
+    from linx.models.tenant import Tenant
+    from linx.models.user import User
 
 
 class TenantUser(Base):
@@ -52,3 +57,7 @@ class TenantUser(Base):
         default=False,
         nullable=False,
     )
+
+    tenant: Mapped["Tenant"] = relationship(back_populates="tenant_users")
+
+    user: Mapped["User"] = relationship(back_populates="tenant_users")

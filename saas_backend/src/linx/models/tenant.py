@@ -6,10 +6,11 @@ from sqlalchemy import BigInteger, Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from linx.db.base import Base
+from linx.db.base_class import Base
 
 if TYPE_CHECKING:
     from linx.models.application import Application
+    from linx.models.tenant_user import TenantUser
 
 
 class Tenant(Base):
@@ -81,6 +82,11 @@ class Tenant(Base):
     )
 
     applications: Mapped[list["Application"]] = relationship(
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+    )
+
+    tenant_users: Mapped[list["TenantUser"]] = relationship(
         back_populates="tenant",
         cascade="all, delete-orphan",
     )
