@@ -15,6 +15,8 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 * [x] Página inicial servida via Jinja2 + arquivos estáticos (`/`).
 * [x] Configuração do SQLAlchemy 2.0 + Psycopg (PostgreSQL).
 * [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`.
+* [x] Configuração centralizada via `pydantic-settings` (`core/config.py`).
+* [x] Alembic configurado com migration inicial das 4 tabelas.
 
 ## 📍 Endpoints disponíveis
 
@@ -82,6 +84,24 @@ Saída esperada:
 
 ```text
 dict_keys(['application', 'tenant', 'tenant_user', 'user'])
+```
+
+### Migrações (Alembic)
+
+O schema é versionado com **Alembic**. A URL do banco é resolvida por `Settings` (`DATABASE_URL` ou default local).
+
+| Comando                                  | Descrição                                  |
+| ---------------------------------------- | ------------------------------------------ |
+| `poetry run alembic upgrade head`        | Aplica todas as migrações pendentes.       |
+| `poetry run alembic downgrade -1`        | Reverte a última migração.                 |
+| `poetry run alembic current`             | Mostra a revisão aplicada.                 |
+| `poetry run alembic revision --autogenerate -m "<msg>"` | Gera nova migração a partir dos models. |
+
+Para aplicar localmente (exige o Postgres de `infra/docker-compose.base.yml`):
+
+```bash
+docker compose -f infra/docker-compose.base.yml up -d postgres
+poetry run alembic upgrade head
 ```
 
 ## 🧪 Testes
