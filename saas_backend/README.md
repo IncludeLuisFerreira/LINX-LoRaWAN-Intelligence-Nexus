@@ -13,6 +13,8 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 * [x] Início da API FastAPI (`linx.main:app`).
 * [x] Endpoint de health check (`/health`).
 * [x] Página inicial servida via Jinja2 + arquivos estáticos (`/`).
+* [x] Configuração do SQLAlchemy 2.0 + Psycopg (PostgreSQL).
+* [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`.
 
 ## 📍 Endpoints disponíveis
 
@@ -40,6 +42,47 @@ poetry run uvicorn linx.main:app --reload
 ```
 
 O parâmetro `--reload` habilita o recarregamento automático do servidor durante o desenvolvimento.
+
+## 🗄️ Banco de Dados
+
+O projeto utiliza **SQLAlchemy 2.0** (estilo declarativo com `Mapped`/`mapped_column`) e **Psycopg 3** para o PostgreSQL.
+
+### Estrutura
+
+| Arquivo                          | Responsabilidade                                                    |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `src/linx/db/base_class.py`      | Declara `Base = declarative_base()`.                                |
+| `src/linx/db/base.py`            | Engine, `SessionLocal` e registro dos models em `Base.metadata`.    |
+| `src/linx/models/`               | Definição dos models (`tenant`, `application`, `user`, `tenant_user`). |
+
+A `DATABASE_URL` está configurada em `src/linx/db/base.py` (padrão: `postgresql+psycopg://linx:linx@localhost:5432/linx`).
+
+### Models
+
+Os nomes de entidade seguem o schema do **ChirpStack v4** para facilitar a integração.
+
+| Model         | Tabela        | Descrição                                                                     |
+| ------------- | ------------- | ----------------------------------------------------------------------------- |
+| `Tenant`      | `tenant`      | Organização (tenant), com limites de gateways/dispositivos e `tags` (JSONB).  |
+| `Application` | `application` | Aplicação pertencente a um tenant (`tenant_id` FK → `tenant.id`).             |
+| `User`        | `user`        | Usuário global (`email` único, `password_hash`, flags de admin/ativo).        |
+| `TenantUser`  | `tenant_user` | Vínculo/papel de um usuário em um tenant (PK composta + flags de RBAC).       |
+
+- Todos os `id` usam `UUID` (v4) como chave primária (RF-040).
+- `TenantUser` usa PK composta (`tenant_id`, `user_id`), fiel ao ChirpStack.
+- Relacionamentos ORM: `Tenant.applications` ↔ `Application.tenant` e `Tenant.tenant_users` ↔ `TenantUser` ↔ `User.tenant_users`.
+
+### Verificando os models
+
+```bash
+poetry run python -c "from linx.db.base import Base; print(Base.metadata.tables.keys())"
+```
+
+Saída esperada:
+
+```text
+dict_keys(['application', 'tenant', 'tenant_user', 'user'])
+```
 
 ## 🧪 Testes
 
