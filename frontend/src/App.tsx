@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useState } from 'react';
+import heroImg from './assets/hero.png';
+import reactLogo from './assets/react.svg';
+import viteLogo from './assets/vite.svg';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(0);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 space-y-12">
@@ -16,9 +16,21 @@ function App() {
       {/* Hero Section */}
       <section className="flex flex-col items-center text-center max-w-lg space-y-6">
         <div className="relative flex items-center justify-center">
-          <img src={heroImg} className="w-36 h-auto opacity-80" alt="Hero background" />
-          <img src={reactLogo} className="w-12 h-12 absolute -left-6 animate-spin-slow" alt="React logo" />
-          <img src={viteLogo} className="w-12 h-12 absolute -right-6" alt="Vite logo" />
+          <img
+            src={heroImg}
+            className="w-36 h-auto opacity-80"
+            alt="Hero background"
+          />
+          <img
+            src={reactLogo}
+            className="w-12 h-12 absolute -left-6 animate-spin-slow"
+            alt="React logo"
+          />
+          <img
+            src={viteLogo}
+            className="w-12 h-12 absolute -right-6"
+            alt="Vite logo"
+          />
         </div>
 
         <div>
@@ -26,7 +38,14 @@ function App() {
             Get started
           </h1>
           <p className="mt-2 text-slate-400">
-            Edit <code className="bg-slate-800 px-2 py-1 rounded text-purple-300 font-mono text-sm">src/App.tsx</code> and save to test <code className="bg-slate-800 px-2 py-1 rounded text-purple-300 font-mono text-sm">HMR</code>
+            Edit{' '}
+            <code className="bg-slate-800 px-2 py-1 rounded text-purple-300 font-mono text-sm">
+              src/App.tsx
+            </code>{' '}
+            and save to test{' '}
+            <code className="bg-slate-800 px-2 py-1 rounded text-purple-300 font-mono text-sm">
+              HMR
+            </code>
           </p>
         </div>
 
@@ -48,7 +67,9 @@ function App() {
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 flex flex-col justify-between">
           <div>
             <h2 className="text-xl font-bold text-slate-200">Documentation</h2>
-            <p className="text-sm text-slate-400 mt-1 mb-4">Your questions, answered</p>
+            <p className="text-sm text-slate-400 mt-1 mb-4">
+              Your questions, answered
+            </p>
           </div>
           <ul className="space-y-2">
             <li>
@@ -79,27 +100,51 @@ function App() {
         {/* Redes Sociais */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6 flex flex-col justify-between">
           <div>
-            <h2 className="text-xl font-bold text-slate-200">Connect with us</h2>
-            <p className="text-sm text-slate-400 mt-1 mb-4">Join the Vite community</p>
+            <h2 className="text-xl font-bold text-slate-200">
+              Connect with us
+            </h2>
+            <p className="text-sm text-slate-400 mt-1 mb-4">
+              Join the Vite community
+            </p>
           </div>
           <ul className="grid grid-cols-2 gap-2 text-sm">
             <li>
-              <a href="https://github.com/vitejs/vite" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-purple-400 transition">
+              <a
+                href="https://github.com/vitejs/vite"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-300 hover:text-purple-400 transition"
+              >
                 GitHub
               </a>
             </li>
             <li>
-              <a href="https://chat.vite.dev/" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-purple-400 transition">
+              <a
+                href="https://chat.vite.dev/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-300 hover:text-purple-400 transition"
+              >
                 Discord
               </a>
             </li>
             <li>
-              <a href="https://x.com/vite_js" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-purple-400 transition">
+              <a
+                href="https://x.com/vite_js"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-300 hover:text-purple-400 transition"
+              >
                 X.com
               </a>
             </li>
             <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-purple-400 transition">
+              <a
+                href="https://bsky.app/profile/vite.dev"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-300 hover:text-purple-400 transition"
+              >
                 Bluesky
               </a>
             </li>
@@ -107,7 +152,7 @@ function App() {
         </div>
       </section>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
