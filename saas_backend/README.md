@@ -43,20 +43,20 @@ Os schemas ficam em `src/linx/schemas/tenant.py` e as rotas em `src/linx/routes/
 
 ### Criação
 
-`name` (até 50 caracteres) e `description` (até 100 caracteres) são obrigatórios:
+`name` é obrigatório (até 50 caracteres); `description` é opcional (até 100 caracteres, default `""`):
 
 ```bash
 curl -X POST localhost:8000/api/v1/tenant/ \
   -H 'Content-Type: application/json' \
-  -d '{"name": "ACME", "description": "Organização ACME"}'
+  -d '{"name": "ACME"}'
 ```
 
-Resposta (`201`):
+Resposta (`201`) — como `description` não foi enviado, vem `""`:
 
 ```json
 {
   "name": "ACME",
-  "description": "Organização ACME",
+  "description": "",
   "id": "89f9a8f6-...-uuid-v4",
   "created_at": "2026-09-07T22:00:00Z",
   "updated_at": "2026-09-07T22:00:00Z"
@@ -72,7 +72,8 @@ curl localhost:8000/api/v1/tenant/
 # Buscar por id (200) — 404 se o tenant não existir
 curl localhost:8000/api/v1/tenant/<UUID>
 
-# Atualização parcial (200) — apenas os campos enviados são alterados
+# Atualização parcial (200) — apenas os campos enviados são alterados;
+# 'updated_at' é atualizado automaticamente pelo model
 curl -X PATCH localhost:8000/api/v1/tenant/<UUID> \
   -H 'Content-Type: application/json' \
   -d '{"name": "ACME Ltda"}'
