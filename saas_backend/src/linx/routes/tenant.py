@@ -21,6 +21,12 @@ def create_tenant(payload: TenantCreate, db: Session = Depends(get_db)):
     return new_tenant
 
 
+@router.get("", response_model=list[TenantResponse])
+def list_tenants(db: Session = Depends(get_db)):
+    tenants = db.query(Tenant).all()
+    return tenants
+
+
 @router.get("/{tenant_id}", response_model=TenantResponse)
 def get_tenant(tenant_id: UUID, db: Session = Depends(get_db)):
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()

@@ -25,6 +25,36 @@ def test_create_tenant_returns_created_with_full_body():
     client.delete(f"/api/v1/tenant/{data['id']}")
 
 
+def test_list_tenants_return_all_created_tenants():
+    payload_one = {
+        "name": "Tenant Lista Um",
+        "description": "Descrição do primeiro tenant",
+    }
+    payload_two = {
+        "name": "Tenant Lista Dois",
+        "description": "Descrição do segundo tenant",
+    }
+
+    created_one = client.post("/api/v1/tenant/", json=payload_one).json()
+    created_two = client.post("/api/v1/tenant/", json=payload_two).json()
+
+    response = client.get("/api/v1/tenant")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) >= 2
+
+    tenants_by_id = {tenant["id"]: tenant for tenant in data}
+    assert created_one["id"] in tenants_by_id
+    assert created_two["id"] in tenants_by_id
+    assert tenants_by_id[created_one["id"]]["name"] == "Tenant Lista Um"
+    assert tenants_by_id[created_two["id"]]["name"] == "Tenant Lista Dois"
+
+    client.delete(f"/api/v1/tenant/{created_one['id']}")
+    client.delete(f"/api/v1/tenant/{created_two['id']}")
+
+
 def test_get_tenant_return_tenant_desc():
     payload = {
         "name": "Tenant Teste",
