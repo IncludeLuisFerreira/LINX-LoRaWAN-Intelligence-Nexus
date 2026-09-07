@@ -10,14 +10,6 @@ from linx.schemas.tenant import TenantCreate, TenantResponse, TenantUpdate
 router = APIRouter(prefix="/api/v1/tenant", tags=["Tenant"])
 
 
-@router.get("/{tenant_id}", response_model=TenantResponse)
-def get_tenant(tenant_id: UUID, db: Session = Depends(get_db)):
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found!")
-    return tenant
-
-
 @router.post(
     "/", status_code=status.HTTP_201_CREATED, response_model=TenantResponse
 )
@@ -26,8 +18,15 @@ def create_tenant(payload: TenantCreate, db: Session = Depends(get_db)):
     db.add(new_tenant)
     db.commit()
     db.refresh(new_tenant)
-
     return new_tenant
+
+
+@router.get("/{tenant_id}", response_model=TenantResponse)
+def get_tenant(tenant_id: UUID, db: Session = Depends(get_db)):
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found!")
+    return tenant
 
 
 @router.patch("/{tenant_id}", response_model=TenantResponse)

@@ -54,9 +54,9 @@ line_length = 79
 
 # FERRAMENTAS DE LINT
 lint-check = "black --check --diff . && isort --check --diff ."
-mypy = "mypy src/ "
-flake8 = "flake8 src/"
-lint = "black . && isort . && mypy src/ && flake8 src/"
+mypy = "mypy src/ tests/"
+flake8 = "flake8 src/ tests/"
+lint = "black . && isort . && mypy src/ tests/ && flake8 src/ tests/"
 
 # FERRAMENTAS DE TEST
 pre_test = "task lint"
@@ -66,3 +66,4 @@ test = "pytest -s -x --cov=src -vv && coverage html && coverage report -m"
 
 pre_run = "task test "
 run = "poetry run uvicorn linx.main:app --reload"
+run_no_test = "poetry run uvicorn linx.main:app --reload"

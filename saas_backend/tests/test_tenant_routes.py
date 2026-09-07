@@ -43,6 +43,14 @@ def test_get_tenant_return_tenant_desc():
     assert data["updated_at"] is not None
 
 
+def test_get_non_existent_tenant_return_404():
+    fake_id = uuid.uuid4()
+    response = client.get(f"/api/v1/tenant/{fake_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Tenant not found!"}
+
+
 def test_patch_tenant_return_tenand_updated():
     payload = {
         "name": "Tenant Teste",
@@ -71,6 +79,19 @@ def test_patch_tenant_return_tenand_updated():
     assert data["updated_at"] is not None
 
 
+def test_uppate_non_existent_tenant_return_404():
+    payload_updated = {
+        "name": "Tenant não existente Updated",
+        "description": "Descrição do Update teste de um tenant não existente",
+    }
+
+    fake_id = uuid.uuid4()
+    response = client.patch(f"/api/v1/tenant/{fake_id}", json=payload_updated)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Tenant not found!"}
+
+
 def test_delete_tenant_return_successfully():
     payload = {
         "name": "Tenant Teste",
@@ -90,30 +111,9 @@ def test_delete_tenant_return_successfully():
     assert response_get.status_code == 404
 
 
-def test_get_non_existent_tenant_return_404():
-    fake_id = uuid.uuid4()
-    response = client.get(f"/api/v1/tenant/{fake_id}")
-
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Tenant not found!"}
-
-
 def test_delete_non_existent_tenant_return_404():
     fake_id = uuid.uuid4()
     response = client.delete(f"/api/v1/tenant/{fake_id}")
-
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Tenant not found!"}
-
-
-def test_uppate_non_existent_tenant_return_404():
-    payload_updated = {
-        "name": "Tenant não existente Updated",
-        "description": "Descrição do Update teste de um tenant não existente",
-    }
-
-    fake_id = uuid.uuid4()
-    response = client.patch(f"/api/v1/tenant/{fake_id}", json=payload_updated)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Tenant not found!"}
