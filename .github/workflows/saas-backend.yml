@@ -55,6 +55,20 @@ jobs:
   test:
     name: Tests & Coverage
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: linx
+          POSTGRES_PASSWORD: linx
+          POSTGRES_DB: linx
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -U linx -d linx
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: saas_backend
@@ -73,6 +87,9 @@ jobs:
 
       - name: Install dependencies
         run: poetry install
+
+      - name: Apply migrations
+        run: poetry run alembic upgrade head
 
       - name: Pytest (cobertura >= 70%)
         run: poetry run pytest --cov=src --cov-report=term-missing --cov-fail-under=70
