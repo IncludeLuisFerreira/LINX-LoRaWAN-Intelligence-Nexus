@@ -17,15 +17,71 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 * [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`.
 * [x] Configuração centralizada via `pydantic-settings` (`core/config.py`).
 * [x] Alembic configurado com migration inicial das 4 tabelas.
+* [x] CRUD REST de Tenants em `/api/v1/tenant` (primeiro endpoint público do SaaS).
 
 ## 📍 Endpoints disponíveis
 
-| Método | Rota      | Descrição                                   |
-| :----: | --------- | ------------------------------------------- |
-|  `GET` | `/`       | Página inicial "Em Construção" (HTML).      |
-|  `GET` | `/health` | Health check retornando `{"status": "ok"}`. |
-|  `GET` | `/docs`   | Documentação interativa (Swagger UI).       |
-|  `GET` | `/redoc`  | Documentação alternativa (ReDoc).           |
+| Método  | Rota                       | Descrição                                                  |
+| :-----: | -------------------------- | ---------------------------------------------------------- |
+|  `GET`  | `/`                        | Página inicial "Em Construção" (HTML).                     |
+|  `GET`  | `/health`                  | Health check retornando `{"status": "ok"}`.                |
+|  `GET`  | `/docs`                    | Documentação interativa (Swagger UI).                      |
+|  `GET`  | `/redoc`                   | Documentação alternativa (ReDoc).                          |
+| `POST`  | `/api/v1/tenant/`          | Cria um tenant (`201` + `id` UUID v4).                     |
+|  `GET`  | `/api/v1/tenant/`          | Lista todos os tenants (`200` + array).                    |
+|  `GET`  | `/api/v1/tenant/{id}`      | Busca um tenant pelo `id` (`404` se não existir).          |
+| `PATCH` | `/api/v1/tenant/{id}`      | Atualiza parcialmente um tenant (`404` se não existir).    |
+| `DELETE`| `/api/v1/tenant/{id}`      | Remove um tenant (`204`; `404` se não existir).            |
+
+> O `{id}` é um `UUID` (v4) gerado automaticamente pelo banco na criação.
+
+## 🔄 CRUD de Tenants
+
+O primeiro endpoint REST público do SaaS permite gerenciar as organizações (tenants).
+Os schemas ficam em `src/linx/schemas/tenant.py` e as rotas em `src/linx/routes/tenant.py`
+(prefixo `/api/v1/tenant`, registrado em `linx/main.py`).
+
+### Criação
+
+`name` (até 50 caracteres) e `description` (até 100 caracteres) são obrigatórios:
+
+```bash
+curl -X POST localhost:8000/api/v1/tenant/ \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "ACME", "description": "Organização ACME"}'
+```
+
+Resposta (`201`):
+
+```json
+{
+  "name": "ACME",
+  "description": "Organização ACME",
+  "id": "89f9a8f6-...-uuid-v4",
+  "created_at": "2026-09-07T22:00:00Z",
+  "updated_at": "2026-09-07T22:00:00Z"
+}
+```
+
+### Consulta, atualização e remoção
+
+```bash
+# Listar todos os tenants (200) — retorna um array
+curl localhost:8000/api/v1/tenant/
+
+# Buscar por id (200) — 404 se o tenant não existir
+curl localhost:8000/api/v1/tenant/<UUID>
+
+# Atualização parcial (200) — apenas os campos enviados são alterados
+curl -X PATCH localhost:8000/api/v1/tenant/<UUID> \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "ACME Ltda"}'
+
+# Remover (204, sem corpo)
+curl -X DELETE localhost:8000/api/v1/tenant/<UUID> -i
+```
+
+O Swagger em `/docs` lista os 5 endpoints da API de tenants.
 
 ## ⚙️ Instalação
 
@@ -56,6 +112,8 @@ O projeto utiliza **SQLAlchemy 2.0** (estilo declarativo com `Mapped`/`mapped_co
 | `src/linx/db/base_class.py`      | Declara `Base = declarative_base()`.                                |
 | `src/linx/db/base.py`            | Engine, `SessionLocal` e registro dos models em `Base.metadata`.    |
 | `src/linx/models/`               | Definição dos models (`tenant`, `application`, `user`, `tenant_user`). |
+| `src/linx/schemas/`              | Schemas Pydantic da API (`tenant.py` → Create/Update/Response).     |
+| `src/linx/routes/`               | Rotas/endpoints da API (`tenant.py` → CRUD em `/api/v1/tenant`).    |
 
 A `DATABASE_URL` está configurada em `src/linx/db/base.py` (padrão: `postgresql+psycopg://linx:linx@localhost:5432/linx`).
 
