@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class TenantBase(BaseModel):
     name: str = Field(min_length=1, max_length=50)
-    desc: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=1, max_length=100)
 
 
 class TenantCreate(TenantBase):
@@ -15,7 +15,7 @@ class TenantCreate(TenantBase):
 
 class TenantUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=50)
-    desc: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class TenantResponse(TenantBase):
@@ -23,4 +23,4 @@ class TenantResponse(TenantBase):
 
     id: UUID
     created_at: datetime
-    last_update: datetime
+    updated_at: datetime
