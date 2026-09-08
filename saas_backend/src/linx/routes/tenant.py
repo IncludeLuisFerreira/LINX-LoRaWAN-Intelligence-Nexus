@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from linx.db.base import get_db
@@ -13,11 +13,14 @@ router = APIRouter(prefix="/api/v1/tenant", tags=["Tenant"])
 @router.post(
     "/", status_code=status.HTTP_201_CREATED, response_model=TenantResponse
 )
-def create_tenant(payload: TenantCreate, db: Session = Depends(get_db)):
+def create_tenant(
+    payload: TenantCreate, response: Response, db: Session = Depends(get_db)
+):
     new_tenant = Tenant(name=payload.name, description=payload.description)
     db.add(new_tenant)
     db.commit()
     db.refresh(new_tenant)
+    response.headers["Location"] = f"/api/v1/tenant/{new_tenant.id}"
     return new_tenant
 
 
