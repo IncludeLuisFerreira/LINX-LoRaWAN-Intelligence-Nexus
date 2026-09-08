@@ -51,7 +51,7 @@ curl -X POST localhost:8000/api/v1/tenant/ \
   -d '{"name": "ACME"}'
 ```
 
-Resposta (`201`) — como `description` não foi enviado, vem `""`:
+Resposta (`201`) — como `description` não foi enviado, vem `""`. O header `Location` aponta para o recurso criado (`/api/v1/tenant/{id}`):
 
 ```json
 {
@@ -78,7 +78,8 @@ curl -X PATCH localhost:8000/api/v1/tenant/<UUID> \
   -H 'Content-Type: application/json' \
   -d '{"name": "ACME Ltda"}'
 
-# Remover (204, sem corpo)
+# Remover (204, sem corpo) — hard-delete; os filhos do tenant
+# (applications/tenant_user) são removidos em cascata via FK ondelete=CASCADE
 curl -X DELETE localhost:8000/api/v1/tenant/<UUID> -i
 ```
 
@@ -132,6 +133,7 @@ Os nomes de entidade seguem o schema do **ChirpStack v4** para facilitar a integ
 - Todos os `id` usam `UUID` (v4) como chave primária (RF-040).
 - `TenantUser` usa PK composta (`tenant_id`, `user_id`), fiel ao ChirpStack.
 - Relacionamentos ORM: `Tenant.applications` ↔ `Application.tenant` e `Tenant.tenant_users` ↔ `TenantUser` ↔ `User.tenant_users`.
+- `created_at`/`updated_at` são gerados **no ORM** (`default`/`onupdate` como callables Python com `datetime.now(timezone.utc)`), avaliados por linha no INSERT/UPDATE. Decisão: mantém-se no lado Python para um único app instance e evita trigger no Postgres (que não tem cláusula `ON UPDATE`); migrar para `server_default` pode ser revisitado se houver múltiplas instâncias ou updates diretos no banco.
 
 ### Verificando os models
 
