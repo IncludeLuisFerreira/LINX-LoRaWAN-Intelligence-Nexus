@@ -34,7 +34,9 @@ def upgrade() -> None:
         sa.Column("max_device_count", sa.BigInteger(), nullable=False),
         sa.Column("private_gateways_up", sa.Boolean(), nullable=False),
         sa.Column("private_gateways_down", sa.Boolean(), nullable=False),
-        sa.Column("tags", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "tags", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -59,8 +61,12 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column("description", sa.String(), nullable=False),
-        sa.Column("tags", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        sa.Column(
+            "tags", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"], ["tenant.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -72,7 +78,9 @@ def upgrade() -> None:
         sa.Column("is_admin", sa.Boolean(), nullable=False),
         sa.Column("is_device_admin", sa.Boolean(), nullable=False),
         sa.Column("is_gateway_admin", sa.Boolean(), nullable=False),
-        sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"], ["tenant.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("tenant_id", "user_id"),
     )
