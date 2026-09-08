@@ -55,7 +55,10 @@ def test_create_tenant_returns_created_with_full_body():
     assert data["id"] is not None
     assert data["created_at"] is not None
     assert data["updated_at"] is not None
-    assert response.headers["Location"] == f"/api/v1/tenant/{data['id']}"
+    assert (
+        response.headers["Location"]
+        == f"http://testserver/api/v1/tenant/{data['id']}"
+    )
 
 
 def test_create_tenant_without_description_uses_empty_default():
