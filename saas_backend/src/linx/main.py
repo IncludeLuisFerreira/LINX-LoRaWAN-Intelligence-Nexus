@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from linx.routes.application import router as application_router
 from linx.routes.tenant import router
 
 app = FastAPI(title="LINX SAAS Backend")
@@ -34,3 +35,4 @@ async def home(request: Request):
 
 
 app.include_router(router)
+app.include_router(application_router)

@@ -32,8 +32,13 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 |  `GET`  | `/api/v1/tenant/{id}`      | Busca um tenant pelo `id` (`404` se não existir).          |
 | `PATCH` | `/api/v1/tenant/{id}`      | Atualiza parcialmente um tenant (`404` se não existir).    |
 | `DELETE`| `/api/v1/tenant/{id}`      | Remove um tenant (`204`; `404` se não existir).            |
+| `POST`  | `/api/v1/tenant/{id}/applications`            | Cria uma application no tenant (`201`; `404` se o tenant não existir). |
+|  `GET`  | `/api/v1/tenant/{id}/applications`            | Lista as applications do tenant (`200` + array; `404` se o tenant não existir). |
+|  `GET`  | `/api/v1/tenant/{id}/applications/{app_id}`   | Busca uma application pelo `app_id` (`404` se não existir). |
+| `PATCH` | `/api/v1/tenant/{id}/applications/{app_id}`   | Atualiza parcialmente uma application (`404` se não existir). |
+| `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}`   | Remove uma application (`204`; `404` se não existir). |
 
-> O `{id}` é um `UUID` (v4) gerado automaticamente pelo banco na criação.
+> O `{id}` e o `{app_id}` são `UUID` (v4) gerados automaticamente pelo banco na criação.
 
 ## 🔄 CRUD de Tenants
 
@@ -84,6 +89,59 @@ curl -X DELETE localhost:8000/api/v1/tenant/<UUID> -i
 ```
 
 O Swagger em `/docs` lista os 5 endpoints da API de tenants.
+
+## 🔄 CRUD de Applications
+
+O segundo recurso REST público do SaaS permite gerenciar as aplicações
+vinculadas a um tenant (organização). Os schemas ficam em
+`src/linx/schemas/application.py` e as rotas em `src/linx/routes/application.py`
+(prefixo `/api/v1/tenant`, registrado em `linx/main.py`).
+
+Toda rota exige um `{tenant_id}` existente (caso contrário, `404`).
+
+### Criação
+
+`name` é obrigatório (até 50 caracteres); `description` é opcional (até 100 caracteres, default `""`):
+
+```bash
+curl -X POST localhost:8000/api/v1/tenant/<UUID>/applications \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Fazenda"}'
+```
+
+Resposta (`201`) — o header `Location` aponta para o recurso criado
+(`/api/v1/tenant/{id}/applications/{app_id}`):
+
+```json
+{
+  "name": "Fazenda",
+  "description": "",
+  "id": "89f9a8f6-...-uuid-v4",
+  "created_at": "2026-09-07T22:00:00Z",
+  "updated_at": "2026-09-07T22:00:00Z"
+}
+```
+
+### Consulta, atualização e remoção
+
+```bash
+# Listar as applications de um tenant (200) — 404 se o tenant não existir
+curl localhost:8000/api/v1/tenant/<UUID>/applications
+
+# Buscar por app_id (200) — 404 se a application não existir
+curl localhost:8000/api/v1/tenant/<UUID>/applications/<APP_UUID>
+
+# Atualização parcial (200) — apenas os campos enviados são alterados;
+# 'updated_at' é atualizado automaticamente pelo model
+curl -X PATCH localhost:8000/api/v1/tenant/<UUID>/applications/<APP_UUID> \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Fazenda Norte"}'
+
+# Remover (204, sem corpo)
+curl -X DELETE localhost:8000/api/v1/tenant/<UUID>/applications/<APP_UUID> -i
+```
+
+O Swagger em `/docs` lista os 5 endpoints da API de applications.
 
 ## ⚙️ Instalação
 
