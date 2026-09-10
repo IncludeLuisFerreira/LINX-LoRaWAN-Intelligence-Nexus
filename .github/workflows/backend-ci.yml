@@ -1,17 +1,17 @@
-name: SaaS Backend CI
+name: backend-ci
 
 on:
   pull_request:
     paths:
       - "saas_backend/**"
-      - ".github/workflows/saas-backend.yml"
+      - ".github/workflows/backend-ci.yml"
   push:
     branches:
       - main
       - develop
     paths:
       - "saas_backend/**"
-      - ".github/workflows/saas-backend.yml"
+      - ".github/workflows/backend-ci.yml"
 
 env:
   PYTHON_VERSION: "3.13"
