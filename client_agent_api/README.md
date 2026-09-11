@@ -14,6 +14,7 @@ FastAPI + Poetry, entregue na issue #16.
 - [x] `Dockerfile` mínimo (`python:3.12-slim` + poetry + uvicorn).
 - [x] Consumidor MQTT (`src/agent/mqtt_consumer.py`) que assina
       `application/+/device/+/event/up` e loga o payload de cada uplink.
+- [x] Stubs gRPC do contrato `saas_agent.proto` em `src/agent/grpc/` (pacote `agent.grpc`).
 
 ## 📍 Endpoints
 
@@ -29,6 +30,7 @@ FastAPI + Poetry, entregue na issue #16.
 | `poetry.lock`                 | Versões travadas das dependências.              |
 | `src/agent/main.py`           | Aplicação FastAPI (`app`) e endpoint `/health`. |
 | `src/agent/mqtt_consumer.py`  | Consumidor MQTT de uplinks (`MqttConsumer`).    |
+| `src/agent/grpc/`             | Stubs gRPC do contrato `saas_agent.proto`.      |
 | `tests/test_main.py`          | Smoke test do `/health` com `TestClient`.       |
 | `tests/test_mqtt_consumer.py` | Testes do consumidor com `paho-mqtt` mockado.   |
 | `Dockerfile`                  | Imagem mínima para rodar o serviço.             |
@@ -96,6 +98,17 @@ Saída esperada no log do consumidor:
 Conectado ao broker MQTT localhost:1883
 Inscrito no tópico application/+/device/+/event/up
 Uplink recebido no tópico application/1/device/abc123/event/up: b'{"temperature": 25.5}'
+```
+
+## 🔌 Contrato gRPC (stubs)
+
+O contrato `AgentBridge` é definido em `proto/saas_agent.proto` (raiz do repo).
+Os stubs Python ficam em `src/agent/grpc/` (`saas_agent_pb2.py` e
+`saas_agent_pb2_grpc.py`). Para verificar e regenerar:
+
+```bash
+poetry run python -c "from agent.grpc import saas_agent_pb2, saas_agent_pb2_grpc"
+bash ../scripts/gen_proto.sh
 ```
 
 ## 🛠️ Lint e tipos
