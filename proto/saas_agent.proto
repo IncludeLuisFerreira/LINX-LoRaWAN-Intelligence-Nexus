@@ -4,10 +4,13 @@ package linx;
 
 import "google/protobuf/timestamp.proto";
 
-// AgentBridge é o contrato gRPC compartilhado entre o SaaS Backend
-// (servidor) e o Client Agent (cliente). Sustenta a comunicação entre os
-// serviços: descoberta de configuração, ingestão de telemetria e motor de
-// regras (sync + notificação de violações).
+// AgentBridge é o contrato gRPC compartilhado entre o SaaS Backend e o
+// Client Agent, sustentando a comunicação entre os serviços: descoberta de
+// configuração, ingestão de telemetria e motor de regras (sync + notificação
+// de violações).
+//
+// A comunicação é bidirecional: cada lado expõe um servidor gRPC conforme o
+// RPC (host de cada RPC documentado em proto/README.md).
 service AgentBridge {
   rpc GetAppConfig(AppId) returns (AppConfig);
   rpc IngestTelemetry(TelemetryEvent) returns (Ack);

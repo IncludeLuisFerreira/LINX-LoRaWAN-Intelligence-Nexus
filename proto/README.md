@@ -16,6 +16,16 @@ A geração dos stubs Python é feita na issue #20.
 | `SyncRule`       | `Rule`         | `Ack`        | SaaS → Client Agent             | Replicar regra ao tenant (S6) |
 | `ReportViolation`| `Violation`    | `Ack`        | Client Agent → SaaS             | Notificar violação de regra (S6) |
 
+> **Nota sobre direção (bidirecional):** o contrato é único, mas cada lado
+> expõe um servidor gRPC conforme o RPC. O **SaaS Backend** hospeda
+> `GetAppConfig` e `ReportViolation`; o **Client Agent** hospeda `SyncRule` e
+> `IngestTelemetry`. A ingestão de telemetria hoje flui via **MQTT → Client
+> Agent** (Sprint 2); o RPC `IngestTelemetry` cobre o caminho de roteamento do
+> SaaS (Sprint 3), a confirmar na implementação.
+
+> **Segurança:** `AppConfig.db_password` trafega em texto plano no gRPC. O
+> canal deve usar TLS/mTLS (Sprint 5) antes de qualquer deploy fora de dev.
+
 ## Mensagens
 
 ### `AppId`
