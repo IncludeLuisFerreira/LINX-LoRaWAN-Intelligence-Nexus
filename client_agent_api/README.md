@@ -12,6 +12,8 @@ FastAPI + Poetry, entregue na issue #16.
 - [x] Tooling de dev espelhado do `saas_backend`: `black`, `isort`, `flake8`,
       `mypy`, `pytest` + `pytest-cov`, `taskipy` e `httpx2`.
 - [x] `Dockerfile` mínimo (`python:3.12-slim` + poetry + uvicorn).
+- [x] Consumidor MQTT (`src/agent/mqtt_consumer.py`) que assina
+      `application/+/device/+/event/up` e loga o payload de cada uplink.
 
 ## 📍 Endpoints
 
@@ -26,7 +28,9 @@ FastAPI + Poetry, entregue na issue #16.
 | `pyproject.toml`              | Dependências, pacote `agent` e tasks de dev.    |
 | `poetry.lock`                 | Versões travadas das dependências.              |
 | `src/agent/main.py`           | Aplicação FastAPI (`app`) e endpoint `/health`. |
+| `src/agent/mqtt_consumer.py`  | Consumidor MQTT de uplinks (`MqttConsumer`).    |
 | `tests/test_main.py`          | Smoke test do `/health` com `TestClient`.       |
+| `tests/test_mqtt_consumer.py` | Testes do consumidor com `paho-mqtt` mockado.   |
 | `Dockerfile`                  | Imagem mínima para rodar o serviço.             |
 
 ## ⚙️ Instalação
@@ -52,6 +56,46 @@ curl http://localhost:8000/health
 
 ```bash
 poetry run pytest
+```
+
+## 📡 Consumidor MQTT
+
+O `MqttConsumer` assina o tópico `application/+/device/+/event/up` no Mosquitto
+e loga o payload de cada uplink recebido. Configuração por variáveis de
+ambiente:
+
+| Variável            | Default                              | Descrição                    |
+| ------------------- | ------------------------------------ | ---------------------------- |
+| `MQTT_BROKER_HOST`  | `localhost`                          | Host do broker MQTT.         |
+| `MQTT_BROKER_PORT`  | `1883`                               | Porta do broker MQTT.        |
+| `MQTT_TOPIC`        | `application/+/device/+/event/up`    | Tópico de assinatura.        |
+
+Subir o broker local (Mosquitto):
+
+```bash
+docker compose -f ../infra/docker-compose.base.yml up -d mosquitto
+```
+
+Executar o consumidor:
+
+```bash
+poetry run python -m agent.mqtt_consumer
+```
+
+Publicar um uplink de teste:
+
+```bash
+mosquitto_pub -h localhost -p 1883 \
+  -t "application/1/device/abc123/event/up" \
+  -m '{"temperature": 25.5}'
+```
+
+Saída esperada no log do consumidor:
+
+```
+Conectado ao broker MQTT localhost:1883
+Inscrito no tópico application/+/device/+/event/up
+Uplink recebido no tópico application/1/device/abc123/event/up: b'{"temperature": 25.5}'
 ```
 
 ## 🛠️ Lint e tipos
