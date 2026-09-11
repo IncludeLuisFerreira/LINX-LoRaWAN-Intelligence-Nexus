@@ -86,3 +86,28 @@ task lint          # black + isort + mypy + flake8
 docker build -t tenant-app-template .
 docker run --rm -p 8000:8000 tenant-app-template
 ```
+
+## 🐳 Docker Compose (ambiente tenant completo)
+
+Sobe `timescaledb` + `client_agent` isolados por tenant.
+
+**Pré-requisitos:** Docker Compose V2 (`docker compose version`).
+
+```bash
+# a partir de tenant_app_template/
+cp .env.example .env   # preencha as variáveis
+docker compose up --build
+```
+
+Variáveis obrigatórias no `.env`:
+
+| Variável      | Exemplo         | Descrição                        |
+| ------------- | --------------- | -------------------------------- |
+| `APP_ID`      | `app-abc123`    | ID da aplicação no SaaS          |
+| `MQTT_TOPIC`  | `au915_0/+/...` | Tópico MQTT de uplink            |
+| `TENANT_PORT` | `8001`          | Porta exposta do `client_agent`  |
+| `DB_USER`     | `tenant`        | Usuário do PostgreSQL            |
+| `DB_PASSWORD` | `secret`        | Senha do PostgreSQL              |
+| `DB_NAME`     | `tenantdb`      | Nome do banco                    |
+
+> `depends_on: condition: service_healthy` requer Docker Compose V2. Não compatível com `docker stack deploy` (Swarm).

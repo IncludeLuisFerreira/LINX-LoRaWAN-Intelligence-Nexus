@@ -1,0 +1,34 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.13-pg14
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/0_schema.sql
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  client_agent:
+    build: ../client_agent_api
+    restart: unless-stopped
+    environment:
+      - APP_ID=${APP_ID}
+      - MQTT_TOPIC=${MQTT_TOPIC}
+      - DB_HOST=timescaledb
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    ports:
+      - "${TENANT_PORT}:8000"
+
+volumes:
+  timescaledb_data:
