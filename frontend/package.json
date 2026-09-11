@@ -1,0 +1,47 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint src/",
+    "format": "prettier --write src/"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
+    "axios": "^1.20.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-hook-form": "^7.87.0",
+    "react-router-dom": "^7.18.3",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "autoprefixer": "^10.5.4",
+    "lint-staged": "^17.4.1",
+    "msw": "^2.15.0",
+    "oxlint": "^1.79.0",
+    "postcss": "^8.5.26",
+    "prettier": "^3.9.6",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "prettier --write",
+      "oxlint --fix"
+    ]
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  }
+}
