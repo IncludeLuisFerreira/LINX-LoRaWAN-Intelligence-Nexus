@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package linx;
+
+import "google/protobuf/timestamp.proto";
+
+// AgentBridge é o contrato gRPC compartilhado entre o SaaS Backend
+// (servidor) e o Client Agent (cliente). Sustenta a comunicação entre os
+// serviços: descoberta de configuração, ingestão de telemetria e motor de
+// regras (sync + notificação de violações).
+service AgentBridge {
+  rpc GetAppConfig(AppId) returns (AppConfig);
+  rpc IngestTelemetry(TelemetryEvent) returns (Ack);
+  rpc SyncRule(Rule) returns (Ack);
+  rpc ReportViolation(Violation) returns (Ack);
+}
+
+message AppId {
+  string app_id = 1;
+}
+
+message AppConfig {
+  string app_id = 1;
+  string db_host = 2;
+  uint32 db_port = 3;
+  string db_name = 4;
+  string db_user = 5;
+  string db_password = 6;
+  string mqtt_topic = 7;
+}
+
+message TelemetryEvent {
+  string dev_eui = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string payload = 3;  // JSON (JSONB no TimescaleDB)
+  int32 rssi = 4;      // INT no schema
+  double snr = 5;      // FLOAT (float8) no schema
+  uint32 f_cnt = 6;    // opcional, p/ ordenação/dedup
+}
+
+message Rule {
+  string id = 1;
+  string sensor_field = 2;
+  string operator = 3;
+  double threshold = 4;
+  string action_type = 5;
+}
+
+message Violation {
+  string rule_id = 1;
+  string dev_eui = 2;
+  string message = 3;
+}
+
+message Ack {
+  bool ok = 1;
+  string error = 2;
+}
