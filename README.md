@@ -18,6 +18,7 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 - `tenant_app_template/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
 - `frontend/` — Dashboard React consumindo dados via `client_agent_api` e WebSocket.
 - `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
+- `proto/` — Contrato gRPC compartilhado (`saas_agent.proto`) entre SaaS Backend e Client Agent.
 
 > Documentação completa do produto: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md)
 
@@ -35,6 +36,8 @@ LINX/
 │   ├── docker-compose.yml         # Stack completa ChirpStack v4
 │   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
 │   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
+├── proto/                  # Contrato gRPC compartilhado (AgentBridge)
+│   └── saas_agent.proto    # service AgentBridge (proto3)
 ├── docs/
 │   ├── estrutura_de_pastas/
 │   ├── analise_seguranca_chirpstack/
