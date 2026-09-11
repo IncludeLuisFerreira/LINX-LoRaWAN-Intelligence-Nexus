@@ -18,6 +18,7 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 * [x] Configuração centralizada via `pydantic-settings` (`core/config.py`).
 * [x] Alembic configurado com migration inicial das 4 tabelas.
 * [x] CRUD REST de Tenants em `/api/v1/tenant` (primeiro endpoint público do SaaS).
+* [x] Stubs gRPC do contrato `saas_agent.proto` em `src/linx/grpc/` (pacote `linx.grpc`).
 
 ## 📍 Endpoints disponíveis
 
@@ -221,6 +222,28 @@ Para aplicar localmente (exige o Postgres de `infra/docker-compose.base.yml`):
 ```bash
 docker compose -f infra/docker-compose.base.yml up -d postgres
 poetry run alembic upgrade head
+```
+
+## 🔌 Contrato gRPC (stubs)
+
+O contrato `AgentBridge` é definido em `proto/saas_agent.proto` e versionado na
+raiz do repositório. Os stubs Python são gerados em `src/linx/grpc/`:
+
+| Arquivo                    | Responsabilidade                          |
+| -------------------------- | ----------------------------------------- |
+| `src/linx/grpc/saas_agent_pb2.py`      | Mensagens protobuf (tipos).  |
+| `src/linx/grpc/saas_agent_pb2_grpc.py` | Stub e Servicer do `AgentBridge`. |
+
+Verificar o import:
+
+```bash
+poetry run python -c "from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc"
+```
+
+Regenerar os stubs (após alterar o `.proto`):
+
+```bash
+bash scripts/gen_proto.sh
 ```
 
 ## 🧪 Testes

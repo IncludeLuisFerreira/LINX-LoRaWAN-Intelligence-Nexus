@@ -90,10 +90,13 @@ protoc --descriptor_set_out=/dev/null --proto_path=proto proto/saas_agent.proto
 
 ## Gerar stubs Python (issue #20)
 
+Os stubs são versionados em `saas_backend/src/linx/grpc/` (pacote `linx`) e em
+`client_agent_api/src/agent/grpc/` (pacote `agent`). Para regenerar:
+
 ```bash
-python -m grpc_tools.protoc \
-  -I proto \
-  --python_out=saas_backend/src/linx/grpc \
-  --grpc_python_out=saas_backend/src/linx/grpc \
-  proto/saas_agent.proto
+bash scripts/gen_proto.sh
 ```
+
+O script usa `grpc_tools.protoc` e corrige o import absoluto gerado para
+import relativo (`from . import saas_agent_pb2`), necessário dentro de pacote.
+Requer `grpcio-tools` instalado em cada módulo (dev dependency).
