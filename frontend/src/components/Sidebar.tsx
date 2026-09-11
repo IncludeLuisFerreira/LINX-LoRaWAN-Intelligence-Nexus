@@ -35,7 +35,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       >
         <div className="flex h-12 items-center px-2 mb-6">
           <h1 className="text-xl font-bold text-white tracking-wide">
-            Nexus App
+            Linx App
           </h1>
         </div>
 

@@ -1,0 +1,251 @@
+openapi: 3.0.0
+info:
+  title: LINX SaaS API
+  version: 0.1.0
+  description: Contrato de API para gerenciamento de Organizações e Aplicações.
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Servidor de Desenvolvimento Local
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/orgs:
+    get:
+      summary: Listar organizações
+      operationId: getOrgs
+      responses:
+        '200':
+          description: Lista de organizações
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrganizationOut'
+        '401':
+          description: Não autorizado
+    post:
+      summary: Criar organização
+      operationId: createOrg
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationCreate'
+      responses:
+        '201':
+          description: Organização criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+
+  /api/v1/orgs/{id}:
+    patch:
+      summary: Atualizar organização
+      operationId: updateOrg
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationUpdate'
+      responses:
+        '200':
+          description: Organização atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Organização não encontrada
+    delete:
+      summary: Deletar organização
+      operationId: deleteOrg
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Organização removida com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: Organização não encontrada
+
+  /api/v1/applications:
+    get:
+      summary: Listar aplicações
+      operationId: getApplications
+      responses:
+        '200':
+          description: Lista de aplicações
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationOut'
+        '401':
+          description: Não autorizado
+    post:
+      summary: Criar aplicação
+      operationId: createApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreate'
+      responses:
+        '201':
+          description: Aplicação criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+
+  /api/v1/applications/{id}:
+    patch:
+      summary: Atualizar aplicação
+      operationId: updateApplication
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationUpdate'
+      responses:
+        '200':
+          description: Aplicação atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação não encontrada
+    delete:
+      summary: Deletar aplicação
+      operationId: deleteApplication
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Aplicação removida com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação não encontrada
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    OrganizationCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    OrganizationUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+
+    OrganizationOut:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ApplicationCreate:
+      type: object
+      required:
+        - name
+        - organizationId
+      properties:
+        name:
+          type: string
+        organizationId:
+          type: string
+
+    ApplicationUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+
+    ApplicationOut:
+      type: object
+      required:
+        - id
+        - name
+        - organizationId
+        - createdAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        organizationId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
