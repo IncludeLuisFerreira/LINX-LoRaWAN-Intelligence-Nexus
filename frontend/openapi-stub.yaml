@@ -1,0 +1,251 @@
+openapi: 3.0.0
+info:
+  title: LINX SaaS API
+  version: 0.1.0
+  description: Contrato de API para gerenciamento de Organizações e Aplicações.
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Servidor de Desenvolvimento Local
+
+security:
+  - BearerAuth: []
+
+paths:
+  /tenant:
+    get:
+      summary: Listar tenants
+      operationId: getTenants
+      responses:
+        '200':
+          description: Lista de tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TenantOut'
+        '401':
+          description: Não autorizado
+    post:
+      summary: Criar tenant
+      operationId: createTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+      responses:
+        '201':
+          description: Tenant criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+
+  /tenant/{id}:
+    patch:
+      summary: Atualizar tenant
+      operationId: updateTenant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantUpdate'
+      responses:
+        '200':
+          description: Tenant atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
+    delete:
+      summary: Deletar tenant
+      operationId: deleteTenant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Tenant removido com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
+
+  /applications:
+    get:
+      summary: Listar aplicações
+      operationId: getApplications
+      responses:
+        '200':
+          description: Lista de aplicações
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationOut'
+        '401':
+          description: Não autorizado
+    post:
+      summary: Criar aplicação
+      operationId: createApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreate'
+      responses:
+        '201':
+          description: Aplicação criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+
+  /applications/{id}:
+    patch:
+      summary: Atualizar aplicação
+      operationId: updateApplication
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationUpdate'
+      responses:
+        '200':
+          description: Aplicação atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '400':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação não encontrada
+    delete:
+      summary: Deletar aplicação
+      operationId: deleteApplication
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Aplicação removida com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação não encontrada
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TenantCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    TenantUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+
+    TenantOut:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ApplicationCreate:
+      type: object
+      required:
+        - name
+        - organizationId
+      properties:
+        name:
+          type: string
+        organizationId:
+          type: string
+
+    ApplicationUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+
+    ApplicationOut:
+      type: object
+      required:
+        - id
+        - name
+        - organizationId
+        - createdAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        organizationId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
