@@ -7,7 +7,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navItems = [
-    { label: 'Tenante', path: '/orgs' },
+    { label: 'Tenants', path: '/tenant' },
     { label: 'Dispositivos', path: '/devices' },
   ];
 
