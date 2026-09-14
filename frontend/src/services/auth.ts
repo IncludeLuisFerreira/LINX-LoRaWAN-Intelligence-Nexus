@@ -1,3 +1,5 @@
+import { api } from './api';
+
 export interface User {
   email: string;
 }
@@ -12,23 +14,27 @@ export async function login(
   email: string,
   password: string,
 ): Promise<AuthResponse> {
-  // Simula o delay de uma requisição HTTP
+  // Simulação mockada enquanto a API real não está pronta
   await new Promise((resolve) => setTimeout(resolve, 800));
 
-  // Mock de erro quando a senha for "erro"
   if (password === 'erro') {
     throw new Error('Credenciais inválidas.');
   }
 
   const response: AuthResponse = {
-    accessToken: 'mock-token',
-    refreshToken: 'mock-refresh',
+    accessToken: 'mock-token-123456',
+    refreshToken: 'mock-refresh-token',
     user: { email },
   };
 
-  // Armazena no localStorage para manter a sessão mockada
   localStorage.setItem('accessToken', response.accessToken);
   localStorage.setItem('user', JSON.stringify(response.user));
 
   return response;
+}
+
+// Exemplo de chamada que usará a instância da API
+export async function getOrgs() {
+  const response = await api.get('/orgs');
+  return response.data;
 }
