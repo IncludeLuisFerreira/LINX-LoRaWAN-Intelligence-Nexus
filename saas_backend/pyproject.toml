@@ -34,7 +34,8 @@ dev = [
     "taskipy (>=1.14.1,<2.0.0)",
     "isort (>=9.0.1,<10.0.0)",
     "httpx2 (>=2.12.0,<3.0.0)",
-    "grpcio-tools (>=1.83.1,<2.0.0)"
+    "grpcio-tools (>=1.84.0,<2.0.0)",
+    "types-grpcio (>=1.83.0.20260730,<2.0.0.0)"
 ]
 
 [tool.poetry]
@@ -51,6 +52,9 @@ target-version = ["py312"]
 extend-exclude = '''
 src/linx/grpc
 '''
+[flake8]
+max-line-lenght = 88
+
 
 [tool.isort]
 profile = "black"
