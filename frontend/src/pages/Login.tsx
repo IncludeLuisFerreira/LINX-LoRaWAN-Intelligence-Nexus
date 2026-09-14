@@ -34,7 +34,7 @@ export default function Login() {
 
     try {
       await login(data.email, data.password);
-      navigate('/tenant');
+      navigate('/tenants');
     } catch (err) {
       if (err instanceof Error) {
         setAuthError(err.message);

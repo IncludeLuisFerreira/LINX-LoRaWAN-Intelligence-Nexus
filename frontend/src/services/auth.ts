@@ -33,3 +33,8 @@ export async function login(
   return response;
 }
 
+export async function getTenants() {
+  const response = await api.get('/tenants');
+  return response.data
+}
+
