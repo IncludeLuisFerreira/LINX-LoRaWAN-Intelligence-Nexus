@@ -1,0 +1,4 @@
+[flake8]
+# Stubs gRPC gerados por grpc_tools.protoc não seguem o estilo do projeto.
+extend-exclude =
+    src/linx/grpc

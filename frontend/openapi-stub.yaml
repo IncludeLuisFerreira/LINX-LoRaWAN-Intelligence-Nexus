@@ -14,46 +14,46 @@ security:
   - BearerAuth: []
 
 paths:
-  /api/v1/orgs:
+  /tenant:
     get:
-      summary: Listar organizações
-      operationId: getOrgs
+      summary: Listar tenants
+      operationId: getTenants
       responses:
         '200':
-          description: Lista de organizações
+          description: Lista de tenants
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/OrganizationOut'
+                  $ref: '#/components/schemas/TenantOut'
         '401':
           description: Não autorizado
     post:
-      summary: Criar organização
-      operationId: createOrg
+      summary: Criar tenant
+      operationId: createTenant
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganizationCreate'
+              $ref: '#/components/schemas/TenantCreate'
       responses:
         '201':
-          description: Organização criada
+          description: Tenant criado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationOut'
+                $ref: '#/components/schemas/TenantOut'
         '400':
           description: Dados inválidos
         '401':
           description: Não autorizado
 
-  /api/v1/orgs/{id}:
+  /tenant/{id}:
     patch:
-      summary: Atualizar organização
-      operationId: updateOrg
+      summary: Atualizar tenant
+      operationId: updateTenant
       parameters:
         - name: id
           in: path
@@ -65,23 +65,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganizationUpdate'
+              $ref: '#/components/schemas/TenantUpdate'
       responses:
         '200':
-          description: Organização atualizada
+          description: Tenant atualizado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganizationOut'
+                $ref: '#/components/schemas/TenantOut'
         '400':
           description: Dados inválidos
         '401':
           description: Não autorizado
         '404':
-          description: Organização não encontrada
+          description: Tenant não encontrado
     delete:
-      summary: Deletar organização
-      operationId: deleteOrg
+      summary: Deletar tenant
+      operationId: deleteTenant
       parameters:
         - name: id
           in: path
@@ -90,13 +90,13 @@ paths:
             type: string
       responses:
         '204':
-          description: Organização removida com sucesso
+          description: Tenant removido com sucesso
         '401':
           description: Não autorizado
         '404':
-          description: Organização não encontrada
+          description: Tenant não encontrado
 
-  /api/v1/applications:
+  /applications:
     get:
       summary: Listar aplicações
       operationId: getApplications
@@ -132,7 +132,7 @@ paths:
         '401':
           description: Não autorizado
 
-  /api/v1/applications/{id}:
+  /applications/{id}:
     patch:
       summary: Atualizar aplicação
       operationId: updateApplication
@@ -186,7 +186,7 @@ components:
       bearerFormat: JWT
 
   schemas:
-    OrganizationCreate:
+    TenantCreate:
       type: object
       required:
         - name
@@ -194,13 +194,13 @@ components:
         name:
           type: string
 
-    OrganizationUpdate:
+    TenantUpdate:
       type: object
       properties:
         name:
           type: string
 
-    OrganizationOut:
+    TenantOut:
       type: object
       required:
         - id

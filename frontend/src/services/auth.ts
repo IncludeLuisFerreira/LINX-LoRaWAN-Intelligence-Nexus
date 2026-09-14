@@ -33,8 +33,3 @@ export async function login(
   return response;
 }
 
-// Exemplo de chamada que usará a instância da API
-export async function getOrgs() {
-  const response = await api.get('/orgs');
-  return response.data;
-}

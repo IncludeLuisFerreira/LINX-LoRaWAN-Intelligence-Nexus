@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Spinner from './components/Spinner';
-import { Layout } from './components/Layout';
 
 const Login = lazy(() => import('./pages/Login'));
 const Orgs = lazy(() => import('./pages/Orgs'));
@@ -14,18 +13,11 @@ export function AppRoutes() {
   return (
     <Suspense fallback={<Spinner />}>
       <Routes>
-        {/* Rota pública sem Layout */}
         <Route path="/login" element={<Login />} />
-
-        {/* Rotas protegidas envolvidas pelo Layout */}
-        <Route element={<Layout />}>
-          <Route path="/orgs" element={<Orgs />} />
-          <Route path="/apps/:id" element={<AppDetail />} />
-          <Route path="/devices" element={<Devices />} />
-          <Route path="/dashboard/:appId" element={<Dashboard />} />
-        </Route>
-
-        {/* Fallback 404*/}
+        <Route path="/orgs" element={<Orgs />} />
+        <Route path="/apps/:id" element={<AppDetail />} />
+        <Route path="/devices" element={<Devices />} />
+        <Route path="/dashboard/:appId" element={<Dashboard />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

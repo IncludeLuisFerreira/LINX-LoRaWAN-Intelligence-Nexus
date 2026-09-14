@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw';
 
-const mockOrgs = [
+const mockTenants = [
   { id: '1', name: 'Organização Alfa', createdAt: new Date().toISOString() },
   { id: '2', name: 'Organização Beta', createdAt: new Date().toISOString() },
 ];
@@ -15,35 +15,35 @@ const mockApps = [
 ];
 
 export const handlers = [
-  // --- ORGS ---
-  http.get('*/api/v1/orgs', () => {
-    return HttpResponse.json(mockOrgs);
+  // --- TENANTS ---
+  http.get('*/api/v1/tenant', () => {
+    return HttpResponse.json(mockTenants);
   }),
 
-  http.post('*/api/v1/orgs', async ({ request }) => {
+  http.post('*/api/v1/tenant', async ({ request }) => {
     const body = (await request.json()) as { name: string };
-    const newOrg = {
+    const newTenant = {
       id: String(Date.now()),
       name: body.name,
       createdAt: new Date().toISOString(),
     };
-    mockOrgs.push(newOrg);
-    return HttpResponse.json(newOrg, { status: 201 });
+    mockTenants.push(newTenant);
+    return HttpResponse.json(newTenant, { status: 201 });
   }),
 
-  http.patch('*/api/v1/orgs/:id', async ({ params, request }) => {
+  http.patch('*/api/v1/tenant/:id', async ({ params, request }) => {
     const { id } = params;
     const body = (await request.json()) as { name: string };
-    const org = mockOrgs.find((o) => o.id === id);
-    if (org && body.name) org.name = body.name;
-    return HttpResponse.json(org);
+    const tenant = mockTenants.find((o) => o.id === id);
+    if (tenant && body.name) tenant.name = body.name;
+    return HttpResponse.json(tenant ?? null, { status: tenant ? 200 : 404 });
   }),
 
-  http.delete('*/api/v1/orgs/:id', ({ params }) => {
+  http.delete('*/api/v1/tenant/:id', ({ params }) => {
     const { id } = params;
-    const index = mockOrgs.findIndex((o) => o.id === id);
-    if (index !== -1) mockOrgs.splice(index, 1);
-    return new HttpResponse(null, { status: 204 });
+    const index = mockTenants.findIndex((o) => o.id === id);
+    if (index !== -1) mockTenants.splice(index, 1);
+    return new HttpResponse(null, { status: index !== -1 ? 204 : 404 });
   }),
 
   // --- APPLICATIONS ---
