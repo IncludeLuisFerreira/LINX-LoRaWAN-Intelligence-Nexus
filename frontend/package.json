@@ -10,9 +10,12 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.3"
+    "react-hook-form": "^7.87.0",
+    "react-router-dom": "^7.18.3",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
