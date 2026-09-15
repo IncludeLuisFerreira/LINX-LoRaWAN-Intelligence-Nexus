@@ -20,9 +20,11 @@ services:
   app:
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:-linx}@db:5432/${POSTGRES_DB:-linx}
     ports:
       - "8000:8000"
       - "50051:50051"
