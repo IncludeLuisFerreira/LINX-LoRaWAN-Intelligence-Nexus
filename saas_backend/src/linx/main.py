@@ -1,3 +1,5 @@
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -5,11 +7,20 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from linx.grpc_server import serve
 from linx.routes.application import router as application_router
 from linx.routes.tenant import router
 
-app = FastAPI(title="LINX SAAS Backend")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    grpc_thread = threading.Thread(target=serve, daemon=True)
+    grpc_thread.start()
+
+    yield
+
+
+app = FastAPI(title="LINX SAAS Backend", lifespan=lifespan)
 BASE_DIR = Path(__file__).resolve().parent
 
 # Mapeia a pasta de arquivos estáticos (CSS, JS, Imagens)
