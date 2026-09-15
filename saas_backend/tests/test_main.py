@@ -70,3 +70,12 @@ def test_home_html_response():
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+
+
+def test_health_reports_real_database_as_up(monkeypatch):
+    monkeypatch.setattr("linx.main.is_grpc_serving", lambda: True)
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "db": True, "grpc": True}

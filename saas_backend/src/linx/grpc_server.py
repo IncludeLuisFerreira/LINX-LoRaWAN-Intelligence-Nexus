@@ -83,7 +83,7 @@ def is_grpc_serving(
     timeout: float = 1.0,
 ) -> bool:
     """Indica se há um servidor escutando no host/porta do gRPC."""
-    target_host = host or settings.grpc_host
+    target_host = settings.grpc_host if host is None else host
     target_port = settings.grpc_port if port is None else port
     if target_host in ("", "0.0.0.0", "::"):
         target_host = "127.0.0.1"
@@ -94,7 +94,7 @@ def is_grpc_serving(
             (target_host, target_port), timeout=timeout
         ):
             return True
-    except OSError:
+    except (OSError, OverflowError, ValueError):
         return False
 
 

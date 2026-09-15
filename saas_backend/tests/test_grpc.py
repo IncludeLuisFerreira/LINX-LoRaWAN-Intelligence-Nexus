@@ -289,3 +289,13 @@ def test_is_grpc_serving_normalizes_wildcard_host(monkeypatch):
         assert is_grpc_serving() is True
     finally:
         listener.close()
+
+
+def test_is_grpc_serving_true_for_real_grpc_server():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+    port = server.add_insecure_port("127.0.0.1:0")
+    server.start()
+    try:
+        assert is_grpc_serving(host="127.0.0.1", port=port) is True
+    finally:
+        server.stop(0)

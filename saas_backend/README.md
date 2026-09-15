@@ -288,6 +288,9 @@ Se o Postgres ou o servidor gRPC estiverem fora, retorna `503` com:
 }
 ```
 
+> O campo `grpc` indica apenas que existe um listener na porta configurada
+> (`GRPC_PORT`, padrão `50051`); não é um health check do protocolo gRPC em si.
+
 ## 📦 Dependências do projeto
 
 ### FastAPI

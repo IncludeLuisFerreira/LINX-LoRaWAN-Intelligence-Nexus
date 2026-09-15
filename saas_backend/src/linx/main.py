@@ -38,7 +38,7 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
 @app.get("/health")
-async def health(response: Response, db: Session = Depends(get_db)) -> dict:
+def health(response: Response, db: Session = Depends(get_db)) -> dict:
     try:
         db.execute(text("SELECT 1"))
         db_ok = True
