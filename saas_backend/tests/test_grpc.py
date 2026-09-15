@@ -1,3 +1,4 @@
+import socket
 from collections.abc import Generator
 from concurrent import futures
 from unittest.mock import MagicMock
@@ -14,7 +15,11 @@ from linx import grpc_server as grpc_server_module
 from linx.core.config import settings
 from linx.db.base import engine
 from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc
-from linx.grpc_server import AgentBridgeServicer, create_server
+from linx.grpc_server import (
+    AgentBridgeServicer,
+    create_server,
+    is_grpc_serving,
+)
 from linx.main import app
 from linx.models.application import Application
 from linx.models.tenant import Tenant
@@ -180,6 +185,7 @@ def test_serve_starts_and_waits_for_termination(monkeypatch):
 def test_lifespan_starts_and_stops_grpc_server(monkeypatch):
     fake_server = MagicMock()
     monkeypatch.setattr("linx.main.create_server", lambda: fake_server)
+    monkeypatch.setattr("linx.main.is_grpc_serving", lambda: True)
 
     with TestClient(app) as client:
         assert client.get("/health").status_code == 200
@@ -243,3 +249,117 @@ def test_client_hosted_rpcs_are_unimplemented_on_saas(grpc_channel):
         with pytest.raises(grpc.RpcError) as exc_info:
             rpc(request)
         assert exc_info.value.code() == grpc.StatusCode.UNIMPLEMENTED
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def test_is_grpc_serving_true_when_port_is_open():
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    port = listener.getsockname()[1]
+    try:
+        assert is_grpc_serving(host="127.0.0.1", port=port) is True
+    finally:
+        listener.close()
+
+
+def test_is_grpc_serving_false_when_port_is_closed():
+    port = _free_port()
+
+    assert is_grpc_serving(host="127.0.0.1", port=port) is False
+
+
+def test_is_grpc_serving_false_when_port_is_zero():
+    assert is_grpc_serving(host="127.0.0.1", port=0) is False
+
+
+def test_is_grpc_serving_normalizes_wildcard_host(monkeypatch):
+    listener = socket.socket()
+    listener.bind(("0.0.0.0", 0))
+    listener.listen()
+    port = listener.getsockname()[1]
+    monkeypatch.setattr(settings, "grpc_host", "0.0.0.0")
+    monkeypatch.setattr(settings, "grpc_port", port)
+    try:
+        assert is_grpc_serving() is True
+    finally:
+        listener.close()
+
+
+def test_is_grpc_serving_true_for_real_grpc_server():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+    port = server.add_insecure_port("127.0.0.1:0")
+    server.start()
+    try:
+        assert is_grpc_serving(host="127.0.0.1", port=port) is True
+    finally:
+        server.stop(0)
+
+
+def test_is_grpc_serving_false_for_out_of_range_port():
+    assert is_grpc_serving(host="127.0.0.1", port=70000) is False
+
+
+def _capture_connect(monkeypatch) -> list:
+    captured: list = []
+
+    def fake_create_connection(address, timeout):
+        captured.append((address, timeout))
+        return MagicMock()
+
+    monkeypatch.setattr(
+        "linx.grpc_server.socket.create_connection", fake_create_connection
+    )
+    return captured
+
+
+def test_is_grpc_serving_normalizes_empty_host(monkeypatch):
+    captured = _capture_connect(monkeypatch)
+
+    assert is_grpc_serving(host="", port=50051) is True
+    assert captured == [(("127.0.0.1", 50051), 1.0)]
+
+
+def test_is_grpc_serving_accepts_hostname(monkeypatch):
+    captured = _capture_connect(monkeypatch)
+
+    assert is_grpc_serving(host="localhost", port=50051) is True
+    assert captured[0][0] == ("localhost", 50051)
+
+
+def test_is_grpc_serving_normalizes_ipv6_unspecified(monkeypatch):
+    captured = _capture_connect(monkeypatch)
+
+    assert is_grpc_serving(host="::", port=50051) is True
+    assert captured[0][0] == ("::1", 50051)
+
+
+def test_is_grpc_serving_normalizes_expanded_ipv6_unspecified(monkeypatch):
+    captured = _capture_connect(monkeypatch)
+
+    assert is_grpc_serving(host="0:0:0:0:0:0:0:0", port=50051) is True
+    assert captured[0][0] == ("::1", 50051)
+
+
+def test_create_server_brackets_ipv6_bind_address(monkeypatch):
+    fake_server = MagicMock()
+    fake_server.add_insecure_port.return_value = 1
+    monkeypatch.setattr(
+        "linx.grpc_server.grpc.server", lambda *args, **kwargs: fake_server
+    )
+    monkeypatch.setattr(
+        "linx.grpc_server.saas_agent_pb2_grpc"
+        ".add_AgentBridgeServicer_to_server",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(settings, "grpc_host", "::")
+    monkeypatch.setattr(settings, "grpc_port", 50051)
+
+    create_server()
+
+    fake_server.add_insecure_port.assert_called_once_with("[::]:50051")

@@ -8,7 +8,11 @@ from linx.models.tenant import Tenant  # noqa: F401
 from linx.models.tenant_user import TenantUser  # noqa: F401
 from linx.models.user import User  # noqa: F401
 
-engine = create_engine(settings.database_url)
+engine = create_engine(
+    settings.database_url,
+    connect_args={"connect_timeout": settings.db_connect_timeout},
+    pool_pre_ping=True,
+)
 
 SessionLocal = sessionmaker(bind=engine)
 

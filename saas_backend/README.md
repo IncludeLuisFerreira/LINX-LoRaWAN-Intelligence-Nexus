@@ -11,7 +11,7 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 * [x] Configuração de coverage de testes.
 * [x] Configuração do Isort.
 * [x] Início da API FastAPI (`linx.main:app`).
-* [x] Endpoint de health check (`/health`).
+* [x] Endpoint de health check (`/health`) com status do banco e do servidor gRPC.
 * [x] Página inicial servida via Jinja2 + arquivos estáticos (`/`).
 * [x] Configuração do SQLAlchemy 2.0 + Psycopg (PostgreSQL).
 * [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`.
@@ -25,7 +25,7 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 | Método  | Rota                       | Descrição                                                  |
 | :-----: | -------------------------- | ---------------------------------------------------------- |
 |  `GET`  | `/`                        | Página inicial "Em Construção" (HTML).                     |
-|  `GET`  | `/health`                  | Health check retornando `{"status": "ok"}`.                |
+|  `GET`  | `/health`                  | Health check: status do banco e do servidor gRPC (`200`/`503`). |
 |  `GET`  | `/docs`                    | Documentação interativa (Swagger UI).                      |
 |  `GET`  | `/redoc`                   | Documentação alternativa (ReDoc).                          |
 | `POST`  | `/api/v1/tenant/`          | Cria um tenant (`201` + `id` UUID v4).                     |
@@ -262,19 +262,34 @@ pytest
 
 ### Testando endpoints
 
-Para testar um endpoint diretamente pelo terminal:
+Para testar o health check diretamente pelo terminal:
 
 ```bash
-curl http://localhost:8000/health
+curl -i http://localhost:8000/health
 ```
 
-Resposta esperada:
+Resposta esperada (`200` quando banco e gRPC estão ok):
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "db": true,
+  "grpc": true
 }
 ```
+
+Se o Postgres ou o servidor gRPC estiverem fora, retorna `503` com:
+
+```json
+{
+  "status": "degraded",
+  "db": false,
+  "grpc": true
+}
+```
+
+> O campo `grpc` indica apenas que existe um listener na porta configurada
+> (`GRPC_PORT`, padrão `50051`); não é um health check do protocolo gRPC em si.
 
 ## 📦 Dependências do projeto
 
