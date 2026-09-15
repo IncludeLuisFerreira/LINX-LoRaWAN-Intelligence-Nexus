@@ -60,6 +60,10 @@ skip_glob = ["src/linx/grpc/*"]
 [tool.mypy]
 exclude = ["src/linx/grpc/"]
 
+[[tool.mypy.overrides]]
+module = ["grpc", "grpc.*"]
+ignore_missing_imports = true
+
 [tool.taskipy.tasks]
 
 # FERRAMENTAS DE LINT
