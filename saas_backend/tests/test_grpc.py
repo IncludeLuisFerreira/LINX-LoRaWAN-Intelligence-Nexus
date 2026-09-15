@@ -185,6 +185,7 @@ def test_serve_starts_and_waits_for_termination(monkeypatch):
 def test_lifespan_starts_and_stops_grpc_server(monkeypatch):
     fake_server = MagicMock()
     monkeypatch.setattr("linx.main.create_server", lambda: fake_server)
+    monkeypatch.setattr("linx.main.is_grpc_serving", lambda: True)
 
     with TestClient(app) as client:
         assert client.get("/health").status_code == 200
