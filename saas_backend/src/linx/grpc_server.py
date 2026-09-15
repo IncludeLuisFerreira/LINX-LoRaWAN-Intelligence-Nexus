@@ -1,29 +1,31 @@
 from concurrent import futures
 
 import grpc
-from sqlalchemy import select
+
+# from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from linx.db.base import engine
 from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc
-from linx.models.application import Application
+
+# from linx.models.application import Application
 
 
 class AgentBridgeServicer(saas_agent_pb2_grpc.AgentBridgeServicer):
     def GetAppConfig(self, request, context):
-        with Session(engine) as session:
+        with Session(engine):
             #   stmt = select(Application).where(Application.id == request.app_id)
             #   app = session.scalar(stmt)
 
             """
-                if not app:
-                    context.abort(
-                        grpc.StatusCode.NOT_FOUND,
-                        f"Aplicação {request.app_id}não encontrada!",
-                    )
+            if not app:
+                context.abort(
+                    grpc.StatusCode.NOT_FOUND,
+                    f"Aplicação {request.app_id}não encontrada!",
+                )
             """
         mqtt_topic = f"application/{request.app_id}/device/+/event/up"
-    
+
         return saas_agent_pb2.AppConfig(
             db_host="localhost", db_port=5432, mqtt_topic=mqtt_topic
         )
