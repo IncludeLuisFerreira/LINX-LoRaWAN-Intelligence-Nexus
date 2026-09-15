@@ -1,4 +1,5 @@
 import logging
+import socket
 from concurrent import futures
 from uuid import UUID
 
@@ -74,6 +75,27 @@ def create_server(
             f"Não foi possível fazer bind do servidor gRPC em {bind_address}"
         )
     return server
+
+
+def is_grpc_serving(
+    host: str | None = None,
+    port: int | None = None,
+    timeout: float = 1.0,
+) -> bool:
+    """Indica se há um servidor escutando no host/porta do gRPC."""
+    target_host = host or settings.grpc_host
+    target_port = settings.grpc_port if port is None else port
+    if target_host in ("", "0.0.0.0", "::"):
+        target_host = "127.0.0.1"
+    if target_port == 0:
+        return False
+    try:
+        with socket.create_connection(
+            (target_host, target_port), timeout=timeout
+        ):
+            return True
+    except OSError:
+        return False
 
 
 def serve():
