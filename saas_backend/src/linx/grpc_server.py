@@ -1,3 +1,4 @@
+import ipaddress
 import logging
 import socket
 from concurrent import futures
@@ -69,7 +70,11 @@ def create_server(
     if servicer is None:
         servicer = AgentBridgeServicer()
     saas_agent_pb2_grpc.add_AgentBridgeServicer_to_server(servicer, server)
-    bind_address = f"{settings.grpc_host}:{settings.grpc_port}"
+    bind_host = settings.grpc_host
+    if ":" in bind_host:
+        bind_address = f"[{bind_host}]:{settings.grpc_port}"
+    else:
+        bind_address = f"{bind_host}:{settings.grpc_port}"
     if server.add_insecure_port(bind_address) == 0:
         raise RuntimeError(
             f"Não foi possível fazer bind do servidor gRPC em {bind_address}"
@@ -85,8 +90,18 @@ def is_grpc_serving(
     """Indica se há um servidor escutando no host/porta do gRPC."""
     target_host = settings.grpc_host if host is None else host
     target_port = settings.grpc_port if port is None else port
-    if target_host in ("", "0.0.0.0", "::"):
+    if not target_host:
         target_host = "127.0.0.1"
+    else:
+        try:
+            address = ipaddress.ip_address(target_host)
+        except ValueError:
+            pass
+        else:
+            if address.is_unspecified:
+                target_host = (
+                    "::1" if address.version == 6 else "127.0.0.1"
+                )
     if target_port == 0:
         return False
     try:

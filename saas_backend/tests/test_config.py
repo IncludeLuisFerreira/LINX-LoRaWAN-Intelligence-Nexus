@@ -15,6 +15,18 @@ def test_settings_override_database_url(monkeypatch):
     assert settings.database_url == "postgresql+psycopg://u:p@db:5432/db"
 
 
+def test_settings_db_connect_timeout_default(monkeypatch):
+    monkeypatch.delenv("DB_CONNECT_TIMEOUT", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.db_connect_timeout == 2
+
+
+def test_settings_override_db_connect_timeout(monkeypatch):
+    monkeypatch.setenv("DB_CONNECT_TIMEOUT", "5")
+    settings = Settings(_env_file=None)
+    assert settings.db_connect_timeout == 5
+
+
 def test_settings_grpc_defaults(monkeypatch):
     monkeypatch.delenv("GRPC_HOST", raising=False)
     monkeypatch.delenv("GRPC_PORT", raising=False)
