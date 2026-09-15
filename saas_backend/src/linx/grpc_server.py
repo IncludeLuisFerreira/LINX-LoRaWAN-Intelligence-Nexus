@@ -5,6 +5,7 @@ from uuid import UUID
 import grpc
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import SQLAlchemyError
 
 from linx.core.config import settings
 from linx.db.base import SessionLocal
@@ -12,9 +13,6 @@ from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc
 from linx.models.application import Application
 
 logger = logging.getLogger(__name__)
-
-GRPC_HOST = "0.0.0.0"
-GRPC_PORT = 50051
 
 
 class AgentBridgeServicer(saas_agent_pb2_grpc.AgentBridgeServicer):
@@ -29,11 +27,17 @@ class AgentBridgeServicer(saas_agent_pb2_grpc.AgentBridgeServicer):
                 grpc.StatusCode.INVALID_ARGUMENT,
                 f"app_id inválido: {request.app_id}",
             )
-            return None
 
-        with self._session_factory() as session:
-            app = session.scalar(
-                select(Application).where(Application.id == app_id)
+        try:
+            with self._session_factory() as session:
+                app = session.scalar(
+                    select(Application).where(Application.id == app_id)
+                )
+            db_url = make_url(settings.database_url)
+        except SQLAlchemyError:
+            logger.exception("Falha ao consultar a aplicação %s", app_id)
+            context.abort(
+                grpc.StatusCode.UNAVAILABLE, "Banco de dados indisponível"
             )
 
         if app is None:
@@ -41,8 +45,6 @@ class AgentBridgeServicer(saas_agent_pb2_grpc.AgentBridgeServicer):
                 grpc.StatusCode.NOT_FOUND,
                 f"Aplicação {request.app_id} não encontrada!",
             )
-
-        db_url = make_url(settings.database_url)
 
         return saas_agent_pb2.AppConfig(
             app_id=str(app.id),
@@ -54,32 +56,28 @@ class AgentBridgeServicer(saas_agent_pb2_grpc.AgentBridgeServicer):
             mqtt_topic=f"application/{app.id}/device/+/event/up",
         )
 
-    def IngestTelemetry(self, request, context):
-        """Placeholder para ingestão de telemetria."""
-        return saas_agent_pb2.Ack(ok=True)
-
-    def SyncRule(self, request, context):
-        """Placeholder para sincronização de regras."""
-        return saas_agent_pb2.Ack(ok=True)
-
     def ReportViolation(self, request, context):
-        """Placeholder para relatório de violações."""
-        return saas_agent_pb2.Ack(ok=True)
+        """Placeholder até a persistência de violações (Sprint 6)."""
+        return saas_agent_pb2.Ack(ok=False, error="not implemented")
+
+
+def create_server(
+    servicer: AgentBridgeServicer | None = None,
+) -> grpc.Server:
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    if servicer is None:
+        servicer = AgentBridgeServicer()
+    saas_agent_pb2_grpc.add_AgentBridgeServicer_to_server(servicer, server)
+    bind_address = f"{settings.grpc_host}:{settings.grpc_port}"
+    if server.add_insecure_port(bind_address) == 0:
+        raise RuntimeError(
+            f"Não foi possível fazer bind do servidor gRPC em {bind_address}"
+        )
+    return server
 
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    saas_agent_pb2_grpc.add_AgentBridgeServicer_to_server(
-        AgentBridgeServicer(), server
-    )
-    port = server.add_insecure_port(f"{GRPC_HOST}:{GRPC_PORT}")
-    if port == 0:
-        logger.error(
-            "Não foi possível fazer bind do servidor gRPC em %s:%s",
-            GRPC_HOST,
-            GRPC_PORT,
-        )
-        return
+    server = create_server()
     server.start()
     server.wait_for_termination()
 

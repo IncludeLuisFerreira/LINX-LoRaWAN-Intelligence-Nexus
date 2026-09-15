@@ -1,16 +1,21 @@
 from collections.abc import Generator
 from concurrent import futures
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import grpc
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
+from linx import grpc_server as grpc_server_module
 from linx.core.config import settings
 from linx.db.base import engine
 from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc
-from linx.grpc_server import AgentBridgeServicer
+from linx.grpc_server import AgentBridgeServicer, create_server
+from linx.main import app
 from linx.models.application import Application
 from linx.models.tenant import Tenant
 
@@ -28,6 +33,13 @@ class FakeContext:
     def abort(self, code: grpc.StatusCode, details: str) -> None:
         self.aborted = (code, details)
         raise AbortError(details)
+
+
+class BrokenSessionFactory:
+    """Session factory que simula indisponibilidade do banco."""
+
+    def __call__(self):
+        raise SQLAlchemyError("banco indisponível")
 
 
 @pytest.fixture
@@ -103,20 +115,78 @@ def test_get_app_config_aborts_invalid_argument_for_invalid_app_id():
     assert context.aborted[0] == grpc.StatusCode.INVALID_ARGUMENT
 
 
-def test_ack_handlers_return_ok():
+def test_get_app_config_aborts_unavailable_when_database_fails():
+    servicer = AgentBridgeServicer(session_factory=BrokenSessionFactory())
+    context = FakeContext()
+
+    with pytest.raises(AbortError):
+        servicer.GetAppConfig(
+            saas_agent_pb2.AppId(app_id=str(uuid4())), context
+        )
+
+    assert context.aborted is not None
+    assert context.aborted[0] == grpc.StatusCode.UNAVAILABLE
+
+
+def test_report_violation_returns_not_implemented_ack():
     servicer = AgentBridgeServicer()
 
-    assert (
-        servicer.IngestTelemetry(
-            saas_agent_pb2.TelemetryEvent(), FakeContext()
-        ).ok
-        is True
+    response = servicer.ReportViolation(
+        saas_agent_pb2.Violation(), FakeContext()
     )
-    assert servicer.SyncRule(saas_agent_pb2.Rule(), FakeContext()).ok is True
-    assert (
-        servicer.ReportViolation(saas_agent_pb2.Violation(), FakeContext()).ok
-        is True
+
+    assert response.ok is False
+    assert response.error == "not implemented"
+
+
+def test_create_server_binds_configured_address(monkeypatch):
+    monkeypatch.setattr(settings, "grpc_host", "127.0.0.1")
+    monkeypatch.setattr(settings, "grpc_port", 0)
+
+    server = create_server()
+    try:
+        assert isinstance(server, grpc.Server)
+        server.start()
+    finally:
+        server.stop(0)
+
+
+def test_create_server_raises_when_bind_fails(monkeypatch):
+    fake_server = MagicMock()
+    fake_server.add_insecure_port.return_value = 0
+    monkeypatch.setattr(
+        "linx.grpc_server.grpc.server", lambda *args, **kwargs: fake_server
     )
+    monkeypatch.setattr(
+        "linx.grpc_server.saas_agent_pb2_grpc"
+        ".add_AgentBridgeServicer_to_server",
+        lambda *args, **kwargs: None,
+    )
+
+    with pytest.raises(RuntimeError):
+        create_server()
+
+
+def test_serve_starts_and_waits_for_termination(monkeypatch):
+    fake_server = MagicMock()
+    monkeypatch.setattr("linx.grpc_server.create_server", lambda: fake_server)
+
+    grpc_server_module.serve()
+
+    fake_server.start.assert_called_once()
+    fake_server.wait_for_termination.assert_called_once()
+
+
+def test_lifespan_starts_and_stops_grpc_server(monkeypatch):
+    fake_server = MagicMock()
+    monkeypatch.setattr("linx.main.create_server", lambda: fake_server)
+
+    with TestClient(app) as client:
+        assert client.get("/health").status_code == 200
+        fake_server.start.assert_called_once()
+
+    fake_server.stop.assert_called_once_with(grace=5)
+    fake_server.stop.return_value.wait.assert_called_once()
 
 
 @pytest.fixture
@@ -152,3 +222,24 @@ def test_get_app_config_over_grpc_not_found(grpc_channel):
         stub.GetAppConfig(saas_agent_pb2.AppId(app_id=str(uuid4())))
 
     assert exc_info.value.code() == grpc.StatusCode.NOT_FOUND
+
+
+def test_report_violation_over_grpc(grpc_channel):
+    stub = saas_agent_pb2_grpc.AgentBridgeStub(grpc_channel)
+
+    response = stub.ReportViolation(saas_agent_pb2.Violation())
+
+    assert response.ok is False
+    assert response.error == "not implemented"
+
+
+def test_client_hosted_rpcs_are_unimplemented_on_saas(grpc_channel):
+    stub = saas_agent_pb2_grpc.AgentBridgeStub(grpc_channel)
+
+    for rpc, request in (
+        (stub.IngestTelemetry, saas_agent_pb2.TelemetryEvent()),
+        (stub.SyncRule, saas_agent_pb2.Rule()),
+    ):
+        with pytest.raises(grpc.RpcError) as exc_info:
+            rpc(request)
+        assert exc_info.value.code() == grpc.StatusCode.UNIMPLEMENTED

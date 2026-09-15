@@ -1,4 +1,4 @@
-import threading
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -7,17 +7,20 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from linx.grpc_server import serve
+from linx.grpc_server import create_server
 from linx.routes.application import router as application_router
 from linx.routes.tenant import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    grpc_thread = threading.Thread(target=serve, daemon=True)
-    grpc_thread.start()
-
-    yield
+    grpc_server = create_server()
+    grpc_server.start()
+    try:
+        yield
+    finally:
+        stop_event = grpc_server.stop(grace=5)
+        await asyncio.to_thread(stop_event.wait)
 
 
 app = FastAPI(title="LINX SAAS Backend", lifespan=lifespan)

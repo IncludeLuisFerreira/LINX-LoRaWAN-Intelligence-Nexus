@@ -44,7 +44,7 @@ A geração dos stubs Python é feita na issue #20.
 | `db_name`     | string | 4 | Nome do banco do tenant                  |
 | `db_user`     | string | 5 | Usuário do banco                         |
 | `db_password` | string | 6 | Senha do banco                           |
-| `mqtt_topic`  | string | 7 | Tópico MQTT de assinatura (`application/+/device/+/event/up`) |
+| `mqtt_topic`  | string | 7 | Tópico MQTT de assinatura (`application/<app_id>/device/+/event/up`) |
 
 ### `TelemetryEvent`
 
