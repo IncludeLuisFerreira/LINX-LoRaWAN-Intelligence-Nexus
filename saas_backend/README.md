@@ -291,6 +291,80 @@ Se o Postgres ou o servidor gRPC estiverem fora, retorna `503` com:
 > O campo `grpc` indica apenas que existe um listener na porta configurada
 > (`GRPC_PORT`, padrão `50051`); não é um health check do protocolo gRPC em si.
 
+## 🚀 Deploy (produção / EC2)
+
+O deploy de produção usa `docker-compose.prod.yml` (serviços `app` + `db`) e a imagem
+construída pelo `Dockerfile`. O entrypoint aplica as migrations do Alembic e sobe o
+Uvicorn, que também inicia o servidor gRPC.
+
+### Variáveis de ambiente
+
+Copie o template e ajuste a senha:
+
+```bash
+cd saas_backend
+cp .env.example .env
+```
+
+| Variável             | Descrição                                                        | Default no exemplo              |
+| -------------------- | ---------------------------------------------------------------- | ------------------------------- |
+| `POSTGRES_USER`      | Usuário do Postgres do MVP.                                      | `linx`                          |
+| `POSTGRES_PASSWORD`  | Senha do Postgres (troque em produção).                          | `change-me-in-production`       |
+| `POSTGRES_DB`        | Banco do Postgres.                                               | `linx`                          |
+| `DATABASE_URL`       | URL SQLAlchemy; host = `db` (serviço do Compose).                | `postgresql+psycopg://linx:...@db:5432/linx` |
+| `DB_CONNECT_TIMEOUT` | Timeout de conexão com o banco (segundos).                       | `5`                             |
+| `GRPC_HOST`          | Endereço de bind do servidor gRPC.                               | `0.0.0.0`                       |
+| `GRPC_PORT`          | Porta do servidor gRPC.                                          | `50051`                         |
+
+> O `.env` é ignorado pelo git; nunca o versione.
+
+### Subir localmente (validar a stack de produção)
+
+```bash
+cd saas_backend
+cp .env.example .env
+docker compose -f docker-compose.prod.yml up -d --build
+curl -i http://localhost:8000/health
+```
+
+Resposta esperada (`200`):
+
+```json
+{"status":"ok","db":true,"grpc":true}
+```
+
+### Runbook — EC2 `t3.small`
+
+1. **Criar a instância:** EC2 `t3.small`, Ubuntu 22.04+ (ou Amazon Linux 2), com IP
+   público e um keypair SSH.
+2. **Security Group (inbound):**
+   - `22` (SSH) — restrito ao seu IP;
+   - `8000` (REST) — `0.0.0.0/0`;
+   - `50051` (gRPC) — `0.0.0.0/0` (ou IP do Client Agent).
+3. **Instalar Docker e Compose plugin:**
+   ```bash
+   sudo apt update && sudo apt install -y docker.io docker-compose-plugin
+   sudo usermod -aG docker "$USER" && newgrp docker
+   ```
+4. **Clonar o repositório e configurar o ambiente:**
+   ```bash
+   git clone https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus.git
+   cd LINX-LoRaWAN-Intelligence-Nexus
+   git checkout develop
+   cd saas_backend
+   cp .env.example .env
+   # edite .env e defina uma POSTGRES_PASSWORD forte
+   ```
+5. **Subir a stack:**
+   ```bash
+   ./scripts/deploy.sh
+   ```
+6. **Verificar de fora da AWS:**
+   ```bash
+   curl -i http://<ec2-ip>:8000/health
+   ```
+   Expected: `200` com `{"status":"ok","db":true,"grpc":true}`.
+
 ## 📦 Dependências do projeto
 
 ### FastAPI
