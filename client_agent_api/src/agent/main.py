@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -17,7 +18,7 @@ async def lifespan(app: FastAPI):
         timeout=settings.grpc_timeout_seconds,
         cache_ttl_seconds=settings.config_cache_ttl_seconds,
     )
-    connected = client.check_connectivity()
+    connected = await asyncio.to_thread(client.check_connectivity)
     if connected:
         logger.info("SaaS Backend acessível em %s", settings.saas_grpc_host)
     app.state.saas_client = client

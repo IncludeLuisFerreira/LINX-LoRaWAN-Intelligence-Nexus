@@ -30,7 +30,7 @@ class SaasGrpcClient:
         self._server = server
         self._timeout = timeout
         self._cache_ttl = cache_ttl_seconds
-        self._channel = grpc.insecure_channel(server)
+        self._channel = grpc.insecure_channel("localhost:50051")
         self._stub = saas_agent_pb2_grpc.AgentBridgeStub(self._channel)
         self._cache: dict[str, tuple[TenantRuntimeConfig, float]] = {}
 
@@ -76,8 +76,10 @@ class SaasGrpcClient:
                 timeout=self._timeout
             )
             return True
-        except grpc.FutureTimeoutError:
-            logger.critical("SaaS Backend inacessível em %s", self._server)
+        except (grpc.FutureTimeoutError, grpc.RpcError, Exception) as err:
+            logger.critical(
+                "SaaS Backend inacessível em %s: %s", self._server, err
+            )
             return False
 
     def close(self) -> None:
