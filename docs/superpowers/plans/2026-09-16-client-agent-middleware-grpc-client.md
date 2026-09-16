@@ -1,28 +1,28 @@
-# Client Agent API — gRPC Client do Gateway (Modelo A) Implementation Plan
+# Client Agent API — gRPC Client do Middleware (Modelo A) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Transformar o `client_agent_api` de agente por-tenant (Modelo B) em gateway compartilhado (Modelo A) com client gRPC, checagem de conectividade no startup e resolução de `GetAppConfig(app_id)` sob demanda com cache.
+**Goal:** Transformar o `client_agent_api` de agente por-tenant (Modelo B) em middleware compartilhado (Modelo A) com client gRPC, checagem de conectividade no startup e resolução de `GetAppConfig(app_id)` sob demanda com cache.
 
-**Architecture:** O `client_agent_api` passa a ser um gateway único entre frontend/integrações e os contêineres isolados por aplicação. No startup ele valida a conectividade gRPC com o SaaS Backend e aguarda requisições; a config de cada tenant é resolvida sob demanda via `GetAppConfig(app_id)` com cache TTL. A ingestão MQTT deixa de viver no gateway (vai para o `tenant_app_template` em issue futura).
+**Architecture:** O `client_agent_api` passa a ser um middleware único entre frontend/integrações e os contêineres isolados por aplicação. No startup ele valida a conectividade gRPC com o SaaS Backend e aguarda requisições; a config de cada tenant é resolvida sob demanda via `GetAppConfig(app_id)` com cache TTL. A ingestão MQTT deixa de viver no middleware (vai para o `tenant_app_template` em issue futura).
 
 **Tech Stack:** Python 3.12, FastAPI, grpcio, protobuf, pydantic-settings, pytest, mypy, black, isort, flake8, taskipy.
 
 **Issue:** #34 (reescrita para o Modelo A)
 
-**Fora de escopo:** ingestão MQTT no tenant, gRPC server do gateway (`IngestTelemetry`/`SyncRule`), proxy REST/WebSocket, JWT/RBAC, TLS, `application_instances`/`agent_endpoint`.
+**Fora de escopo:** ingestão MQTT no tenant, gRPC server do middleware (`IngestTelemetry`/`SyncRule`), proxy REST/WebSocket, JWT/RBAC, TLS, `application_instances`/`agent_endpoint`.
 
 ---
 
 ## Decisões
 
-1. Conectividade no startup **não** derruba o gateway: loga e continua; `/health` reporta `saas_grpc`.
+1. Conectividade no startup **não** derruba o middleware: loga e continua; `/health` reporta `saas_grpc`.
 2. `TenantRuntimeConfig` mantém `db_host`/`db_port`/`mqtt_topic` (contrato atual). `agent_endpoint`/`agent_port` entram na Fase 5.
 3. `mqtt_consumer.py` permanece no repo nesta issue; a movimentação para o tenant é a Fase 1.
 
 ## File Structure
 
-- Modify: `client_agent_api/src/agent/config.py` — settings do gateway, sem `app_id`.
+- Modify: `client_agent_api/src/agent/config.py` — settings do middleware, sem `app_id`.
 - Rewrite: `client_agent_api/src/agent/grpc_client.py` — `SaasGrpcClient` (connectivity + resolver + cache).
 - Modify: `client_agent_api/src/agent/main.py` — lifespan cria client, valida conectividade, expõe `app.state`.
 - Modify: `client_agent_api/tests/conftest.py` — remove `APP_ID`.
@@ -33,7 +33,7 @@
 
 ---
 
-### Task 1: Settings do gateway sem `app_id`
+### Task 1: Settings do middleware sem `app_id`
 
 **Files:**
 - Modify: `client_agent_api/src/agent/config.py`
