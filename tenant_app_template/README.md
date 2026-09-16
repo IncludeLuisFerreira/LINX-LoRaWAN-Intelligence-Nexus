@@ -1,8 +1,9 @@
 # Tenant App Template
 
-Molde do Docker Cliente do **Aluno 3** — o serviço que será instanciado por
-aplicação no Sprint 4. Este é o scaffold inicial com FastAPI + Poetry,
-entregue na issue #16.
+Molde do ambiente isolado por aplicação (motor de regras + TimescaleDB),
+instanciado por aplicação no Sprint 4. Este é o scaffold inicial com
+FastAPI + Poetry, entregue na issue #16. O tenant app **não** roda o
+middleware: ele se comunica com o `client_agent_api` compartilhado.
 
 ## 📋 O que foi feito
 
@@ -89,7 +90,9 @@ docker run --rm -p 8000:8000 tenant-app-template
 
 ## 🐳 Docker Compose (ambiente tenant completo)
 
-Sobe `timescaledb` + `client_agent` isolados por tenant.
+Sobe `timescaledb` + `tenant_app`. O tenant app **não** instancia o
+`client_agent_api`: ele se comunica com o **middleware compartilhado**, cujo
+endereço vem de `CLIENT_AGENT_URL`.
 
 **Pré-requisitos:** Docker Compose V2 (`docker compose version`).
 
@@ -101,13 +104,17 @@ docker compose up --build
 
 Variáveis obrigatórias no `.env`:
 
-| Variável      | Exemplo         | Descrição                        |
-| ------------- | --------------- | -------------------------------- |
-| `APP_ID`      | `app-abc123`    | ID da aplicação no SaaS          |
-| `MQTT_TOPIC`  | `au915_0/+/...` | Tópico MQTT de uplink            |
-| `TENANT_PORT` | `8001`          | Porta exposta do `client_agent`  |
-| `DB_USER`     | `tenant`        | Usuário do PostgreSQL            |
-| `DB_PASSWORD` | `secret`        | Senha do PostgreSQL              |
-| `DB_NAME`     | `tenantdb`      | Nome do banco                    |
+| Variável           | Exemplo                      | Descrição                              |
+| ------------------ | ---------------------------- | -------------------------------------- |
+| `CLIENT_AGENT_URL` | `http://localhost:8001`      | URL base do middleware compartilhado.  |
+| `APP_ID`           | `app-abc123`                 | ID da aplicação no SaaS.               |
+| `MQTT_TOPIC`       | `au915_0/gateway/+/event/up` | Tópico MQTT de uplink.                 |
+| `TENANT_PORT`      | `8002`                       | Porta exposta do `tenant_app`.         |
+| `DB_USER`          | `tenant`                     | Usuário do PostgreSQL.                 |
+| `DB_PASSWORD`      | `secret`                     | Senha do PostgreSQL.                   |
+| `DB_NAME`          | `tenantdb`                   | Nome do banco.                         |
+
+> O cliente HTTP tenant→middleware ainda não está implementado (issue
+> futura); aqui entra apenas a configuração/topologia.
 
 > `depends_on: condition: service_healthy` requer Docker Compose V2. Não compatível com `docker stack deploy` (Swarm).
