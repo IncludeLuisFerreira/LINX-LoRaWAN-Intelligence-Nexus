@@ -14,10 +14,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-  client_agent:
-    build: ../client_agent_api
+  tenant_app:
+    build: .
     restart: unless-stopped
     environment:
+      - CLIENT_AGENT_URL=${CLIENT_AGENT_URL}
       - APP_ID=${APP_ID}
       - MQTT_TOPIC=${MQTT_TOPIC}
       - DB_HOST=timescaledb
@@ -28,7 +29,6 @@ services:
       timescaledb:
         condition: service_healthy
     ports:
-      - "${TENANT_PORT}:8001"
-
+      - "${TENANT_PORT}:8000"
 volumes:
   timescaledb_data:
