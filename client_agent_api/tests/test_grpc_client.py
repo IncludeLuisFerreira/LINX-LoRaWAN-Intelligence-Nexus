@@ -12,9 +12,12 @@ from agent.grpc_client import (
 
 
 def _client(stub: MagicMock) -> SaasGrpcClient:
-    with patch("agent.grpc_client.grpc.insecure_channel"), patch(
-        "agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub",
-        return_value=stub,
+    with (
+        patch("agent.grpc_client.grpc.insecure_channel"),
+        patch(
+            "agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub",
+            return_value=stub,
+        ),
     ):
         return SaasGrpcClient(
             server="localhost:50051", timeout=1.0, cache_ttl_seconds=60.0
@@ -70,9 +73,7 @@ def test_get_app_config_refreshes_after_ttl():
     )
     client = _client(stub)
 
-    with patch(
-        "agent.grpc_client.time.monotonic", side_effect=[0.0, 61.0]
-    ):
+    with patch("agent.grpc_client.time.monotonic", side_effect=[0.0, 61.0]):
         client.get_app_config("tenant1")
         client.get_app_config("tenant1")
 
@@ -82,10 +83,12 @@ def test_get_app_config_refreshes_after_ttl():
 def test_check_connectivity_true_when_ready():
     future = MagicMock()
     future.result.return_value = None
-    with patch("agent.grpc_client.grpc.insecure_channel"), patch(
-        "agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub"
-    ), patch(
-        "agent.grpc_client.grpc.channel_ready_future", return_value=future
+    with (
+        patch("agent.grpc_client.grpc.insecure_channel"),
+        patch("agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub"),
+        patch(
+            "agent.grpc_client.grpc.channel_ready_future", return_value=future
+        ),
     ):
         client = SaasGrpcClient("localhost:50051", timeout=1.0)
         assert client.check_connectivity() is True
@@ -94,10 +97,12 @@ def test_check_connectivity_true_when_ready():
 def test_check_connectivity_false_on_timeout():
     future = MagicMock()
     future.result.side_effect = grpc.FutureTimeoutError()
-    with patch("agent.grpc_client.grpc.insecure_channel"), patch(
-        "agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub"
-    ), patch(
-        "agent.grpc_client.grpc.channel_ready_future", return_value=future
+    with (
+        patch("agent.grpc_client.grpc.insecure_channel"),
+        patch("agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub"),
+        patch(
+            "agent.grpc_client.grpc.channel_ready_future", return_value=future
+        ),
     ):
         client = SaasGrpcClient("localhost:50051", timeout=1.0)
         assert client.check_connectivity() is False
