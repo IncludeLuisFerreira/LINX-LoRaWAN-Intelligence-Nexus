@@ -48,3 +48,32 @@ def test_get_app_config_rpc_error_raises_bootstrap_error():
         client.get_app_config("missing")
 
     assert "NOT_FOUND" in str(exc.value)
+
+
+def test_get_app_config_uses_cache():
+    stub = MagicMock()
+    stub.GetAppConfig.return_value = saas_agent_pb2.AppConfig(
+        db_host="h", db_port=1, mqtt_topic="t"
+    )
+    client = _client(stub)
+
+    client.get_app_config("tenant1")
+    client.get_app_config("tenant1")
+
+    assert stub.GetAppConfig.call_count == 1
+
+
+def test_get_app_config_refreshes_after_ttl():
+    stub = MagicMock()
+    stub.GetAppConfig.return_value = saas_agent_pb2.AppConfig(
+        db_host="h", db_port=1, mqtt_topic="t"
+    )
+    client = _client(stub)
+
+    with patch(
+        "agent.grpc_client.time.monotonic", side_effect=[0.0, 61.0]
+    ):
+        client.get_app_config("tenant1")
+        client.get_app_config("tenant1")
+
+    assert stub.GetAppConfig.call_count == 2
