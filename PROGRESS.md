@@ -13,9 +13,9 @@
 - [ ] [#7 feat(frontend): openapi-stub.yaml with expected REST contracts](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/7)
 - [ ] [#8 feat(backend): scaffold FastAPI + Poetry project](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/8)
 - [ ] [#9 feat(devops): docker-compose.base.yml (PostgreSQL 15, Redis 7, Mosquitto)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/9)
-- [ ] [#10 feat(backend): SQLAlchemy models (organizations, applications, users, roles)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/10)
+- [ ] [#10 feat(backend): SQLAlchemy models (tenant, application, user, tenant_user)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/10)
 - [ ] [#11 feat(backend): initial Alembic migration for 4 tables](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/11)
-- [ ] [#12 feat(backend): CRUD REST for organizations /api/v1/orgs](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/12)
+- [ ] [#12 feat(backend): CRUD REST for organizations /api/v1/tenant](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/12)
 - [ ] [#13 feat(backend): CRUD REST for applications linked to org](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/13)
 - [ ] [#14 ci(devops): GitHub Actions (black, flake8, mypy, pytest >=70%)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/14)
 - [ ] [#15 feat(backend): deliver OpenAPI stub for frontend](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/15)
@@ -25,11 +25,11 @@
 - [ ] [#19 feat(backend): define proto/saas_agent.proto (AgentBridge)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/19)
 - [ ] [#20 feat(backend): generate Python gRPC stubs](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/20)
 - [ ] [#21 feat(devops): multi-stage Dockerfile for client_agent_api](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/21)
-- [ ] [#22 feat(devops): tenant docker-compose (client_agent_api + timescaledb)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/22)
+- [ ] [#22 feat(devops): tenant docker-compose (tenant_app + timescaledb)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/22)
 
 ## Sprint 2 — Dois Serviços na AWS com gRPC
 
-- [ ] [#23 feat(frontend): organization registration screen consuming POST /api/v1/orgs](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/23)
+- [ ] [#23 feat(frontend): tenant registration screen consuming POST /api/v1/tenant](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/23)
 - [ ] [#24 feat(frontend): application registration screen with organization select](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/24)
 - [ ] [#25 feat(devops): frontend Dockerfile (nginx alpine serving static build)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/25)
 - [ ] [#26 feat(devops): deploy-frontend.sh (build → push → deploy EC2/S3+CloudFront)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/26)
@@ -40,12 +40,12 @@
 - [ ] [#31 feat(devops): AWS Security Group (8000, 50051, 22)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/31)
 - [ ] [#32 feat(devops): nginx with TLS (Let's Encrypt / self-signed dev)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/32)
 - [ ] [#33 feat(backend): device_routes table (dev_eui, app_id, agent_endpoint)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/33)
-- [ ] [#34 feat(backend): gRPC client calling GetAppConfig on startup](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/34)
+- [ ] [#34 feat(backend): gRPC client do middleware + resolução de config por tenant (GetAppConfig)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/34)
 - [ ] [#35 feat(backend): POST /ingest (validate schema, persist TimescaleDB)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)
 - [ ] [#36 feat(backend): pipeline Mosquitto → mqtt_consumer → POST /ingest → TimescaleDB](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/36)
 - [ ] [#37 feat(devops): deploy Client Agent on second EC2 (or port 8001)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/37)
 - [ ] [#38 feat(backend): log AppConfig received via gRPC (proof of communication)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/38)
-- [ ] [#39 docs(backend): README with curl for create org + ingest telemetry](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/39)
+- [ ] [#39 docs(backend): README with curl for create tenant + ingest telemetry](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/39)
 
 ## Sprint 3 — ChirpStack, Uplink Ponta-a-Ponta e WebSocket
 
@@ -77,7 +77,7 @@
 - [ ] [#62 feat(backend): enforce UUID v4 on all resources](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/62)
 - [ ] [#63 feat(backend): update device_routes with provisioned endpoint](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/63)
 - [ ] [#64 feat(devops): publish tenant_app_template image to ECR/Docker Hub](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/64)
-- [ ] [#65 feat(backend): Client Agent receives APP_ID and MQTT_TOPIC via env](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/65)
+- [ ] [#65 feat(backend): [obsoleto] Client Agent receives APP_ID and MQTT_TOPIC via env](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/65)
 - [ ] [#66 feat(devops): network isolation (dedicated bridge per app)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/66)
 - [ ] [#67 feat(backend): tenant /health (TimescaleDB + MQTT consumer)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/67)
 - [ ] [#68 feat(backend): isolation test script (2 apps, no data crossing)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/68)

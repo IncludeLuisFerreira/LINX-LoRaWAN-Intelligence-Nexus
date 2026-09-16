@@ -63,7 +63,7 @@ O MVP é considerado completo quando:
 - [ ] Definir `proto/saas_agent.proto`: `service AgentBridge { rpc GetAppConfig(AppId) returns (AppConfig); rpc IngestTelemetry(TelemetryEvent) returns (Ack); }`.
 - [ ] Gerar stubs gRPC Python.
 - [ ] Dockerfile multi-stage para `client_agent_api`.
-- [ ] `docker-compose.yml` do tenant: `client_agent_api` + `timescaledb`.
+- [ ] `docker-compose.yml` do tenant: `tenant_app` (motor de regras) + `timescaledb`. O `client_agent_api` é middleware **compartilhado**, não faz parte do container por-tenant.
 
 **Critérios de Aceitação S1:**
 - `docker-compose -f infra/docker-compose.base.yml up` sobe sem erros.
@@ -94,7 +94,7 @@ O MVP é considerado completo quando:
 - [ ] Tabela `device_routes` (`dev_eui`, `app_id`, `agent_endpoint`) para roteamento futuro.
 
 ### Aluno 3 — Client Agent
-- [ ] gRPC Client em `client_agent_api/grpc_client.py`: conecta ao SaaS Backend porta 50051, chama `GetAppConfig` no startup.
+- [ ] gRPC Client em `client_agent_api/grpc_client.py`: conecta ao SaaS Backend porta 50051 e resolve `GetAppConfig` sob demanda (com cache TTL).
 - [ ] Endpoint `POST /ingest`: recebe payload JSON, valida schema, persiste no TimescaleDB.
 - [ ] Pipeline: Mosquitto → `mqtt_consumer.py` → parse → `POST /ingest` → TimescaleDB.
 - [ ] Deploy em segunda instância EC2 (ou porta 8001 na mesma EC2).
@@ -163,7 +163,7 @@ O MVP é considerado completo quando:
 
 ### Aluno 3 — Client Agent + Tenant Template
 - [ ] Imagem Docker do `tenant_app_template` publicada no ECR (ou Docker Hub para MVP).
-- [ ] Client Agent recebe `APP_ID` e `MQTT_TOPIC` via variável de ambiente no startup.
+- [ ] `tenant_app` recebe `APP_ID` e `MQTT_TOPIC` via variável de ambiente no startup. (O middleware `client_agent_api` é compartilhado e não recebe `APP_ID`.)
 - [ ] Isolamento de rede: cada container tenant em Docker network isolada (`bridge` dedicada por app).
 - [ ] Endpoint `/health` no tenant retornando status do TimescaleDB e do consumidor MQTT.
 - [ ] Teste de isolamento: script Python que cria 2 apps, publica telemetria em cada uma e verifica que os dados não se cruzam.
