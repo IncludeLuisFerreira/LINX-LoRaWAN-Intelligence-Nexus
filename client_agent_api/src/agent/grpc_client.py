@@ -70,5 +70,15 @@ class SaasGrpcClient:
         self._cache[app_id] = (config, now + self._cache_ttl)
         return config
 
+    def check_connectivity(self) -> bool:
+        try:
+            grpc.channel_ready_future(self._channel).result(
+                timeout=self._timeout
+            )
+            return True
+        except grpc.FutureTimeoutError:
+            logger.critical("SaaS Backend inacessível em %s", self._server)
+            return False
+
     def close(self) -> None:
         self._channel.close()

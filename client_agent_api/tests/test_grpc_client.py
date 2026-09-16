@@ -77,3 +77,27 @@ def test_get_app_config_refreshes_after_ttl():
         client.get_app_config("tenant1")
 
     assert stub.GetAppConfig.call_count == 2
+
+
+def test_check_connectivity_true_when_ready():
+    future = MagicMock()
+    future.result.return_value = None
+    with patch("agent.grpc_client.grpc.insecure_channel"), patch(
+        "agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub"
+    ), patch(
+        "agent.grpc_client.grpc.channel_ready_future", return_value=future
+    ):
+        client = SaasGrpcClient("localhost:50051", timeout=1.0)
+        assert client.check_connectivity() is True
+
+
+def test_check_connectivity_false_on_timeout():
+    future = MagicMock()
+    future.result.side_effect = grpc.FutureTimeoutError()
+    with patch("agent.grpc_client.grpc.insecure_channel"), patch(
+        "agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub"
+    ), patch(
+        "agent.grpc_client.grpc.channel_ready_future", return_value=future
+    ):
+        client = SaasGrpcClient("localhost:50051", timeout=1.0)
+        assert client.check_connectivity() is False
