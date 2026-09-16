@@ -74,5 +74,5 @@ test = "pytest -s -x --cov=src -vv && coverage html && coverage report -m"
 # FERRAMENTAS DE RUN
 
 pre_run = "task test "
-run = "poetry run uvicorn agent.main:app --reload"
+run = "poetry run uvicorn agent.main:app --reload --port 8001"
 run_no_test = "poetry run uvicorn agent.main:app --reload"
