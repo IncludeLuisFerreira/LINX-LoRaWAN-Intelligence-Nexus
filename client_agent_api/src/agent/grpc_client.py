@@ -52,7 +52,7 @@ class SaasGrpcClient:
                 if hasattr(rpc_err, "details")
                 else str(rpc_err)
             )
-            logger.critical(
+            logger.error(
                 "Falha gRPC GetAppConfig app_id=%s code=%s details=%s",
                 app_id,
                 code,
@@ -77,7 +77,7 @@ class SaasGrpcClient:
             )
             return True
         except Exception as err:
-            logger.critical(
+            logger.warning(
                 "SaaS Backend inacessível em %s: %s", self._server, err
             )
             return False

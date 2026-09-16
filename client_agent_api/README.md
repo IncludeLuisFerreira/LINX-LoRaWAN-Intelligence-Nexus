@@ -76,6 +76,14 @@ Configuração por variáveis de ambiente:
 | `GRPC_TIMEOUT_SECONDS`     | `5`             | Timeout (s) das chamadas/checagem gRPC.        |
 | `CONFIG_CACHE_TTL_SECONDS` | `60`            | TTL (s) do cache de `GetAppConfig` por `app_id`. |
 
+> `SAAS_GRPC_HOST` precisa apontar para um endereço alcançável de dentro do
+> container do gateway. `localhost:50051` só funciona em dev na mesma máquina;
+> em container use o IP privado/DNS do SaaS ou um alias de rede Docker.
+
+> O `/health` revalida a conectividade com um cache curto (5 s) e retorna
+> `503`/`degraded` enquanto o SaaS estiver inacessível. Por isso não deve ser
+> usado como probe de liveness — apenas como readiness de dependência.
+
 ## 🧪 Testes
 
 ```bash

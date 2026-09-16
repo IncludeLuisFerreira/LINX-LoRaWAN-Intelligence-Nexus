@@ -25,6 +25,22 @@ def test_health_degraded_when_saas_unreachable():
     assert response.json() == {"status": "degraded", "saas_grpc": False}
 
 
+def test_health_rechecks_connectivity_after_ttl():
+    with patch("agent.main.SaasGrpcClient") as client_cls:
+        instance = client_cls.return_value
+        instance.check_connectivity.return_value = True
+        with TestClient(app) as client:
+            assert client.get("/health").json()["saas_grpc"] is True
+
+            instance.check_connectivity.return_value = False
+            client.app.state.saas_checked_at = 0.0
+
+            response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "degraded", "saas_grpc": False}
+
+
 def test_lifespan_registers_and_closes_client():
     with patch("agent.main.SaasGrpcClient") as client_cls:
         instance = client_cls.return_value
