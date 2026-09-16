@@ -1,12 +1,12 @@
 # Client Agent API
 
-Gateway/middleware compartilhado do LINX (Modelo A) — fica entre o
+Middleware compartilhado do LINX (Modelo A) — fica entre o
 frontend/integrações e os contêineres isolados por aplicação, validando acesso
 e roteando por `app_id`. No startup valida a conectividade gRPC com o SaaS
 Backend e resolve a configuração de cada tenant sob demanda via
 `GetAppConfig(app_id)`, com cache TTL.
 
-> A ingestão MQTT do tenant vive no `tenant_app_template`, não neste gateway.
+> A ingestão MQTT do tenant vive no `tenant_app_template`, não neste middleware.
 
 ## 📋 O que foi feito
 
@@ -63,9 +63,9 @@ curl http://localhost:8001/health
 # {"status":"ok","saas_grpc":true}
 ```
 
-## 🔗 Gateway gRPC (SaaS Backend)
+## 🔗 Middleware — conexão gRPC com o SaaS Backend
 
-No startup o gateway abre um canal gRPC com o SaaS Backend e valida a
+No startup o middleware abre um canal gRPC com o SaaS Backend e valida a
 conectividade (sem derrubar o serviço em caso de falha). A configuração de
 cada tenant é resolvida sob demanda com `GetAppConfig(app_id)` e cacheada.
 Configuração por variáveis de ambiente:
@@ -77,7 +77,7 @@ Configuração por variáveis de ambiente:
 | `CONFIG_CACHE_TTL_SECONDS` | `60`            | TTL (s) do cache de `GetAppConfig` por `app_id`. |
 
 > `SAAS_GRPC_HOST` precisa apontar para um endereço alcançável de dentro do
-> container do gateway. `localhost:50051` só funciona em dev na mesma máquina;
+> container do middleware. `localhost:50051` só funciona em dev na mesma máquina;
 > em container use o IP privado/DNS do SaaS ou um alias de rede Docker.
 
 > O `/health` revalida a conectividade com um cache curto (5 s) e retorna
