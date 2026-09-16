@@ -1,10 +1,9 @@
 services:
   client_agent:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
     ports:
       - "8001:8001"
-    

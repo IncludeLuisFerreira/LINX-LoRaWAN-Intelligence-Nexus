@@ -28,7 +28,7 @@ services:
       timescaledb:
         condition: service_healthy
     ports:
-      - "${TENANT_PORT}:8000"
+      - "${TENANT_PORT}:8001"
 
 volumes:
   timescaledb_data:

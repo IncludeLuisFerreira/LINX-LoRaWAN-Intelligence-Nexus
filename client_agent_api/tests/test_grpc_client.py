@@ -24,6 +24,16 @@ def _client(stub: MagicMock) -> SaasGrpcClient:
         )
 
 
+def test_channel_uses_configured_server():
+    with (
+        patch("agent.grpc_client.grpc.insecure_channel") as channel,
+        patch("agent.grpc_client.saas_agent_pb2_grpc.AgentBridgeStub"),
+    ):
+        SaasGrpcClient("saas:50051", timeout=1.0)
+
+    channel.assert_called_once_with("saas:50051")
+
+
 def test_get_app_config_maps_response():
     stub = MagicMock()
     stub.GetAppConfig.return_value = saas_agent_pb2.AppConfig(

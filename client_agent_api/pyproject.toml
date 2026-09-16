@@ -44,6 +44,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 
+[tool.coverage.run]
+omit = ["src/agent/grpc/*"]
+
 [tool.black]
 line-length = 79
 target-version = ["py312"]
@@ -75,4 +78,4 @@ test = "pytest -s -x --cov=src -vv && coverage html && coverage report -m"
 
 pre_run = "task test "
 run = "poetry run uvicorn agent.main:app --reload --port 8001"
-run_no_test = "poetry run uvicorn agent.main:app --reload"
+run_no_test = "poetry run uvicorn agent.main:app --reload --port 8001"

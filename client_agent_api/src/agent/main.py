@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 
 from agent.config import AgentSettings
 from agent.grpc_client import SaasGrpcClient
@@ -34,8 +34,11 @@ app = FastAPI(title="LINX Client Agent API", lifespan=lifespan)
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health(response: Response) -> dict:
+    connected = getattr(app.state, "saas_connected", False)
+    if not connected:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return {
-        "status": "ok",
-        "saas_grpc": getattr(app.state, "saas_connected", False),
+        "status": "ok" if connected else "degraded",
+        "saas_grpc": connected,
     }
