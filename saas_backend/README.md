@@ -311,7 +311,7 @@ cp .env.example .env
 | `POSTGRES_USER`      | Usuário do Postgres do MVP.                                      | `linx`                          |
 | `POSTGRES_PASSWORD`  | Senha do Postgres (troque em produção).                          | `change-me-in-production`       |
 | `POSTGRES_DB`        | Banco do Postgres.                                               | `linx`                          |
-| `DATABASE_URL`       | URL SQLAlchemy; host = `db` (serviço do Compose).                | `postgresql+psycopg://linx:...@db:5432/linx` |
+| `DATABASE_URL`       | URL SQLAlchemy. O exemplo usa `localhost`; no Compose é sobrescrita para o host `db`. | `postgresql+psycopg://linx:...@localhost:5432/linx` |
 | `DB_CONNECT_TIMEOUT` | Timeout de conexão com o banco (segundos).                       | `5`                             |
 | `GRPC_HOST`          | Endereço de bind do servidor gRPC.                               | `0.0.0.0`                       |
 | `GRPC_PORT`          | Porta do servidor gRPC.                                          | `50051`                         |
@@ -335,15 +335,23 @@ Resposta esperada (`200`):
 
 ### Runbook — EC2 `t3.small`
 
-1. **Criar a instância:** EC2 `t3.small`, Ubuntu 22.04+ (ou Amazon Linux 2), com IP
-   público e um keypair SSH.
+1. **Criar a instância:** EC2 `t3.small`, Ubuntu 22.04+, com IP público e um
+   keypair SSH.
 2. **Security Group (inbound):**
    - `22` (SSH) — restrito ao seu IP;
    - `8000` (REST) — `0.0.0.0/0`;
-   - `50051` (gRPC) — `0.0.0.0/0` (ou IP do Client Agent).
+   - `50051` (gRPC) — **somente o IP público do Client Agent** (ou uma regra
+     SG-to-SG). Não exponha a `0.0.0.0/0`.
+
+   > **Atenção (P0):** o gRPC ainda não tem autenticação e `GetAppConfig`
+   > devolve usuário/senha do Postgres. Como os endpoints REST também não têm
+   > auth e `GET /api/v1/tenant` + `GET /api/v1/tenant/{id}/applications`
+   > expõem os UUIDs, qualquer cliente com acesso a `50051` consegue obter as
+   > credenciais — e elas são as do banco global (não por aplicação). Restringir
+   > a porta ao Client Agent é o controle obrigatório até o mTLS do Sprint 5.
 3. **Instalar Docker e Compose plugin:**
    ```bash
-   sudo apt update && sudo apt install -y docker.io docker-compose-plugin
+   sudo apt update && sudo apt install -y docker.io docker-compose-v2
    sudo usermod -aG docker "$USER" && newgrp docker
    ```
 4. **Clonar o repositório e configurar o ambiente:**

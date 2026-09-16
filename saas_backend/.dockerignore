@@ -6,3 +6,5 @@
 **/.mypy_cache
 **/.venv
 **/.coverage
+.git
+**/tests

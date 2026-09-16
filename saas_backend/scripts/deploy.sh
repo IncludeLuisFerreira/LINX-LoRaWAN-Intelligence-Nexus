@@ -8,8 +8,9 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-echo "Pulling latest code..."
-git pull
+branch="$(git rev-parse --abbrev-ref HEAD)"
+echo "Pulling latest code on branch '${branch}'..."
+git pull --ff-only
 
 echo "Building and starting containers..."
 docker compose -f docker-compose.prod.yml up -d --build
