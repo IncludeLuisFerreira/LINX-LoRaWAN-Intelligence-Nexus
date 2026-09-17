@@ -14,7 +14,7 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 * [x] Endpoint de health check (`/health`) com status do banco e do servidor gRPC.
 * [x] Página inicial servida via Jinja2 + arquivos estáticos (`/`).
 * [x] Configuração do SQLAlchemy 2.0 + Psycopg (PostgreSQL).
-* [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`.
+* [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`, `device_routes`.
 * [x] Configuração centralizada via `pydantic-settings` (`core/config.py`).
 * [x] Alembic configurado com migration inicial das 4 tabelas.
 * [x] CRUD REST de Tenants em `/api/v1/tenant` (primeiro endpoint público do SaaS).
@@ -172,7 +172,7 @@ O projeto utiliza **SQLAlchemy 2.0** (estilo declarativo com `Mapped`/`mapped_co
 | -------------------------------- | ------------------------------------------------------------------- |
 | `src/linx/db/base_class.py`      | Declara `Base = declarative_base()`.                                |
 | `src/linx/db/base.py`            | Engine, `SessionLocal` e registro dos models em `Base.metadata`.    |
-| `src/linx/models/`               | Definição dos models (`tenant`, `application`, `user`, `tenant_user`). |
+| `src/linx/models/`               | Definição dos models (`tenant`, `application`, `user`, `tenant_user`, `device_routes`). |
 | `src/linx/schemas/`              | Schemas Pydantic da API (`tenant.py` → Create/Update/Response).     |
 | `src/linx/routes/`               | Rotas/endpoints da API (`tenant.py` → CRUD em `/api/v1/tenant`).    |
 
@@ -182,16 +182,17 @@ A `DATABASE_URL` está configurada em `src/linx/db/base.py` (padrão: `postgresq
 
 Os nomes de entidade seguem o schema do **ChirpStack v4** para facilitar a integração.
 
-| Model         | Tabela        | Descrição                                                                     |
-| ------------- | ------------- | ----------------------------------------------------------------------------- |
-| `Tenant`      | `tenant`      | Organização (tenant), com limites de gateways/dispositivos e `tags` (JSONB).  |
-| `Application` | `application` | Aplicação pertencente a um tenant (`tenant_id` FK → `tenant.id`).             |
-| `User`        | `user`        | Usuário global (`email` único, `password_hash`, flags de admin/ativo).        |
-| `TenantUser`  | `tenant_user` | Vínculo/papel de um usuário em um tenant (PK composta + flags de RBAC).       |
+| Model         | Tabela          | Descrição                                                                             |
+| ------------- | --------------- | ------------------------------------------------------------------------------------- |
+| `Tenant`      | `tenant`        | Organização (tenant), com limites de gateways/dispositivos e `tags` (JSONB).          |
+| `Application` | `application`   | Aplicação pertencente a um tenant (`tenant_id` FK → `tenant.id`).                     |
+| `User`        | `user`          | Usuário global (`email` único, `password_hash`, flags de admin/ativo).                |
+| `TenantUser`  | `tenant_user`   | Vínculo/papel de um usuário em um tenant (PK composta + flags de RBAC).               |
+| `DeviceRoute` | `device_routes` | Rota de telemetria: `dev_eui` único → `application.id` + `agent_endpoint` (nullable). |
 
 - Todos os `id` usam `UUID` (v4) como chave primária (RF-040).
 - `TenantUser` usa PK composta (`tenant_id`, `user_id`), fiel ao ChirpStack.
-- Relacionamentos ORM: `Tenant.applications` ↔ `Application.tenant` e `Tenant.tenant_users` ↔ `TenantUser` ↔ `User.tenant_users`.
+- Relacionamentos ORM: `Tenant.applications` ↔ `Application.tenant`, `Tenant.tenant_users` ↔ `TenantUser` ↔ `User.tenant_users` e `Application.device_routes` ↔ `DeviceRoute.application`.
 - `created_at`/`updated_at` são gerados **no ORM** (`default`/`onupdate` como callables Python com `datetime.now(timezone.utc)`), avaliados por linha no INSERT/UPDATE. Decisão: mantém-se no lado Python para um único app instance e evita trigger no Postgres (que não tem cláusula `ON UPDATE`); migrar para `server_default` pode ser revisitado se houver múltiplas instâncias ou updates diretos no banco.
 
 ### Verificando os models
@@ -203,7 +204,7 @@ poetry run python -c "from linx.db.base import Base; print(Base.metadata.tables.
 Saída esperada:
 
 ```text
-dict_keys(['application', 'tenant', 'tenant_user', 'user'])
+dict_keys(['application', 'device_routes', 'tenant', 'tenant_user', 'user'])
 ```
 
 ### Migrações (Alembic)

@@ -91,7 +91,7 @@ O MVP é considerado completo quando:
 - [ ] Deploy em EC2 `t3.small` com Docker Compose (app + PostgreSQL local para MVP).
 - [ ] Security Group AWS: inbound 8000 (REST), 50051 (gRPC), 22 (SSH).
 - [ ] Nginx com TLS (Let's Encrypt ou certificado autoassinado para dev).
-- [ ] Tabela `device_routes` (`dev_eui`, `app_id`, `agent_endpoint`) para roteamento futuro.
+- [x] Tabela `device_routes` (`dev_eui`, `app_id`, `agent_endpoint`) para roteamento futuro.
 
 ### Aluno 3 — Client Agent
 - [ ] gRPC Client em `client_agent_api/grpc_client.py`: conecta ao SaaS Backend porta 50051, chama `GetAppConfig` no startup.

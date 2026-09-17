@@ -39,7 +39,7 @@
 - [ ] [#30 feat(devops): deploy SaaS Backend on EC2 t3.small (Docker Compose)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/30)
 - [ ] [#31 feat(devops): AWS Security Group (8000, 50051, 22)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/31)
 - [ ] [#32 feat(devops): nginx with TLS (Let's Encrypt / self-signed dev)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/32)
-- [ ] [#33 feat(backend): device_routes table (dev_eui, app_id, agent_endpoint)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/33)
+- [x] [#33 feat(backend): device_routes table (dev_eui, app_id, agent_endpoint)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/33)
 - [ ] [#34 feat(backend): gRPC client calling GetAppConfig on startup](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/34)
 - [ ] [#35 feat(backend): POST /ingest (validate schema, persist TimescaleDB)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)
 - [ ] [#36 feat(backend): pipeline Mosquitto → mqtt_consumer → POST /ingest → TimescaleDB](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/36)
