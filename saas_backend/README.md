@@ -16,7 +16,7 @@ Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento
 * [x] Configuração do SQLAlchemy 2.0 + Psycopg (PostgreSQL).
 * [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`, `device_routes`.
 * [x] Configuração centralizada via `pydantic-settings` (`core/config.py`).
-* [x] Alembic configurado com migration inicial das 4 tabelas.
+* [x] Alembic configurado com migrations das tabelas `tenant`, `application`, `user`, `tenant_user` e `device_routes`.
 * [x] CRUD REST de Tenants em `/api/v1/tenant` (primeiro endpoint público do SaaS).
 * [x] Stubs gRPC do contrato `saas_agent.proto` em `src/linx/grpc/` (pacote `linx.grpc`).
 
