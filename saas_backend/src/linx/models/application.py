@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from linx.db.base_class import Base
 
 if TYPE_CHECKING:
+    from linx.models.device_route import DeviceRoute
     from linx.models.tenant import Tenant
 
 
@@ -60,3 +61,8 @@ class Application(Base):
     )
 
     tenant: Mapped["Tenant"] = relationship(back_populates="applications")
+
+    device_routes: Mapped[list["DeviceRoute"]] = relationship(
+        back_populates="application",
+        cascade="all, delete-orphan",
+    )
