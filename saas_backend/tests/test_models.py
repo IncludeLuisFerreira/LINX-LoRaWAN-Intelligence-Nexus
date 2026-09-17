@@ -49,6 +49,7 @@ def test_device_route_dev_eui_is_unique_and_indexed():
 def test_device_route_application_foreign_key():
     fk = list(DeviceRoute.__table__.foreign_keys)[0]
     assert fk.target_fullname == "application.id"
+    assert fk.ondelete == "CASCADE"
 
 
 def test_device_route_application_relationship():

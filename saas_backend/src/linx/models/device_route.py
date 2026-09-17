@@ -33,6 +33,7 @@ class DeviceRoute(Base):
     app_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("application.id", ondelete="CASCADE"),
+        index=True,
         nullable=False,
     )
 
