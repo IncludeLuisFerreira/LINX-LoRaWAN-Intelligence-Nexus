@@ -60,10 +60,11 @@ def main():
         lines.append(f"## {heading}")
         lines.append("")
         for i in by_sprint[name]:
-            mark = "x" if i["state"] == "closed" else " "
+            closed = i["state"].upper() == "CLOSED"
+            mark = "x" if closed else " "
             lines.append(f"- [{mark}] [#{i['number']} {i['title']}]({i['url']})")
             total += 1
-            if i["state"] == "closed":
+            if closed:
                 done += 1
         lines.append("")
     lines.append(f"**Total de issues:** {total} ({done} concluídas)")
