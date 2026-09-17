@@ -28,7 +28,7 @@
 | `sprint-7` | `#1d76db` | Sprint 7 — Resiliência |
 | `sprint-8` | `#d4c5f9` | Sprint 8 — Observabilidade e Hardening |
 | `frontend` | `#61dafb` | Código do frontend (React/Vite/TS) |
-| `backend` | `#2ea043` | Código de backend (FastAPI/gRPC/agente) |
+| `backend` | `#2ea043` | Código de backend (FastAPI/gRPC/middleware) |
 | `devops` | `#f9d0c4` | Infra, CI/CD, deploy, Docker |
 | `docs` | `#d876e3` | Documentação |
 
@@ -76,7 +76,7 @@ frontend
 ## Referências
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 1](SPRINTS_BACKLOG.md)
 
-#### `feat(frontend): routing structure (login, orgs, apps, devices, dashboard)`
+#### `feat(frontend): routing structure (login, tenants, apps, devices, dashboard)`
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `frontend`
 
 ## Contexto
@@ -84,7 +84,7 @@ Define a navegação base do SaaS; as rotas são a espinha dorsal das telas.
 
 ## Critérios de aceite
 - [ ] React Router configurado
-- [ ] Rotas /login, /orgs, /apps/:id, /devices e /dashboard/:appId existem
+- [ ] Rotas /login, /tenants, /apps/:id, /devices e /dashboard/:appId existem
 - [ ] Rota inexistente cai em fallback
 
 ## Stack afetado
@@ -119,7 +119,7 @@ Tela de login com autenticação mockada para desbloquear o fluxo antes do backe
 ## Critérios de aceite
 - [ ] Formulário de login
 - [ ] Mock de autenticação local
-- [ ] Redireciona para /orgs após login
+- [ ] Redireciona para /tenants após login
 
 ## Stack afetado
 frontend
@@ -154,7 +154,7 @@ Contrato REST acordado com o Aluno 2 para desenvolvimento paralelo contra mock.
 
 ## Critérios de aceite
 - [ ] Arquivo openapi-stub.yaml criado
-- [ ] Contratos de organizações e aplicações definidos
+- [ ] Contratos de tenants e aplicações definidos
 - [ ] Validado em conjunto com o Aluno 2
 
 ## Stack afetado
@@ -198,7 +198,7 @@ devops
 ## Referências
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 2](SPRINTS_BACKLOG.md)
 
-#### `feat(backend): SQLAlchemy models (organizations, applications, users, roles)`
+#### `feat(backend): SQLAlchemy models (tenant, application, user, tenant_user)`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `backend`
 
 ## Contexto
@@ -206,7 +206,7 @@ Modelos de domínio centrais com UUID como PK (nomeação de recursos).
 
 ## Critérios de aceite
 - [ ] 4 models com id UUID PK
-- [ ] Relacionamento organization → application definido
+- [ ] Relacionamento tenant → application definido
 - [ ] Tipos SQLAlchemy 2.0
 
 ## Stack afetado
@@ -233,14 +233,14 @@ backend
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 2](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-040](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(backend): CRUD REST for organizations /api/v1/orgs`
+#### `feat(backend): CRUD REST for tenants /api/v1/tenant`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `backend`
 
 ## Contexto
-Primeiro endpoint REST público do SaaS (cadastro de organizações).
+Primeiro endpoint REST público do SaaS (cadastro de tenants).
 
 ## Critérios de aceite
-- [ ] POST/GET/PATCH/DELETE /api/v1/orgs
+- [ ] POST/GET/PATCH/DELETE /api/v1/tenant
 - [ ] Validação de payload
 - [ ] Testes cobrindo o CRUD
 
@@ -251,15 +251,15 @@ backend
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 2](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-001](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(backend): CRUD REST for applications linked to org`
+#### `feat(backend): CRUD REST for applications linked to tenant`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `backend`
 
 ## Contexto
-Aplicações pertencem a uma organização, com org_id FK.
+Aplicações pertencem a um tenant, com tenant_id FK.
 
 ## Critérios de aceite
-- [ ] CRUD de /api/v1/applications
-- [ ] org_id FK obrigatório
+- [ ] CRUD de /api/v1/tenant/{tenant_id}/applications
+- [ ] tenant_id FK obrigatório
 - [ ] Testes de integridade referencial
 
 ## Stack afetado
@@ -294,7 +294,7 @@ Dependência crítica para o Aluno 1 desenvolver em paralelo (prazo 03/09).
 
 ## Critérios de aceite
 - [ ] OpenAPI stub entregue até 03/09
-- [ ] Contratos de organizações e aplicações
+- [ ] Contratos de tenants e aplicações
 - [ ] Aluno 1 consegue desenvolver contra o stub
 
 ## Stack afetado
@@ -308,7 +308,7 @@ backend
 - **Assignee:** deny759 · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `backend`
 
 ## Contexto
-Base dos serviços de agente e do template do tenant.
+Base dos serviços do middleware e do template do tenant.
 
 ## Critérios de aceite
 - [ ] client_agent_api/ e tenant_app_template/ com FastAPI
@@ -395,7 +395,7 @@ backend
 - **Assignee:** deny759 · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `devops`
 
 ## Contexto
-Imagem Docker enxuta para o agente.
+Imagem Docker enxuta para o middleware.
 
 ## Critérios de aceite
 - [ ] Dockerfile multi-stage
@@ -407,15 +407,15 @@ devops
 ## Referências
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 3](SPRINTS_BACKLOG.md)
 
-#### `feat(devops): tenant docker-compose (client_agent_api + timescaledb)`
+#### `feat(devops): tenant docker-compose (tenant_app + timescaledb)`
 - **Assignee:** deny759 · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `devops`
 
 ## Contexto
-Compose do ambiente isolado do tenant.
+Compose do ambiente isolado do tenant (motor de regras + banco). O `client_agent_api` é middleware compartilhado e não entra neste compose.
 
 ## Critérios de aceite
 - [ ] docker-compose.yml do tenant
-- [ ] Serviços client_agent_api + timescaledb
+- [ ] Serviços tenant_app + timescaledb
 - [ ] Sobe sem erros
 
 ## Stack afetado
@@ -427,15 +427,15 @@ devops
 
 ### Sprint 2 — Dois Serviços na AWS com gRPC (17 issues)
 
-#### `feat(frontend): organization registration screen consuming POST /api/v1/orgs`
+#### `feat(frontend): tenant registration screen consuming POST /api/v1/tenant`
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `frontend`
 
 ## Contexto
-Cadastro de organização contra o backend real na AWS.
+Cadastro de tenant contra o backend real na AWS.
 
 ## Critérios de aceite
-- [ ] Formulário de organização
-- [ ] Chama POST /api/v1/orgs
+- [ ] Formulário de tenant
+- [ ] Chama POST /api/v1/tenant
 - [ ] Trata sucesso/erro
 
 ## Stack afetado
@@ -445,16 +445,16 @@ frontend
 - [SPRINTS_BACKLOG.md — Sprint 2 · Aluno 1](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-001](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(frontend): application registration screen with organization select`
+#### `feat(frontend): application registration screen with tenant select`
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `frontend`
 
 ## Contexto
-Cadastro de aplicação vinculado a uma organização.
+Cadastro de aplicação vinculado a um tenant.
 
 ## Critérios de aceite
 - [ ] Formulário de aplicação
-- [ ] Select de Organization
-- [ ] Envia org_id
+- [ ] Select de Tenant
+- [ ] Envia tenant_id
 
 ## Stack afetado
 frontend
@@ -609,15 +609,15 @@ backend
 - [SPRINTS_BACKLOG.md — Sprint 2 · Aluno 2](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-013](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(backend): gRPC client calling GetAppConfig on startup`
+#### `feat(backend): gRPC client resolving GetAppConfig on demand`
 - **Assignee:** deny759 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `backend`
 
 ## Contexto
-Client Agent obtém a configuração da aplicação do SaaS no boot.
+O middleware obtém a configuração da aplicação do SaaS sob demanda (com cache TTL).
 
 ## Critérios de aceite
 - [ ] grpc_client.py conecta na porta 50051
-- [ ] Chama GetAppConfig no startup
+- [ ] Resolve GetAppConfig sob demanda (cache TTL)
 
 ## Stack afetado
 backend
@@ -664,7 +664,7 @@ backend
 - **Assignee:** deny759 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `devops`
 
 ## Contexto
-Deploy do agente em instância separada.
+Deploy do middleware em instância separada.
 
 ## Critérios de aceite
 - [ ] Client Agent rodando na AWS
@@ -692,14 +692,14 @@ backend
 - [SPRINTS_BACKLOG.md — Sprint 2 · Aluno 3](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-013](PRD_PLATAFORMA_IOT.md)
 
-#### `docs(backend): README with curl for create org + ingest telemetry`
+#### `docs(backend): README with curl for create tenant + ingest telemetry`
 - **Assignee:** deny759 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `docs`
 
 ## Contexto
 Documentação reprodutível dos fluxos.
 
 ## Critérios de aceite
-- [ ] README com curl criando org via SaaS REST
+- [ ] README com curl criando tenant via SaaS REST
 - [ ] curl ingerindo telemetria via Client Agent
 
 ## Stack afetado
@@ -1023,7 +1023,7 @@ Provisionamento automático do container do tenant.
 ## Critérios de aceite
 - [ ] docker run a partir de tenant_app_template
 - [ ] Porta dinâmica 8100-9100
-- [ ] Env injetadas (APP_ID, DB_PASSWORD, MQTT_TOPIC)
+- [ ] Env injetadas (CLIENT_AGENT_URL, APP_ID, DB_PASSWORD, MQTT_TOPIC)
 
 ## Stack afetado
 backend
@@ -1128,11 +1128,11 @@ devops
 - [SPRINTS_BACKLOG.md — Sprint 4 · Aluno 3](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-010](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(backend): Client Agent receives APP_ID and MQTT_TOPIC via env`
+#### `feat(backend): tenant_app receives APP_ID and MQTT_TOPIC via env`
 - **Assignee:** deny759 · **Milestone:** Sprint 4 · **Labels:** `sprint-4`, `backend`
 
 ## Contexto
-Configuração do agente por variável de ambiente.
+Configuração do tenant app por variável de ambiente. O middleware `client_agent_api` é compartilhado e não recebe `APP_ID`.
 
 ## Critérios de aceite
 - [ ] Lê APP_ID e MQTT_TOPIC no startup
@@ -1250,7 +1250,7 @@ frontend
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 5 · **Labels:** `sprint-5`, `frontend`
 
 ## Contexto
-Gestão de usuários da organização.
+Gestão de usuários do tenant.
 
 ## Critérios de aceite
 - [ ] Listar, convidar, alterar papel e desativar
@@ -1376,7 +1376,7 @@ backend
 ## Referências
 - [SPRINTS_BACKLOG.md — Sprint 5 · Aluno 2](SPRINTS_BACKLOG.md)
 
-#### `feat(backend): invite user (POST /orgs/{org_id}/invite)`
+#### `feat(backend): invite user (POST /api/v1/tenant/{tenant_id}/invite)`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 5 · **Labels:** `sprint-5`, `backend`
 
 ## Contexto

@@ -1,8 +1,8 @@
 # Contrato gRPC — `proto/saas_agent.proto`
 
-Contrato compartilhado entre o **SaaS Backend** (servidor) e o **Client Agent**
-(cliente). Define o serviço `AgentBridge`, que sustenta toda a comunicação gRPC
-entre os serviços da plataforma.
+Contrato compartilhado entre o **SaaS Backend** (servidor) e o **Client Agent
+API** (middleware compartilhado). Define o serviço `AgentBridge`, que sustenta
+toda a comunicação gRPC entre os serviços da plataforma.
 
 Definido na issue [#19](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/19).
 A geração dos stubs Python é feita na issue #20.
@@ -11,17 +11,19 @@ A geração dos stubs Python é feita na issue #20.
 
 | RPC              | Request        | Response     | Direção                         | Uso (Sprint) |
 | ---------------- | -------------- | ------------ | ------------------------------- | ------------ |
-| `GetAppConfig`   | `AppId`        | `AppConfig`  | Client Agent → SaaS             | Config do tenant no startup (S2) |
+| `GetAppConfig`   | `AppId`        | `AppConfig`  | Client Agent → SaaS             | Config do tenant sob demanda (S2) |
 | `IngestTelemetry`| `TelemetryEvent` | `Ack`      | SaaS → Client Agent             | Ingestão de telemetria (S2/S3) |
 | `SyncRule`       | `Rule`         | `Ack`        | SaaS → Client Agent             | Replicar regra ao tenant (S6) |
 | `ReportViolation`| `Violation`    | `Ack`        | Client Agent → SaaS             | Notificar violação de regra (S6) |
 
 > **Nota sobre direção (bidirecional):** o contrato é único, mas cada lado
 > expõe um servidor gRPC conforme o RPC. O **SaaS Backend** hospeda
-> `GetAppConfig` e `ReportViolation`; o **Client Agent** hospeda `SyncRule` e
-> `IngestTelemetry`. A ingestão de telemetria hoje flui via **MQTT → Client
-> Agent** (Sprint 2); o RPC `IngestTelemetry` cobre o caminho de roteamento do
-> SaaS (Sprint 3), a confirmar na implementação.
+> `GetAppConfig` e `ReportViolation`; o **Client Agent API** (middleware
+> compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A persistência de
+> telemetria é exposta pelo middleware no `POST /ingest` (issue
+> [#35](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)).
+> O RPC `IngestTelemetry` cobre o caminho de roteamento do SaaS (Sprint 3), a
+> confirmar na implementação.
 
 > **Segurança:** `AppConfig.db_password` trafega em texto plano no gRPC. O
 > canal deve usar TLS/mTLS (Sprint 5) antes de qualquer deploy fora de dev.

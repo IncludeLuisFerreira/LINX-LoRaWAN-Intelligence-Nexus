@@ -126,7 +126,7 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 **UC09 — Consulta de Histórico e Integração Externa (APIs REST)**
 
 - **Atores:** Sistema Externo (ERP do Cliente), Client Agent API, Docker Cliente.
-- **Fluxo Principal:** O ERP do cliente solicita o histórico de dados de um mês enviando uma requisição HTTP/REST. A **Client Agent API** atua como *API Gateway/Middleware*, valida o token de acesso (TLS/HTTPS) e roteia a consulta para o PostgreSQL/TimescaleDB isolado daquela aplicação. Os dados são recuperados, formatados em JSON pelo middleware e devolvidos ao ERP.
+- **Fluxo Principal:** O ERP do cliente solicita o histórico de dados de um mês enviando uma requisição HTTP/REST. A **Client Agent API** atua como *Middleware*, valida o token de acesso (TLS/HTTPS) e roteia a consulta para o PostgreSQL/TimescaleDB isolado daquela aplicação. Os dados são recuperados, formatados em JSON pelo middleware e devolvidos ao ERP.
 
 ---
 
@@ -255,7 +255,7 @@ O MVP (Minimum Viable Product) acadêmico/inicial será considerado concluído q
 ## 13. Roadmap de Produto
 
 - **Fase 1 — Core Cloud:** Deploy na AWS do SaaS Backend, ChirpStack, MQTT e PostgreSQL Central.
-- **Fase 2 — Orquestração de Aplicações:** Desenvolvimento da rotina automatizada de criação do *Docker Cliente* (Client Agent + TimescaleDB) para cada nova Aplicação.
+- **Fase 2 — Orquestração de Aplicações:** Desenvolvimento da rotina automatizada de criação do *Docker Cliente* (motor de regras + TimescaleDB) para cada nova Aplicação. O `client_agent_api` é middleware compartilhado e não faz parte do container por-tenant.
 - **Fase 3 — Plug and Play e Dados:** Leitura de QR Code, fluxo ponta-a-ponta de telemetria e integração WebSocket.
 - **Fase 4 — Lógica e Downlink:** Motor de confirmação de regras e roteamento de comandos via gRPC.
 - **Fase 5 — Observabilidade e Alertas:** Serviço de notificações (Telegram/Email), monitoramento de saúde dos contêineres e detecção de quedas de Gateways.
