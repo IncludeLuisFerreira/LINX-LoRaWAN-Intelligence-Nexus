@@ -19,8 +19,12 @@ env:
 
 jobs:
   lint:
-    name: Lint & Type Check
+    name: Lint & Type Check (${{ matrix.package }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [shared, identity_api, agent_bridge]
     defaults:
       run:
         working-directory: saas_backend
@@ -35,26 +39,29 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: poetry
 
       - name: Install dependencies
-        run: poetry install
+        run: poetry -C ${{ matrix.package }} install
 
       - name: Black (format check)
-        run: poetry run black --check src tests
+        run: poetry -C ${{ matrix.package }} run black --check src tests
 
       - name: isort (import order check)
-        run: poetry run isort --check-only src tests
+        run: poetry -C ${{ matrix.package }} run isort --check-only src tests
 
       - name: Flake8 (lint)
-        run: poetry run flake8 src tests
+        run: poetry -C ${{ matrix.package }} run flake8 src tests
 
       - name: Mypy (type check)
-        run: poetry run mypy src tests
+        run: poetry -C ${{ matrix.package }} run mypy src tests
 
   test:
-    name: Tests & Coverage
+    name: Tests & Coverage (${{ matrix.package }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [shared, identity_api, agent_bridge]
     services:
       postgres:
         image: postgres:15-alpine
@@ -83,13 +90,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: poetry
 
       - name: Install dependencies
-        run: poetry install
+        run: |
+          poetry -C shared install
+          poetry -C identity_api install
+          poetry -C agent_bridge install
 
       - name: Apply migrations
-        run: poetry run alembic upgrade head
+        run: poetry -C identity_api run alembic -c ../alembic.ini upgrade head
 
       - name: Pytest (cobertura >= 70%)
-        run: poetry run pytest --cov=src --cov-report=term-missing --cov-fail-under=70
+        run: poetry -C ${{ matrix.package }} run pytest --cov=src --cov-report=term-missing --cov-fail-under=70
