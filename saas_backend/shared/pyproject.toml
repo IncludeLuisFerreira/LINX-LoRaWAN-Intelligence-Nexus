@@ -38,6 +38,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 
+[tool.coverage.run]
+# Stubs gRPC são gerados; não entram na cobertura.
+omit = ["src/linx_shared/grpc/*"]
+
 [tool.black]
 line-length = 79
 target-version = ["py312"]
