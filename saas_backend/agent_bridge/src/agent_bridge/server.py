@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 
-from linx.core.config import settings
-from linx.db.base import SessionLocal
-from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc
-from linx.models.application import Application
+from agent_bridge.config import settings
+from linx_shared.db.base import SessionLocal
+from linx_shared.grpc import saas_agent_pb2, saas_agent_pb2_grpc
+from linx_shared.models.application import Application
 
 logger = logging.getLogger(__name__)
 

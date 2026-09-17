@@ -6,23 +6,21 @@ from uuid import uuid4
 
 import grpc
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
-from linx import grpc_server as grpc_server_module
-from linx.core.config import settings
-from linx.db.base import engine
-from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc
-from linx.grpc_server import (
+from agent_bridge import server as grpc_server_module
+from agent_bridge.config import settings
+from agent_bridge.server import (
     AgentBridgeServicer,
     create_server,
     is_grpc_serving,
 )
-from linx.main import app
-from linx.models.application import Application
-from linx.models.tenant import Tenant
+from linx_shared.db.base import engine
+from linx_shared.grpc import saas_agent_pb2, saas_agent_pb2_grpc
+from linx_shared.models.application import Application
+from linx_shared.models.tenant import Tenant
 
 
 class AbortError(Exception):
@@ -160,10 +158,10 @@ def test_create_server_raises_when_bind_fails(monkeypatch):
     fake_server = MagicMock()
     fake_server.add_insecure_port.return_value = 0
     monkeypatch.setattr(
-        "linx.grpc_server.grpc.server", lambda *args, **kwargs: fake_server
+        "agent_bridge.server.grpc.server", lambda *args, **kwargs: fake_server
     )
     monkeypatch.setattr(
-        "linx.grpc_server.saas_agent_pb2_grpc"
+        "agent_bridge.server.saas_agent_pb2_grpc"
         ".add_AgentBridgeServicer_to_server",
         lambda *args, **kwargs: None,
     )
@@ -174,25 +172,12 @@ def test_create_server_raises_when_bind_fails(monkeypatch):
 
 def test_serve_starts_and_waits_for_termination(monkeypatch):
     fake_server = MagicMock()
-    monkeypatch.setattr("linx.grpc_server.create_server", lambda: fake_server)
+    monkeypatch.setattr("agent_bridge.server.create_server", lambda: fake_server)
 
     grpc_server_module.serve()
 
     fake_server.start.assert_called_once()
     fake_server.wait_for_termination.assert_called_once()
-
-
-def test_lifespan_starts_and_stops_grpc_server(monkeypatch):
-    fake_server = MagicMock()
-    monkeypatch.setattr("linx.main.create_server", lambda: fake_server)
-    monkeypatch.setattr("linx.main.is_grpc_serving", lambda: True)
-
-    with TestClient(app) as client:
-        assert client.get("/health").status_code == 200
-        fake_server.start.assert_called_once()
-
-    fake_server.stop.assert_called_once_with(grace=5)
-    fake_server.stop.return_value.wait.assert_called_once()
 
 
 @pytest.fixture
@@ -313,7 +298,7 @@ def _capture_connect(monkeypatch) -> list:
         return MagicMock()
 
     monkeypatch.setattr(
-        "linx.grpc_server.socket.create_connection", fake_create_connection
+        "agent_bridge.server.socket.create_connection", fake_create_connection
     )
     return captured
 
@@ -350,10 +335,10 @@ def test_create_server_brackets_ipv6_bind_address(monkeypatch):
     fake_server = MagicMock()
     fake_server.add_insecure_port.return_value = 1
     monkeypatch.setattr(
-        "linx.grpc_server.grpc.server", lambda *args, **kwargs: fake_server
+        "agent_bridge.server.grpc.server", lambda *args, **kwargs: fake_server
     )
     monkeypatch.setattr(
-        "linx.grpc_server.saas_agent_pb2_grpc"
+        "agent_bridge.server.saas_agent_pb2_grpc"
         ".add_AgentBridgeServicer_to_server",
         lambda *args, **kwargs: None,
     )
