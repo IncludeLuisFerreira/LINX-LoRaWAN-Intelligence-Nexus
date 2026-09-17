@@ -19,9 +19,12 @@ A geração dos stubs Python é feita na issue #20.
 > **Nota sobre direção (bidirecional):** o contrato é único, mas cada lado
 > expõe um servidor gRPC conforme o RPC. O **SaaS Backend** hospeda
 > `GetAppConfig` e `ReportViolation`; o **Client Agent API** (middleware
-> compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A ingestão de
-> telemetria vive no `tenant_app_template` (o middleware não ingere MQTT); o
-> RPC `IngestTelemetry` cobre o caminho de roteamento do SaaS (Sprint 3), a
+> compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A **ingestão MQTT**
+> (broker → parse) vive no `tenant_app_template`, que encaminha a telemetria ao
+> middleware via `CLIENT_AGENT_URL`; a **persistência** no TimescaleDB é exposta
+> pelo middleware no `POST /ingest` (issue
+> [#35](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)).
+> O RPC `IngestTelemetry` cobre o caminho de roteamento do SaaS (Sprint 3), a
 > confirmar na implementação.
 
 > **Segurança:** `AppConfig.db_password` trafega em texto plano no gRPC. O
