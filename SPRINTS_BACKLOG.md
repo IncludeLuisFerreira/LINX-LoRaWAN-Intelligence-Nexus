@@ -40,7 +40,7 @@ O MVP é considerado completo quando:
 ### Aluno 1 — Frontend
 - [ ] Scaffold `frontend/` com React + Vite + TypeScript + TailwindCSS.
 - [ ] Configurar ESLint + Prettier + husky (pre-commit).
-- [ ] Criar estrutura de rotas: `/login`, `/orgs`, `/apps/:id`, `/devices`, `/dashboard/:appId`.
+- [ ] Criar estrutura de rotas: `/login`, `/tenants`, `/apps/:id`, `/devices`, `/dashboard/:appId`.
 - [ ] Implementar Layout shell (Sidebar + AppBar + ContentArea) responsivo.
 - [ ] Tela de Login (UI + mock de autenticação local).
 - [ ] Configurar Axios instance com `baseURL` e interceptors prontos para JWT.
@@ -49,10 +49,10 @@ O MVP é considerado completo quando:
 ### Aluno 2 — SaaS Backend
 - [ ] Scaffold `saas_backend/` com FastAPI + Poetry.
 - [ ] `infra/docker-compose.base.yml`: PostgreSQL 15, Redis 7, Mosquitto MQTT.
-- [ ] Models SQLAlchemy 2.0: `organizations`, `applications`, `users`, `roles` (todos com `id UUID PK`).
+- [ ] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user` (todos com `id UUID PK`).
 - [ ] Alembic migration inicial criando as 4 tabelas.
-- [ ] CRUD REST de Organizações: `POST/GET/PATCH/DELETE /api/v1/orgs`.
-- [ ] CRUD REST de Aplicações vinculadas a org (`org_id FK`).
+- [ ] CRUD REST de Tenants: `POST/GET/PATCH/DELETE /api/v1/tenant`.
+- [ ] CRUD REST de Aplicações vinculadas a tenant (`tenant_id FK`).
 - [ ] GitHub Actions: `black`, `flake8`, `mypy`, `pytest` (cobertura ≥ 70%).
 - [ ] Entregar stub OpenAPI até **03/09** para o Aluno 1 desenvolver contra mock.
 
@@ -79,8 +79,8 @@ O MVP é considerado completo quando:
 **Meta:** SaaS Backend e Client Agent deployados na AWS, comunicando via gRPC. Prova de comunicação documentada.
 
 ### Aluno 1 — Frontend
-- [ ] Tela de Cadastro de Organização consumindo `POST /api/v1/orgs` (backend AWS).
-- [ ] Tela de Cadastro de Aplicação com select de Organization.
+- [ ] Tela de Cadastro de Tenant consumindo `POST /api/v1/tenant` (backend AWS).
+- [ ] Tela de Cadastro de Aplicação com select de Tenant.
 - [ ] Dockerfile do frontend (nginx alpine servindo build estático).
 - [ ] Script `deploy-frontend.sh`: build → push → deploy em EC2 ou S3+CloudFront.
 - [ ] Nginx local roteando `/api/*` → SaaS Backend AWS.
@@ -99,14 +99,14 @@ O MVP é considerado completo quando:
 - [ ] Pipeline: Mosquitto → `mqtt_consumer.py` → parse → `POST /ingest` → TimescaleDB.
 - [ ] Deploy em segunda instância EC2 (ou porta 8001 na mesma EC2).
 - [ ] Log do `AppConfig` recebido via gRPC (prova de comunicação).
-- [ ] README com `curl` documentando: (1) criar org via SaaS REST, (2) ingestar telemetria via Client Agent.
+- [ ] README com `curl` documentando: (1) criar tenant via SaaS REST, (2) ingestar telemetria via Client Agent.
 
 **Critérios de Aceitação S2:**
 - Dois serviços distintos rodando na AWS com URLs/portas acessíveis.
 - Log do Client Agent mostrando `AppConfig` recebido do SaaS via gRPC.
-- `curl POST /api/v1/orgs` cria organização no banco AWS.
+- `curl POST /api/v1/tenant` cria tenant no banco AWS.
 - `curl POST /ingest` persiste telemetria no TimescaleDB.
-- Frontend acessível via navegador cadastrando Org/App no backend AWS.
+- Frontend acessível via navegador cadastrando Tenant/App no backend AWS.
 
 ---
 
@@ -195,7 +195,7 @@ O MVP é considerado completo quando:
 - [ ] RBAC: tabelas `permissions` (resource, action) e `user_roles`. Middleware `Depends(require_permission(...))` em 100% dos endpoints.
 - [ ] TLS 1.3 em todos os endpoints (Let's Encrypt na AWS).
 - [ ] Rate limiting com `slowapi` (Redis backend): 100 req/min por IP, 10 req/min para `/auth/login`.
-- [ ] Convidar usuário: `POST /api/v1/orgs/{org_id}/invite` gera token de convite (TTL 48h no Redis).
+- [ ] Convidar usuário: `POST /api/v1/tenant/{tenant_id}/invite` gera token de convite (TTL 48h no Redis).
 
 ### Aluno 3 — Client Agent
 - [ ] TLS no Mosquitto: porta 8883 para MQTT over TLS. Rejeitar conexões não-TLS na porta 1883.

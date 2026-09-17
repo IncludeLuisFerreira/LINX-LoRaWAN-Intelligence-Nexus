@@ -84,7 +84,7 @@ Define a navegação base do SaaS; as rotas são a espinha dorsal das telas.
 
 ## Critérios de aceite
 - [ ] React Router configurado
-- [ ] Rotas /login, /orgs, /apps/:id, /devices e /dashboard/:appId existem
+- [ ] Rotas /login, /tenants, /apps/:id, /devices e /dashboard/:appId existem
 - [ ] Rota inexistente cai em fallback
 
 ## Stack afetado
@@ -119,7 +119,7 @@ Tela de login com autenticação mockada para desbloquear o fluxo antes do backe
 ## Critérios de aceite
 - [ ] Formulário de login
 - [ ] Mock de autenticação local
-- [ ] Redireciona para /orgs após login
+- [ ] Redireciona para /tenants após login
 
 ## Stack afetado
 frontend
@@ -154,7 +154,7 @@ Contrato REST acordado com o Aluno 2 para desenvolvimento paralelo contra mock.
 
 ## Critérios de aceite
 - [ ] Arquivo openapi-stub.yaml criado
-- [ ] Contratos de organizações e aplicações definidos
+- [ ] Contratos de tenants e aplicações definidos
 - [ ] Validado em conjunto com o Aluno 2
 
 ## Stack afetado
@@ -198,7 +198,7 @@ devops
 ## Referências
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 2](SPRINTS_BACKLOG.md)
 
-#### `feat(backend): SQLAlchemy models (organizations, applications, users, roles)`
+#### `feat(backend): SQLAlchemy models (tenant, application, user, tenant_user)`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `backend`
 
 ## Contexto
@@ -206,7 +206,7 @@ Modelos de domínio centrais com UUID como PK (nomeação de recursos).
 
 ## Critérios de aceite
 - [ ] 4 models com id UUID PK
-- [ ] Relacionamento organization → application definido
+- [ ] Relacionamento tenant → application definido
 - [ ] Tipos SQLAlchemy 2.0
 
 ## Stack afetado
@@ -233,14 +233,14 @@ backend
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 2](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-040](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(backend): CRUD REST for organizations /api/v1/orgs`
+#### `feat(backend): CRUD REST for tenants /api/v1/tenant`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `backend`
 
 ## Contexto
-Primeiro endpoint REST público do SaaS (cadastro de organizações).
+Primeiro endpoint REST público do SaaS (cadastro de tenants).
 
 ## Critérios de aceite
-- [ ] POST/GET/PATCH/DELETE /api/v1/orgs
+- [ ] POST/GET/PATCH/DELETE /api/v1/tenant
 - [ ] Validação de payload
 - [ ] Testes cobrindo o CRUD
 
@@ -251,15 +251,15 @@ backend
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 2](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-001](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(backend): CRUD REST for applications linked to org`
+#### `feat(backend): CRUD REST for applications linked to tenant`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `backend`
 
 ## Contexto
-Aplicações pertencem a uma organização, com org_id FK.
+Aplicações pertencem a um tenant, com tenant_id FK.
 
 ## Critérios de aceite
 - [ ] CRUD de /api/v1/applications
-- [ ] org_id FK obrigatório
+- [ ] tenant_id FK obrigatório
 - [ ] Testes de integridade referencial
 
 ## Stack afetado
@@ -294,7 +294,7 @@ Dependência crítica para o Aluno 1 desenvolver em paralelo (prazo 03/09).
 
 ## Critérios de aceite
 - [ ] OpenAPI stub entregue até 03/09
-- [ ] Contratos de organizações e aplicações
+- [ ] Contratos de tenants e aplicações
 - [ ] Aluno 1 consegue desenvolver contra o stub
 
 ## Stack afetado
@@ -427,15 +427,15 @@ devops
 
 ### Sprint 2 — Dois Serviços na AWS com gRPC (17 issues)
 
-#### `feat(frontend): organization registration screen consuming POST /api/v1/orgs`
+#### `feat(frontend): tenant registration screen consuming POST /api/v1/tenant`
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `frontend`
 
 ## Contexto
-Cadastro de organização contra o backend real na AWS.
+Cadastro de tenant contra o backend real na AWS.
 
 ## Critérios de aceite
-- [ ] Formulário de organização
-- [ ] Chama POST /api/v1/orgs
+- [ ] Formulário de tenant
+- [ ] Chama POST /api/v1/tenant
 - [ ] Trata sucesso/erro
 
 ## Stack afetado
@@ -445,16 +445,16 @@ frontend
 - [SPRINTS_BACKLOG.md — Sprint 2 · Aluno 1](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-001](PRD_PLATAFORMA_IOT.md)
 
-#### `feat(frontend): application registration screen with organization select`
+#### `feat(frontend): application registration screen with tenant select`
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `frontend`
 
 ## Contexto
-Cadastro de aplicação vinculado a uma organização.
+Cadastro de aplicação vinculado a um tenant.
 
 ## Critérios de aceite
 - [ ] Formulário de aplicação
-- [ ] Select de Organization
-- [ ] Envia org_id
+- [ ] Select de Tenant
+- [ ] Envia tenant_id
 
 ## Stack afetado
 frontend
@@ -692,14 +692,14 @@ backend
 - [SPRINTS_BACKLOG.md — Sprint 2 · Aluno 3](SPRINTS_BACKLOG.md)
 - [PRD_PLATAFORMA_IOT.md — RF-013](PRD_PLATAFORMA_IOT.md)
 
-#### `docs(backend): README with curl for create org + ingest telemetry`
+#### `docs(backend): README with curl for create tenant + ingest telemetry`
 - **Assignee:** deny759 · **Milestone:** Sprint 2 · **Labels:** `sprint-2`, `docs`
 
 ## Contexto
 Documentação reprodutível dos fluxos.
 
 ## Critérios de aceite
-- [ ] README com curl criando org via SaaS REST
+- [ ] README com curl criando tenant via SaaS REST
 - [ ] curl ingerindo telemetria via Client Agent
 
 ## Stack afetado
@@ -1250,7 +1250,7 @@ frontend
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 5 · **Labels:** `sprint-5`, `frontend`
 
 ## Contexto
-Gestão de usuários da organização.
+Gestão de usuários do tenant.
 
 ## Critérios de aceite
 - [ ] Listar, convidar, alterar papel e desativar
@@ -1376,7 +1376,7 @@ backend
 ## Referências
 - [SPRINTS_BACKLOG.md — Sprint 5 · Aluno 2](SPRINTS_BACKLOG.md)
 
-#### `feat(backend): invite user (POST /orgs/{org_id}/invite)`
+#### `feat(backend): invite user (POST /api/v1/tenant/{tenant_id}/invite)`
 - **Assignee:** IncludeLuisFerreira · **Milestone:** Sprint 5 · **Labels:** `sprint-5`, `backend`
 
 ## Contexto
