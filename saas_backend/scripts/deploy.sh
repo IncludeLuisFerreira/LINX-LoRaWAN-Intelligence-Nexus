@@ -13,7 +13,7 @@ echo "Pulling latest code on branch '${branch}'..."
 git pull --ff-only
 
 echo "Building and starting containers..."
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 
 echo "Status:"
-docker compose -f docker-compose.prod.yml ps
+docker compose ps

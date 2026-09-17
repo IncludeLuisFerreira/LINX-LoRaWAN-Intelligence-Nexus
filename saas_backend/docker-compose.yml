@@ -17,19 +17,16 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  identity_api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: identity_api/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
     ports:
       - "8000:8000"
-      # 50051 expõe GetAppConfig (sem auth). Restrinja no Security Group ao IP
-      # do Client Agent; nunca a 0.0.0.0/0. Ver README (Runbook — Security Group).
-      - "50051:50051"
     depends_on:
       db:
         condition: service_healthy
@@ -43,6 +40,24 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  agent_bridge:
+    build:
+      context: .
+      dockerfile: agent_bridge/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - GRPC_HOST=0.0.0.0
+      - GRPC_PORT=50051
+    ports:
+      # 50051 expõe GetAppConfig (sem auth). Restrinja no Security Group ao IP
+      # do Client Agent; nunca a 0.0.0.0/0. Ver README (Runbook — Security Group).
+      - "50051:50051"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

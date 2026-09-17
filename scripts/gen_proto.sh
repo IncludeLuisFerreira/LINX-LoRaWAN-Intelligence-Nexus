@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Gera os stubs Python gRPC (saas_agent_pb2.py / saas_agent_pb2_grpc.py) a
-# partir de proto/saas_agent.proto, para o SaaS Backend (package linx) e o
-# Client Agent (package agent).
+# partir de proto/saas_agent.proto, para a biblioteca compartilhada do SaaS
+# (package linx_shared) e o Client Agent (package agent).
 #
 # Uso:
 #     bash scripts/gen_proto.sh
@@ -22,16 +22,16 @@ gen() {
     "$ROOT/proto/saas_agent.proto"
 }
 
-gen saas_backend saas_backend/src/linx/grpc
+gen saas_backend/shared saas_backend/shared/src/linx_shared/grpc
 gen client_agent_api client_agent_api/src/agent/grpc
 
 # grpc_tools.protoc gera `import saas_agent_pb2` (absoluto), o que quebra
-# quando o arquivo vive dentro de um pacote (linx.grpc / agent.grpc).
+# quando o arquivo vive dentro de um pacote (linx_shared.grpc / agent.grpc).
 # Corrige para import relativo.
 for grpc_file in \
-  saas_backend/src/linx/grpc/saas_agent_pb2_grpc.py \
+  saas_backend/shared/src/linx_shared/grpc/saas_agent_pb2_grpc.py \
   client_agent_api/src/agent/grpc/saas_agent_pb2_grpc.py; do
   sed -i 's/^import saas_agent_pb2 as saas__agent__pb2$/from . import saas_agent_pb2 as saas__agent__pb2/' "$grpc_file"
 done
 
-echo "Stubs gRPC gerados em saas_backend/src/linx/grpc e client_agent_api/src/agent/grpc"
+echo "Stubs gRPC gerados em saas_backend/shared/src/linx_shared/grpc e client_agent_api/src/agent/grpc"
