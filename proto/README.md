@@ -1,8 +1,8 @@
 # Contrato gRPC — `proto/saas_agent.proto`
 
-Contrato compartilhado entre o **SaaS Backend** (servidor) e o **Client Agent**
-(cliente). Define o serviço `AgentBridge`, que sustenta toda a comunicação gRPC
-entre os serviços da plataforma.
+Contrato compartilhado entre o **SaaS Backend** (servidor) e o **Client Agent
+API** (middleware compartilhado). Define o serviço `AgentBridge`, que sustenta
+toda a comunicação gRPC entre os serviços da plataforma.
 
 Definido na issue [#19](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/19).
 A geração dos stubs Python é feita na issue #20.
@@ -19,10 +19,8 @@ A geração dos stubs Python é feita na issue #20.
 > **Nota sobre direção (bidirecional):** o contrato é único, mas cada lado
 > expõe um servidor gRPC conforme o RPC. O **SaaS Backend** hospeda
 > `GetAppConfig` e `ReportViolation`; o **Client Agent API** (middleware
-> compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A **ingestão MQTT**
-> (broker → parse) vive no `tenant_app_template`, que encaminha a telemetria ao
-> middleware via `CLIENT_AGENT_URL`; a **persistência** no TimescaleDB é exposta
-> pelo middleware no `POST /ingest` (issue
+> compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A persistência de
+> telemetria é exposta pelo middleware no `POST /ingest` (issue
 > [#35](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)).
 > O RPC `IngestTelemetry` cobre o caminho de roteamento do SaaS (Sprint 3), a
 > confirmar na implementação.

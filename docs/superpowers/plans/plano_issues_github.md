@@ -76,7 +76,7 @@ frontend
 ## Referências
 - [SPRINTS_BACKLOG.md — Sprint 1 · Aluno 1](SPRINTS_BACKLOG.md)
 
-#### `feat(frontend): routing structure (login, orgs, apps, devices, dashboard)`
+#### `feat(frontend): routing structure (login, tenants, apps, devices, dashboard)`
 - **Assignee:** Lynnes42 · **Milestone:** Sprint 1 · **Labels:** `sprint-1`, `frontend`
 
 ## Contexto
@@ -258,7 +258,7 @@ backend
 Aplicações pertencem a um tenant, com tenant_id FK.
 
 ## Critérios de aceite
-- [ ] CRUD de /api/v1/applications
+- [ ] CRUD de /api/v1/tenant/{tenant_id}/applications
 - [ ] tenant_id FK obrigatório
 - [ ] Testes de integridade referencial
 
