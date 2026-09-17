@@ -18,7 +18,7 @@ def test_device_routes_table_has_expected_columns():
     } <= columns
 
 
-def test_device_routes_dev_eui_is_not_nullable():
+def test_device_routes_column_nullability():
     columns = {
         column["name"]: column
         for column in inspect(engine).get_columns("device_routes")
