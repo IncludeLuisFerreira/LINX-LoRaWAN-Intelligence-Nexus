@@ -1,5 +1,3 @@
-import asyncio
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, Response, status
@@ -10,24 +8,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from linx.db.base import get_db
-from linx.grpc_server import create_server, is_grpc_serving
-from linx.routes.application import router as application_router
-from linx.routes.tenant import router
+from identity_api.routes.application import router as application_router
+from identity_api.routes.tenant import router
+from linx_shared.db.base import get_db
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    grpc_server = create_server()
-    grpc_server.start()
-    try:
-        yield
-    finally:
-        stop_event = grpc_server.stop(grace=5)
-        await asyncio.to_thread(stop_event.wait)
-
-
-app = FastAPI(title="LINX SAAS Backend", lifespan=lifespan)
+app = FastAPI(title="LINX SAAS Backend")
 BASE_DIR = Path(__file__).resolve().parent
 
 # Mapeia a pasta de arquivos estáticos (CSS, JS, Imagens)
@@ -45,15 +30,12 @@ def health(response: Response, db: Session = Depends(get_db)) -> dict:
     except SQLAlchemyError:
         db_ok = False
 
-    grpc_ok = is_grpc_serving()
-    healthy = db_ok and grpc_ok
-    if not healthy:
+    if not db_ok:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
     return {
-        "status": "ok" if healthy else "degraded",
+        "status": "ok" if db_ok else "degraded",
         "db": db_ok,
-        "grpc": grpc_ok,
     }
 
 

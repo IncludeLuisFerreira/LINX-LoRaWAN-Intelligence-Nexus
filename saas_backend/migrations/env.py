@@ -3,9 +3,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-import linx.models  # noqa: F401
-from linx.core.config import settings
-from linx.db.base_class import Base
+import linx_shared.models  # noqa: F401
+from linx_shared.core.config import settings
+from linx_shared.db.base_class import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

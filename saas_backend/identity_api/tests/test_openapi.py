@@ -3,11 +3,11 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from linx.main import app
+from identity_api.main import app
 
 client = TestClient(app)
 
-STUB_PATH = Path(__file__).resolve().parents[2] / "docs" / "openapi-stub.json"
+STUB_PATH = Path(__file__).resolve().parents[3] / "docs" / "openapi-stub.json"
 
 
 def _openapi() -> dict:

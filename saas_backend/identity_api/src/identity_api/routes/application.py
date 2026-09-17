@@ -3,10 +3,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from linx.db.base import get_db
-from linx.models.application import Application
-from linx.models.tenant import Tenant
-from linx.schemas.application import (
+from linx_shared.db.base import get_db
+from linx_shared.models.application import Application
+from linx_shared.models.tenant import Tenant
+from linx_shared.schemas.application import (
     ApplicationCreate,
     ApplicationResponse,
     ApplicationUpdate,

@@ -7,8 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from linx.db.base import engine, get_db
-from linx.main import app
+from identity_api.main import app
+from linx_shared.db.base import engine, get_db
 
 client = TestClient(app)
 
