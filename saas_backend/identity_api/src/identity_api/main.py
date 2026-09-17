@@ -4,13 +4,13 @@ from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from linx_shared.db.base import get_db
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from identity_api.routes.application import router as application_router
 from identity_api.routes.tenant import router
-from linx_shared.db.base import get_db
 
 app = FastAPI(title="LINX SAAS Backend")
 BASE_DIR = Path(__file__).resolve().parent

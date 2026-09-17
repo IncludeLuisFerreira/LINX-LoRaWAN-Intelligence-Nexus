@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
+from linx_shared.db.base import get_db
 from sqlalchemy.exc import SQLAlchemyError
 
 from identity_api.main import app
-from linx_shared.db.base import get_db
 
 client = TestClient(app)
 

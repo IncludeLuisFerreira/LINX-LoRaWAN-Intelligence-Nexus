@@ -1,6 +1,5 @@
-from sqlalchemy import inspect
-
 from linx_shared.db.base import engine
+from sqlalchemy import inspect
 
 
 def test_device_routes_table_has_expected_columns():

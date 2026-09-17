@@ -6,6 +6,10 @@ from uuid import uuid4
 
 import grpc
 import pytest
+from linx_shared.db.base import engine
+from linx_shared.grpc import saas_agent_pb2, saas_agent_pb2_grpc
+from linx_shared.models.application import Application
+from linx_shared.models.tenant import Tenant
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
@@ -17,10 +21,6 @@ from agent_bridge.server import (
     create_server,
     is_grpc_serving,
 )
-from linx_shared.db.base import engine
-from linx_shared.grpc import saas_agent_pb2, saas_agent_pb2_grpc
-from linx_shared.models.application import Application
-from linx_shared.models.tenant import Tenant
 
 
 class AbortError(Exception):
@@ -172,7 +172,9 @@ def test_create_server_raises_when_bind_fails(monkeypatch):
 
 def test_serve_starts_and_waits_for_termination(monkeypatch):
     fake_server = MagicMock()
-    monkeypatch.setattr("agent_bridge.server.create_server", lambda: fake_server)
+    monkeypatch.setattr(
+        "agent_bridge.server.create_server", lambda: fake_server
+    )
 
     grpc_server_module.serve()
 

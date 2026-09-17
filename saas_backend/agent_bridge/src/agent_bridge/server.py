@@ -5,14 +5,14 @@ from concurrent import futures
 from uuid import UUID
 
 import grpc
+from linx_shared.db.base import SessionLocal
+from linx_shared.grpc import saas_agent_pb2, saas_agent_pb2_grpc
+from linx_shared.models.application import Application
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 
 from agent_bridge.config import settings
-from linx_shared.db.base import SessionLocal
-from linx_shared.grpc import saas_agent_pb2, saas_agent_pb2_grpc
-from linx_shared.models.application import Application
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +99,7 @@ def is_grpc_serving(
             pass
         else:
             if address.is_unspecified:
-                target_host = (
-                    "::1" if address.version == 6 else "127.0.0.1"
-                )
+                target_host = "::1" if address.version == 6 else "127.0.0.1"
     if target_port == 0:
         return False
     try:

@@ -8,11 +8,14 @@ from fastapi import (
     Response,
     status,
 )
-from sqlalchemy.orm import Session
-
 from linx_shared.db.base import get_db
 from linx_shared.models.tenant import Tenant
-from linx_shared.schemas.tenant import TenantCreate, TenantResponse, TenantUpdate
+from linx_shared.schemas.tenant import (
+    TenantCreate,
+    TenantResponse,
+    TenantUpdate,
+)
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/v1/tenant", tags=["Tenant"])
 

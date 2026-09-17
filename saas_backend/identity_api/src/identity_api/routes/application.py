@@ -1,8 +1,6 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy.orm import Session
-
 from linx_shared.db.base import get_db
 from linx_shared.models.application import Application
 from linx_shared.models.tenant import Tenant
@@ -11,6 +9,7 @@ from linx_shared.schemas.application import (
     ApplicationResponse,
     ApplicationUpdate,
 )
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/v1/tenant", tags=["Application"])
 

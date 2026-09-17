@@ -5,10 +5,10 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from linx_shared.db.base import engine, get_db
 from sqlalchemy.orm import Session
 
 from identity_api.main import app
-from linx_shared.db.base import engine, get_db
 
 client = TestClient(app)
 
