@@ -61,3 +61,8 @@ class Application(Base):
     )
 
     tenant: Mapped["Tenant"] = relationship(back_populates="applications")
+
+    device_routes: Mapped[list["DeviceRoute"]] = relationship(
+        back_populates="application",
+        cascade="all, delete-orphan",
+    )

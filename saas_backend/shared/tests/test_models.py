@@ -3,9 +3,6 @@ import sys
 
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
-<<<<<<< Updated upstream:saas_backend/tests/test_models.py
-from linx.models import Application, Base, Tenant, TenantUser, User
-=======
 from linx_shared.models import (
     Application,
     Base,
@@ -14,20 +11,20 @@ from linx_shared.models import (
     TenantUser,
     User,
 )
->>>>>>> Stashed changes:saas_backend/shared/tests/test_models.py
 
 
 def test_all_tables_registered():
     assert set(Base.metadata.tables) == {
-        "tenant",
         "application",
-        "user",
+        "device_routes",
+        "tenant",
         "tenant_user",
+        "user",
     }
 
 
 def test_models_have_uuid_pk():
-    for model in (Tenant, Application, User):
+    for model in (Tenant, Application, User, DeviceRoute):
         pk = list(model.__table__.primary_key.columns)[0]
         assert pk.name == "id"
         assert isinstance(pk.type, PGUUID)
@@ -41,6 +38,23 @@ def test_tenant_user_has_composite_pk():
 def test_application_tenant_foreign_key():
     fk = list(Application.__table__.foreign_keys)[0]
     assert fk.target_fullname == "tenant.id"
+
+
+def test_device_route_dev_eui_is_unique_and_indexed():
+    column = DeviceRoute.__table__.c.dev_eui
+    assert column.unique is True
+    assert column.index is True
+
+
+def test_device_route_application_foreign_key():
+    fk = list(DeviceRoute.__table__.foreign_keys)[0]
+    assert fk.target_fullname == "application.id"
+    assert fk.ondelete == "CASCADE"
+
+
+def test_device_route_application_relationship():
+    assert DeviceRoute.application.property.mapper.class_ is Application
+    assert Application.device_routes.property.mapper.class_ is DeviceRoute
 
 
 def test_tenant_application_relationship():
@@ -65,12 +79,17 @@ def test_db_base_reexports_base_and_session():
 
 
 def test_db_base_import_registers_models():
-    code = "from linx_shared.db.base import Base; print(sorted(Base.metadata.tables))"
+    code = (
+        "from linx_shared.db.base import Base; "
+        "print(sorted(Base.metadata.tables))"
+    )
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
         check=True,
     )
-    expected = "['application', 'tenant', 'tenant_user', 'user']"
+    expected = (
+        "['application', 'device_routes', 'tenant', 'tenant_user', 'user']"
+    )
     assert result.stdout.strip() == expected
