@@ -6,7 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, status
 
 from agent.config import AgentSettings
+from agent.db import create_db_pool
 from agent.grpc_client import SaasGrpcClient
+from agent.routers import ingest
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +30,38 @@ async def lifespan(app: FastAPI):
     app.state.saas_connected = connected
     app.state.saas_checked_at = time.monotonic()
 
+    # --- Inicialização TimescaleDB Pool (Issue #35) ---
+    db_pool = None
+    try:
+        db_pool = await create_db_pool(
+            host="localhost",
+            port=5432,
+            user="postgres",
+            password="postgres",
+            database="postgres",
+        )
+        logger.info("Pool de conexões TimescaleDB inicializado.")
+    except Exception as exc:
+        logger.warning(
+            "TimescaleDB indisponível no startup (%s); operando sem pool.", exc
+        )
+    app.state.db_pool = db_pool
+
     yield
+
+    # --- Teardown Gracioso dos Recursos ---
+    if db_pool is not None:
+        await db_pool.close()
+        logger.info("Pool TimescaleDB encerrado.")
 
     client.close()
     logger.info("Canal gRPC encerrado.")
 
 
 app = FastAPI(title="LINX Client Agent API", lifespan=lifespan)
+
+# Registro das rotas da API
+app.include_router(ingest.router)
 
 
 async def _is_saas_connected(fastapi_app: FastAPI) -> bool:
