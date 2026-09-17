@@ -6,10 +6,10 @@ from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from linx.db.base_class import Base
+from linx_shared.db.base_class import Base
 
 if TYPE_CHECKING:
-    from linx.models.tenant_user import TenantUser
+    from linx_shared.models.tenant_user import TenantUser
 
 
 class User(Base):

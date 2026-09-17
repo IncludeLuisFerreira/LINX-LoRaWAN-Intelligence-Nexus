@@ -3,7 +3,18 @@ import sys
 
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
+<<<<<<< Updated upstream:saas_backend/tests/test_models.py
 from linx.models import Application, Base, Tenant, TenantUser, User
+=======
+from linx_shared.models import (
+    Application,
+    Base,
+    DeviceRoute,
+    Tenant,
+    TenantUser,
+    User,
+)
+>>>>>>> Stashed changes:saas_backend/shared/tests/test_models.py
 
 
 def test_all_tables_registered():
@@ -45,8 +56,8 @@ def test_tenant_user_relationships():
 
 
 def test_db_base_reexports_base_and_session():
-    from linx.db.base import Base as DBBase
-    from linx.db.base import SessionLocal, engine
+    from linx_shared.db.base import Base as DBBase
+    from linx_shared.db.base import SessionLocal, engine
 
     assert DBBase is Base
     assert engine is not None
@@ -54,7 +65,7 @@ def test_db_base_reexports_base_and_session():
 
 
 def test_db_base_import_registers_models():
-    code = "from linx.db.base import Base; print(sorted(Base.metadata.tables))"
+    code = "from linx_shared.db.base import Base; print(sorted(Base.metadata.tables))"
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,

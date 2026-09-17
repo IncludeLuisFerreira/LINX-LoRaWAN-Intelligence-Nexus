@@ -6,10 +6,11 @@ from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from linx.db.base_class import Base
+from linx_shared.db.base_class import Base
 
 if TYPE_CHECKING:
-    from linx.models.tenant import Tenant
+    from linx_shared.models.device_route import DeviceRoute
+    from linx_shared.models.tenant import Tenant
 
 
 class Application(Base):

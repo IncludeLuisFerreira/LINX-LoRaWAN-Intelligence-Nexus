@@ -1,12 +1,13 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from linx.core.config import settings
-from linx.db.base_class import Base
-from linx.models.application import Application  # noqa: F401
-from linx.models.tenant import Tenant  # noqa: F401
-from linx.models.tenant_user import TenantUser  # noqa: F401
-from linx.models.user import User  # noqa: F401
+from linx_shared.core.config import settings
+from linx_shared.db.base_class import Base
+from linx_shared.models.application import Application  # noqa: F401
+from linx_shared.models.device_route import DeviceRoute  # noqa: F401
+from linx_shared.models.tenant import Tenant  # noqa: F401
+from linx_shared.models.tenant_user import TenantUser  # noqa: F401
+from linx_shared.models.user import User  # noqa: F401
 
 engine = create_engine(
     settings.database_url,
