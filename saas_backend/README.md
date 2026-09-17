@@ -1,434 +1,204 @@
 # SaaS Backend
 
-Backend do SaaS desenvolvido em Python utilizando **FastAPI**, com gerenciamento de dependências através do **Poetry** e ferramentas de qualidade e testes.
+Backend do SaaS **LINX**, organizado como um conjunto de **microserviços de
+plano de controle**. Cada serviço tem seu próprio pacote, `pyproject.toml`,
+Dockerfile e processo — podendo ser implantado e escalado de forma
+independente. O código comum fica na biblioteca compartilhada `linx_shared`.
 
-## 📋 O que foi feito
+## Estrutura
 
-* [x] Instalação do Poetry.
-* [x] Instalação das dependências Python.
-* [x] Configuração das ferramentas de qualidade de código.
-* [x] Configuração do ambiente de testes.
-* [x] Configuração de coverage de testes.
-* [x] Configuração do Isort.
-* [x] Início da API FastAPI (`linx.main:app`).
-* [x] Endpoint de health check (`/health`) com status do banco e do servidor gRPC.
-* [x] Página inicial servida via Jinja2 + arquivos estáticos (`/`).
-* [x] Configuração do SQLAlchemy 2.0 + Psycopg (PostgreSQL).
-* [x] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user`.
-* [x] Configuração centralizada via `pydantic-settings` (`core/config.py`).
-* [x] Alembic configurado com migration inicial das 4 tabelas.
-* [x] CRUD REST de Tenants em `/api/v1/tenant` (primeiro endpoint público do SaaS).
-* [x] Stubs gRPC do contrato `saas_agent.proto` em `src/linx/grpc/` (pacote `linx.grpc`).
+```
+saas_backend/
+├── shared/                    # biblioteca compartilhada (linx_shared)
+│   ├── pyproject.toml
+│   └── src/linx_shared/
+│       ├── core/config.py     # Settings (DATABASE_URL, DB_CONNECT_TIMEOUT)
+│       ├── db/                # engine, SessionLocal, get_db, Base
+│       ├── models/            # tenant, application, user, tenant_user, device_routes
+│       ├── schemas/           # schemas Pydantic da API
+│       └── grpc/              # stubs do contrato AgentBridge
+│
+├── identity_api/              # microserviço REST (FastAPI)     → :8000
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   ├── docker-entrypoint.sh
+│   ├── src/identity_api/      # main.py + routes/ + templates/ + static/
+│   └── tests/
+│
+├── agent_bridge/              # microserviço gRPC (AgentBridge)  → :50051
+│   ├── pyproject.toml
+│   ├── Dockerfile
+│   ├── src/agent_bridge/      # server.py + config.py
+│   └── tests/
+│
+├── migrations/                # Alembic (dono: identity_api)
+├── alembic.ini
+├── docker-compose.yml         # sobe db + identity_api + agent_bridge
+├── scripts/deploy.sh
+└── .env.example
+```
 
-## 📍 Endpoints disponíveis
+> O código que antes ficava em `src/linx/` foi redistribuído: o que era comum
+> virou `linx_shared`, o REST virou `identity_api` e o gRPC virou
+> `agent_bridge`. Nenhum serviço importa código do outro.
 
-| Método  | Rota                       | Descrição                                                  |
-| :-----: | -------------------------- | ---------------------------------------------------------- |
-|  `GET`  | `/`                        | Página inicial "Em Construção" (HTML).                     |
-|  `GET`  | `/health`                  | Health check: status do banco e do servidor gRPC (`200`/`503`). |
-|  `GET`  | `/docs`                    | Documentação interativa (Swagger UI).                      |
-|  `GET`  | `/redoc`                   | Documentação alternativa (ReDoc).                          |
-| `POST`  | `/api/v1/tenant/`          | Cria um tenant (`201` + `id` UUID v4).                     |
-|  `GET`  | `/api/v1/tenant/`          | Lista todos os tenants (`200` + array).                    |
-|  `GET`  | `/api/v1/tenant/{id}`      | Busca um tenant pelo `id` (`404` se não existir).          |
-| `PATCH` | `/api/v1/tenant/{id}`      | Atualiza parcialmente um tenant (`404` se não existir).    |
-| `DELETE`| `/api/v1/tenant/{id}`      | Remove um tenant (`204`; `404` se não existir).            |
-| `POST`  | `/api/v1/tenant/{id}/applications`            | Cria uma application no tenant (`201`; `404` se o tenant não existir). |
-|  `GET`  | `/api/v1/tenant/{id}/applications`            | Lista as applications do tenant (`200` + array; `404` se o tenant não existir). |
-|  `GET`  | `/api/v1/tenant/{id}/applications/{app_id}`   | Busca uma application pelo `app_id` (`404` se não existir). |
-| `PATCH` | `/api/v1/tenant/{id}/applications/{app_id}`   | Atualiza parcialmente uma application (`404` se não existir). |
-| `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}`   | Remove uma application (`204`; `404` se não existir). |
+## Serviços
 
-> O `{id}` e o `{app_id}` são `UUID` (v4) gerados automaticamente pelo banco na criação.
+### `identity_api` (REST — porta 8000)
 
-## 🔄 CRUD de Tenants
+Serviço FastAPI com os recursos de identidade/catálogo:
 
-O primeiro endpoint REST público do SaaS permite gerenciar as organizações (tenants).
-Os schemas ficam em `src/linx/schemas/tenant.py` e as rotas em `src/linx/routes/tenant.py`
-(prefixo `/api/v1/tenant`, registrado em `linx/main.py`).
+| Método  | Rota                       | Descrição                                          |
+| :-----: | -------------------------- | -------------------------------------------------- |
+|  `GET`  | `/`                        | Página inicial "Em Construção" (HTML).             |
+|  `GET`  | `/health`                  | Health check do banco (`200`/`503`).               |
+|  `GET`  | `/docs`                    | Swagger UI.                                        |
+|  `GET`  | `/redoc`                   | ReDoc.                                             |
+| `POST`  | `/api/v1/tenant/`          | Cria um tenant (`201` + `id` UUID v4).             |
+|  `GET`  | `/api/v1/tenant/`          | Lista todos os tenants.                            |
+|  `GET`  | `/api/v1/tenant/{id}`      | Busca um tenant pelo `id` (`404` se não existir).  |
+| `PATCH` | `/api/v1/tenant/{id}`      | Atualiza parcialmente um tenant.                   |
+| `DELETE`| `/api/v1/tenant/{id}`      | Remove um tenant (`204`).                          |
+| `POST`  | `/api/v1/tenant/{id}/applications`          | Cria uma application no tenant.       |
+|  `GET`  | `/api/v1/tenant/{id}/applications`          | Lista as applications do tenant.      |
+|  `GET`  | `/api/v1/tenant/{id}/applications/{app_id}` | Busca uma application.                |
+| `PATCH` | `/api/v1/tenant/{id}/applications/{app_id}` | Atualiza parcialmente uma application.|
+| `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}` | Remove uma application (`204`).       |
 
-### Criação
+### `agent_bridge` (gRPC — porta 50051)
 
-`name` é obrigatório (até 50 caracteres); `description` é opcional (até 100 caracteres, default `""`):
+Servidor gRPC do contrato `AgentBridge`:
+
+| RPC               | Direção            | Uso                                        |
+| ----------------- | ------------------ | ------------------------------------------ |
+| `GetAppConfig`    | Client Agent → SaaS | Config do tenant no startup.              |
+| `ReportViolation` | Client Agent → SaaS | Notificação de violação (placeholder).    |
+
+> O `agent_bridge` consulta o Postgres diretamente via `linx_shared`. Migrar
+> para consultar o `identity_api` é uma evolução futura (desacoplamento total).
+
+## Desenvolvimento local
+
+Cada serviço é um projeto Poetry independente que depende de `linx_shared` por
+caminho (`../shared`). A raiz do `saas_backend/` é um projeto Poetry
+(`package-mode = false`) só com os atalhos `task`.
 
 ```bash
-curl -X POST localhost:8000/api/v1/tenant/ \
-  -H 'Content-Type: application/json' \
-  -d '{"name": "ACME"}'
+# Instalar dependências (uma vez por serviço + task runner da raiz)
+poetry install                       # task runner (taskipy)
+poetry -C shared install
+poetry -C identity_api install
+poetry -C agent_bridge install
 ```
 
-Resposta (`201`) — como `description` não foi enviado, vem `""`. O header `Location` aponta para o recurso criado (`/api/v1/tenant/{id}`):
-
-```json
-{
-  "name": "ACME",
-  "description": "",
-  "id": "89f9a8f6-...-uuid-v4",
-  "created_at": "2026-09-07T22:00:00Z",
-  "updated_at": "2026-09-07T22:00:00Z"
-}
-```
-
-### Consulta, atualização e remoção
+Subir os dois serviços de uma vez (carrega o `.env` da raiz e sobe REST + gRPC;
+`Ctrl+C` encerra ambos):
 
 ```bash
-# Listar todos os tenants (200) — retorna um array
-curl localhost:8000/api/v1/tenant/
-
-# Buscar por id (200) — 404 se o tenant não existir
-curl localhost:8000/api/v1/tenant/<UUID>
-
-# Atualização parcial (200) — apenas os campos enviados são alterados;
-# 'updated_at' é atualizado automaticamente pelo model
-curl -X PATCH localhost:8000/api/v1/tenant/<UUID> \
-  -H 'Content-Type: application/json' \
-  -d '{"name": "ACME Ltda"}'
-
-# Remover (204, sem corpo) — hard-delete; os filhos do tenant
-# (applications/tenant_user) são removidos em cascata via FK ondelete=CASCADE
-curl -X DELETE localhost:8000/api/v1/tenant/<UUID> -i
+poetry run task run
 ```
 
-O Swagger em `/docs` lista os 5 endpoints da API de tenants.
-
-## 🔄 CRUD de Applications
-
-O segundo recurso REST público do SaaS permite gerenciar as aplicações
-vinculadas a um tenant (organização). Os schemas ficam em
-`src/linx/schemas/application.py` e as rotas em `src/linx/routes/application.py`
-(prefixo `/api/v1/tenant`, registrado em `linx/main.py`).
-
-Toda rota exige um `{tenant_id}` existente (caso contrário, `404`).
-
-### Criação
-
-`name` é obrigatório (até 50 caracteres); `description` é opcional (até 100 caracteres, default `""`):
+Ou individualmente:
 
 ```bash
-curl -X POST localhost:8000/api/v1/tenant/<UUID>/applications \
-  -H 'Content-Type: application/json' \
-  -d '{"name": "Fazenda"}'
+poetry -C identity_api run uvicorn identity_api.main:app --reload
+poetry -C agent_bridge run python -m agent_bridge.server
 ```
 
-Resposta (`201`) — o header `Location` aponta para o recurso criado
-(`/api/v1/tenant/{id}/applications/{app_id}`):
+> `poetry -C <serviço>` executa o comando com o diretório de trabalho do
+> serviço; por isso o `task run` carrega o `.env` da raiz antes de subir os
+> processos.
 
-```json
-{
-  "name": "Fazenda",
-  "description": "",
-  "id": "89f9a8f6-...-uuid-v4",
-  "created_at": "2026-09-07T22:00:00Z",
-  "updated_at": "2026-09-07T22:00:00Z"
-}
-```
+### Atalhos (`task`)
 
-### Consulta, atualização e remoção
+| Task         | Ação                                                          |
+| ------------ | ------------------------------------------------------------- |
+| `run`        | Sobe `identity_api` + `agent_bridge` em modo dev.             |
+| `run-docker` | `docker compose up --build` (foreground).                     |
+| `up`         | `docker compose up -d --build`.                               |
+| `down`       | `docker compose down`.                                        |
+| `migrate`    | Aplica as migrations do Alembic (`upgrade head`).             |
+| `migration`  | Gera nova migration (`revision --autogenerate -m "<msg>"`).   |
+| `test`       | Roda os testes dos três pacotes.                              |
+
+### Testes
 
 ```bash
-# Listar as applications de um tenant (200) — 404 se o tenant não existir
-curl localhost:8000/api/v1/tenant/<UUID>/applications
+poetry run task test
 
-# Buscar por app_id (200) — 404 se a application não existir
-curl localhost:8000/api/v1/tenant/<UUID>/applications/<APP_UUID>
-
-# Atualização parcial (200) — apenas os campos enviados são alterados;
-# 'updated_at' é atualizado automaticamente pelo model
-curl -X PATCH localhost:8000/api/v1/tenant/<UUID>/applications/<APP_UUID> \
-  -H 'Content-Type: application/json' \
-  -d '{"name": "Fazenda Norte"}'
-
-# Remover (204, sem corpo)
-curl -X DELETE localhost:8000/api/v1/tenant/<UUID>/applications/<APP_UUID> -i
+# ou por serviço
+poetry -C shared run pytest
+poetry -C identity_api run pytest   # exige Postgres em localhost:5432
+poetry -C agent_bridge run pytest   # exige Postgres em localhost:5432
 ```
 
-O Swagger em `/docs` lista os 5 endpoints da API de applications.
+## Banco de dados e migrações
 
-## ⚙️ Instalação
+O schema é versionado com **Alembic** (em `migrations/`). O dono das tabelas é
+o `identity_api`, então é ele que roda as migrações no startup.
 
-Instale as dependências do projeto:
+| Comando                                              | Descrição                                  |
+| ---------------------------------------------------- | ------------------------------------------ |
+| `poetry run task migrate`                            | Aplica todas as migrações pendentes.       |
+| `poetry -C identity_api run alembic -c ../alembic.ini downgrade -1` | Reverte a última migração.    |
+| `poetry run task migration "<msg>"`                  | Gera nova migração a partir dos models.    |
 
-```bash
-poetry install
-```
+> O `alembic.ini` fica na raiz do `saas_backend/`; como `poetry -C identity_api`
+> muda o diretório de trabalho para `identity_api/`, é preciso apontar o config
+> com `-c ../alembic.ini` (os atalhos `task migrate`/`task migration` já fazem
+> isso).
 
-## ▶️ Executando o projeto
+> Os models ficam em `linx_shared.models`; o `migrations/env.py` importa de lá.
 
-Para iniciar o servidor FastAPI utilizando o Uvicorn:
-
-```bash
-poetry run uvicorn linx.main:app --reload
-```
-
-O parâmetro `--reload` habilita o recarregamento automático do servidor durante o desenvolvimento.
-
-## 🗄️ Banco de Dados
-
-O projeto utiliza **SQLAlchemy 2.0** (estilo declarativo com `Mapped`/`mapped_column`) e **Psycopg 3** para o PostgreSQL.
-
-### Estrutura
-
-| Arquivo                          | Responsabilidade                                                    |
-| -------------------------------- | ------------------------------------------------------------------- |
-| `src/linx/db/base_class.py`      | Declara `Base = declarative_base()`.                                |
-| `src/linx/db/base.py`            | Engine, `SessionLocal` e registro dos models em `Base.metadata`.    |
-| `src/linx/models/`               | Definição dos models (`tenant`, `application`, `user`, `tenant_user`). |
-| `src/linx/schemas/`              | Schemas Pydantic da API (`tenant.py` → Create/Update/Response).     |
-| `src/linx/routes/`               | Rotas/endpoints da API (`tenant.py` → CRUD em `/api/v1/tenant`).    |
-
-A `DATABASE_URL` está configurada em `src/linx/db/base.py` (padrão: `postgresql+psycopg://linx:linx@localhost:5432/linx`).
-
-### Models
-
-Os nomes de entidade seguem o schema do **ChirpStack v4** para facilitar a integração.
-
-| Model         | Tabela        | Descrição                                                                     |
-| ------------- | ------------- | ----------------------------------------------------------------------------- |
-| `Tenant`      | `tenant`      | Organização (tenant), com limites de gateways/dispositivos e `tags` (JSONB).  |
-| `Application` | `application` | Aplicação pertencente a um tenant (`tenant_id` FK → `tenant.id`).             |
-| `User`        | `user`        | Usuário global (`email` único, `password_hash`, flags de admin/ativo).        |
-| `TenantUser`  | `tenant_user` | Vínculo/papel de um usuário em um tenant (PK composta + flags de RBAC).       |
-
-- Todos os `id` usam `UUID` (v4) como chave primária (RF-040).
-- `TenantUser` usa PK composta (`tenant_id`, `user_id`), fiel ao ChirpStack.
-- Relacionamentos ORM: `Tenant.applications` ↔ `Application.tenant` e `Tenant.tenant_users` ↔ `TenantUser` ↔ `User.tenant_users`.
-- `created_at`/`updated_at` são gerados **no ORM** (`default`/`onupdate` como callables Python com `datetime.now(timezone.utc)`), avaliados por linha no INSERT/UPDATE. Decisão: mantém-se no lado Python para um único app instance e evita trigger no Postgres (que não tem cláusula `ON UPDATE`); migrar para `server_default` pode ser revisitado se houver múltiplas instâncias ou updates diretos no banco.
-
-### Verificando os models
-
-```bash
-poetry run python -c "from linx.db.base import Base; print(Base.metadata.tables.keys())"
-```
-
-Saída esperada:
-
-```text
-dict_keys(['application', 'tenant', 'tenant_user', 'user'])
-```
-
-### Migrações (Alembic)
-
-O schema é versionado com **Alembic**. A URL do banco é resolvida por `Settings` (`DATABASE_URL` ou default local).
-
-| Comando                                  | Descrição                                  |
-| ---------------------------------------- | ------------------------------------------ |
-| `poetry run alembic upgrade head`        | Aplica todas as migrações pendentes.       |
-| `poetry run alembic downgrade -1`        | Reverte a última migração.                 |
-| `poetry run alembic current`             | Mostra a revisão aplicada.                 |
-| `poetry run alembic revision --autogenerate -m "<msg>"` | Gera nova migração a partir dos models. |
-
-Para aplicar localmente (exige o Postgres de `infra/docker-compose.base.yml`):
-
-```bash
-docker compose -f infra/docker-compose.base.yml up -d postgres
-poetry run alembic upgrade head
-```
-
-## 🔌 Contrato gRPC (stubs)
+## Contrato gRPC
 
 O contrato `AgentBridge` é definido em `proto/saas_agent.proto` e versionado na
-raiz do repositório. Os stubs Python são gerados em `src/linx/grpc/`:
-
-| Arquivo                    | Responsabilidade                          |
-| -------------------------- | ----------------------------------------- |
-| `src/linx/grpc/saas_agent_pb2.py`      | Mensagens protobuf (tipos).  |
-| `src/linx/grpc/saas_agent_pb2_grpc.py` | Stub e Servicer do `AgentBridge`. |
-
-Verificar o import:
-
-```bash
-poetry run python -c "from linx.grpc import saas_agent_pb2, saas_agent_pb2_grpc"
-```
-
-Regenerar os stubs (após alterar o `.proto`):
+raiz do repositório. Os stubs Python são gerados em
+`shared/src/linx_shared/grpc/` (e em `client_agent_api/src/agent/grpc/`).
 
 ```bash
 bash scripts/gen_proto.sh
 ```
 
-## 🧪 Testes
+## Docker / Deploy
 
-Para executar os testes:
-
-```bash
-task test
-```
-
-Também é possível executar o Pytest diretamente:
-
-```bash
-pytest
-```
-
-### Testando endpoints
-
-Para testar o health check diretamente pelo terminal:
-
-```bash
-curl -i http://localhost:8000/health
-```
-
-Resposta esperada (`200` quando banco e gRPC estão ok):
-
-```json
-{
-  "status": "ok",
-  "db": true,
-  "grpc": true
-}
-```
-
-Se o Postgres ou o servidor gRPC estiverem fora, retorna `503` com:
-
-```json
-{
-  "status": "degraded",
-  "db": false,
-  "grpc": true
-}
-```
-
-> O campo `grpc` indica apenas que existe um listener na porta configurada
-> (`GRPC_PORT`, padrão `50051`); não é um health check do protocolo gRPC em si.
-
-## 🚀 Deploy (produção / EC2)
-
-O deploy de produção usa `docker-compose.prod.yml` (serviços `app` + `db`) e a imagem
-construída pelo `Dockerfile`. O entrypoint aplica as migrations do Alembic e sobe o
-Uvicorn, que também inicia o servidor gRPC.
-
-### Variáveis de ambiente
-
-Copie o template e ajuste a senha:
+O `docker-compose.yml` sobe três serviços: `db` (Postgres), `identity_api` e
+`agent_bridge`.
 
 ```bash
 cd saas_backend
-cp .env.example .env
-```
-
-| Variável             | Descrição                                                        | Default no exemplo              |
-| -------------------- | ---------------------------------------------------------------- | ------------------------------- |
-| `POSTGRES_USER`      | Usuário do Postgres do MVP.                                      | `linx`                          |
-| `POSTGRES_PASSWORD`  | Senha do Postgres (troque em produção).                          | `change-me-in-production`       |
-| `POSTGRES_DB`        | Banco do Postgres.                                               | `linx`                          |
-| `DATABASE_URL`       | URL SQLAlchemy. O exemplo usa `localhost`; no Compose é sobrescrita para o host `db`. | `postgresql+psycopg://linx:...@localhost:5432/linx` |
-| `DB_CONNECT_TIMEOUT` | Timeout de conexão com o banco (segundos).                       | `5`                             |
-| `GRPC_HOST`          | Endereço de bind do servidor gRPC.                               | `0.0.0.0`                       |
-| `GRPC_PORT`          | Porta do servidor gRPC.                                          | `50051`                         |
-
-> O `.env` é ignorado pelo git; nunca o versione.
-
-### Subir localmente (validar a stack de produção)
-
-```bash
-cd saas_backend
-cp .env.example .env
-docker compose -f docker-compose.prod.yml up -d --build
+cp .env.example .env   # ajuste POSTGRES_PASSWORD
+docker compose up -d --build
 curl -i http://localhost:8000/health
 ```
 
 Resposta esperada (`200`):
 
 ```json
-{"status":"ok","db":true,"grpc":true}
+{"status":"ok","db":true}
 ```
+
+### Variáveis de ambiente
+
+| Variável             | Descrição                                                        | Default no exemplo              |
+| -------------------- | ---------------------------------------------------------------- | ------------------------------- |
+| `POSTGRES_USER`      | Usuário do Postgres.                                             | `linx`                          |
+| `POSTGRES_PASSWORD`  | Senha do Postgres (troque em produção).                          | `change-me-in-production`       |
+| `POSTGRES_DB`        | Banco do Postgres.                                               | `linx`                          |
+| `DATABASE_URL`       | URL SQLAlchemy (o Compose sobrescreve o host para `db`).         | `postgresql+psycopg://linx:...@localhost:5432/linx` |
+| `DB_CONNECT_TIMEOUT` | Timeout de conexão com o banco (segundos).                       | `5`                             |
+| `GRPC_HOST`          | Endereço de bind do `agent_bridge`.                              | `0.0.0.0`                       |
+| `GRPC_PORT`          | Porta do `agent_bridge`.                                         | `50051`                         |
+
+> **Atenção (P0):** o gRPC ainda não tem autenticação e `GetAppConfig` devolve
+> usuário/senha do Postgres. Restrinja a porta `50051` no Security Group ao IP
+> do Client Agent até o mTLS (Sprint 5). Nunca exponha a `0.0.0.0/0`.
 
 ### Runbook — EC2 `t3.small`
 
-1. **Criar a instância:** EC2 `t3.small`, Ubuntu 22.04+, com IP público e um
-   keypair SSH.
-2. **Security Group (inbound):**
-   - `22` (SSH) — restrito ao seu IP;
-   - `8000` (REST) — `0.0.0.0/0`;
-   - `50051` (gRPC) — **somente o IP público do Client Agent** (ou uma regra
-     SG-to-SG). Não exponha a `0.0.0.0/0`.
-
-   > **Atenção (P0):** o gRPC ainda não tem autenticação e `GetAppConfig`
-   > devolve usuário/senha do Postgres. Como os endpoints REST também não têm
-   > auth e `GET /api/v1/tenant` + `GET /api/v1/tenant/{id}/applications`
-   > expõem os UUIDs, qualquer cliente com acesso a `50051` consegue obter as
-   > credenciais — e elas são as do banco global (não por aplicação). Restringir
-   > a porta ao Client Agent é o controle obrigatório até o mTLS do Sprint 5.
-3. **Instalar Docker e Compose plugin:**
-   ```bash
-   sudo apt update && sudo apt install -y docker.io docker-compose-v2
-   sudo usermod -aG docker "$USER" && newgrp docker
-   ```
-4. **Clonar o repositório e configurar o ambiente:**
-   ```bash
-   git clone https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus.git
-   cd LINX-LoRaWAN-Intelligence-Nexus
-   git checkout develop
-   cd saas_backend
-   cp .env.example .env
-   # edite .env e defina uma POSTGRES_PASSWORD forte
-   ```
-5. **Subir a stack:**
-   ```bash
-   ./scripts/deploy.sh
-   ```
-6. **Verificar de fora da AWS:**
-   ```bash
-   curl -i http://<ec2-ip>:8000/health
-   ```
-   Expected: `200` com `{"status":"ok","db":true,"grpc":true}`.
-
-## 📦 Dependências do projeto
-
-### FastAPI
-
-Framework web moderno e de alto desempenho para a construção de APIs em Python, com validação automática de dados via Pydantic e documentação interativa (Swagger/ReDoc).
-
-### Uvicorn
-
-Servidor web ASGI de alta performance baseado em `uvloop` e `httptools`, utilizado para executar a aplicação FastAPI.
-
-### Pydantic Settings
-
-Extensão do Pydantic para gerenciamento de configurações e variáveis de ambiente da aplicação através de classes tipadas e validação estática.
-
-### Jinja2
-
-Motor de templates para Python, utilizado na renderização de páginas HTML dinâmicas no lado do servidor.
-
-### SQLAlchemy
-
-ORM (*Object-Relational Mapping*) e SQL Toolkit para abstração, consulta e manipulação de banco de dados relacional em Python.
-
-### Psycopg
-
-Adaptador de banco de dados PostgreSQL de terceira geração para Python, focado em alta performance, concorrência e recursos assíncronos.
-
-## 🛠️ Dependências de desenvolvimento
-
-### Pytest
-
-Framework para testes automatizados em Python. Permite escrever e executar testes unitários e de integração de forma simples e escalável.
-
-### Black
-
-Formatador automático de código Python (*uncompromising code formatter*). Aplica regras consistentes de formatação ao código.
-
-### Isort
-
-Utilitário para ordenação e organização automática das declarações de `import` em ordem alfabética e por seções de dependência.
-
-### Flake8
-
-Linter para Python que realiza análise estática do código, identificando problemas como erros de sintaxe, variáveis não utilizadas e violações das convenções da PEP 8.
-
-### Mypy
-
-Verificador estático de tipos para Python. Analisa as anotações de tipo (*type hints*) para identificar possíveis erros de compatibilidade e problemas de lógica antes da execução do código.
-
-### Pytest-cov
-
-Plugin do Pytest integrado ao `coverage.py` para medir a cobertura de código pelos testes e gerar relatórios em terminal e HTML.
-
-### httpx2
-
-Client HTTP assíncrono utilizado pelo `TestClient` do FastAPI/Starlette para execução dos testes de endpoints da API.
-
-### Taskipy
-
-Task runner para Python que permite criar atalhos padronizados para comandos utilizados frequentemente no projeto, como execução de linters, testes e servidor.
+1. **Security Group (inbound):** `22` (SSH, restrito), `8000` (REST),
+   `50051` (gRPC, **somente** o IP do Client Agent).
+2. Instale Docker e o plugin Compose, clone o repositório.
+3. `cd saas_backend && cp .env.example .env` e defina uma senha forte.
+4. `./scripts/deploy.sh`.
+5. Verifique de fora: `curl -i http://<ec2-ip>:8000/health`.
