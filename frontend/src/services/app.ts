@@ -4,12 +4,10 @@ export interface ApplicationOutput {
   id: string;
   name: string;
   organizationId?: string;
-  tenantId?: string;
-  createdAt?: string;
 }
 
 export interface CreateApplicationInput {
-  tenantId: string;
+  organizationId: string;
   name: string;
 }
 
@@ -18,13 +16,18 @@ export const applicationService = {
     // Envia POST /applications com a prop organizationId que o handlers.ts aguarda
     const response = await api.post<ApplicationOutput>('/applications', {
       name: data.name,
-      organizationId: data.tenantId,
+      organizationId: data.organizationId,
     });
     return response.data;
   },
 
-  listByTenant: async (_tenantId?: string): Promise<ApplicationOutput[]> => {
-    const response = await api.get<ApplicationOutput[]>('/applications');
+  listByTenant: async (
+    organizationId?: string,
+  ): Promise<ApplicationOutput[]> => {
+    // Se passar um organizationId, envia como query param para filtrar na API/Mock
+    const response = await api.get<ApplicationOutput[]>('/applications', {
+      params: organizationId ? { organizationId } : undefined,
+    });
     return response.data;
   },
 };

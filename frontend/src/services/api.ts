@@ -1,10 +1,7 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: '/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1',
 });
 
 // Interceptor de Requisição: Injeta o token Bearer no Header se existir no localStorage
@@ -33,3 +30,16 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export function getErrorMessage(
+  error: unknown,
+  fallbackMessage = 'Ocorreu um erro inesperado.',
+): string {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message || error.message || fallbackMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallbackMessage;
+}

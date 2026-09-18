@@ -6,9 +6,10 @@ import { z } from 'zod';
 import { tenantService } from '../../services/tenant';
 import type { TenantOutput } from '../../services/tenant';
 import { applicationService } from '../../services/app';
+import { getErrorMessage } from '../../services/api';
 
 const newAppSchema = z.object({
-  tenantId: z.string().min(1, 'Selecione um tenant obrigatoriamente'),
+  organizationId: z.string().min(1, 'Selecione um tenant obrigatoriamente'),
   name: z
     .string()
     .min(2, 'O nome da aplicação deve ter pelo menos 2 caracteres'),
@@ -31,20 +32,22 @@ const NewApp: React.FC = () => {
   } = useForm<NewAppFormData>({
     resolver: zodResolver(newAppSchema),
     defaultValues: {
-      tenantId: '',
+      organizationId: '',
       name: '',
     },
   });
 
-  const selectedTenantId = watch('tenantId');
+  const selectedOrganizationId = watch('organizationId');
 
   useEffect(() => {
     const fetchTenants = async () => {
       try {
         const data = await tenantService.list();
         setTenants(data || []);
-      } catch {
-        setErrorMessage('Falha ao carregar a lista de tenants.');
+      } catch (err: unknown) {
+        setErrorMessage(
+          getErrorMessage(err, 'Falha ao carregar a lista de tenants.'),
+        );
       } finally {
         setLoadingTenants(false);
       }
@@ -52,18 +55,29 @@ const NewApp: React.FC = () => {
     fetchTenants();
   }, []);
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (successMessage) {
+      timer = setTimeout(() => {
+        navigate('/tenants');
+      }, 1500);
+    }
+    return () => clearTimeout(timer);
+  }, [successMessage, navigate]);
+
   const onSubmit = async (data: NewAppFormData) => {
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
       await applicationService.create({
-        tenantId: data.tenantId,
+        organizationId: data.organizationId,
         name: data.name,
       });
       setSuccessMessage('Aplicação vinculada com sucesso!');
-      setTimeout(() => navigate('/tenants'), 1500);
-    } catch {
-      setErrorMessage('Erro ao vincular aplicação. Verifique os dados.');
+    } catch (err: unknown) {
+      setErrorMessage(
+        getErrorMessage(err, 'Erro ao vincular aplicação. Verifique os dados.'),
+      );
     }
   };
 
@@ -91,7 +105,7 @@ const NewApp: React.FC = () => {
             Tenant
           </label>
           <select
-            {...register('tenantId')}
+            {...register('organizationId')}
             disabled={loadingTenants}
             className="w-full px-3 py-2 text-black bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
           >
@@ -105,9 +119,9 @@ const NewApp: React.FC = () => {
                 </option>
               ))}
           </select>
-          {errors.tenantId && (
+          {errors.organizationId && (
             <p className="text-red-500 text-xs mt-1">
-              {errors.tenantId.message}
+              {errors.organizationId.message}
             </p>
           )}
         </div>
@@ -129,7 +143,7 @@ const NewApp: React.FC = () => {
 
         <button
           type="submit"
-          disabled={isSubmitting || !selectedTenantId}
+          disabled={isSubmitting || !selectedOrganizationId}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md disabled:opacity-50 transition-colors"
         >
           {isSubmitting ? 'Cadastrando...' : 'Criar Aplicação'}

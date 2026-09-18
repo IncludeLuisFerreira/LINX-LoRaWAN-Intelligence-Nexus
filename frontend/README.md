@@ -43,9 +43,9 @@ Abaixo está a organização atualizada da raiz e do diretório `frontend/`:
     │   │   ├── browser.ts
     │   │   └── handlers.ts
     │   ├── pages/            # Páginas/Rotas da aplicação
-    │   │   ├── apps/
+    │   │   ├── app/
     │   │   │   └── NewApp.tsx # Tela de cadastro de Aplicação
-    │   │   ├── tenant/
+    │   │   ├── tenants/
     │   │   │   └── NewTenant.tsx # Tela de cadastro de Tenant
     │   │   ├── AppDetail.tsx
     │   │   ├── Dashboard.tsx

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { tenantService } from '../../services/tenant';
+import { getErrorMessage } from '../../services/api';
 
 const tenantSchema = z.object({
   name: z.string().min(2, 'O nome do tenant deve ter pelo menos 2 caracteres'),
@@ -24,20 +25,25 @@ const NewTenant: React.FC = () => {
     resolver: zodResolver(tenantSchema),
   });
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (successMessage) {
+      timer = setTimeout(() => {
+        navigate('/tenants');
+      }, 1500);
+    }
+    return () => clearTimeout(timer);
+  }, [successMessage, navigate]);
+
   const onSubmit = async (data: TenantFormData) => {
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
       await tenantService.create(data);
-      setSuccessMessage('Tenant criado com sucesso! Redirecionando...');
-      setTimeout(() => {
-        navigate('/tenants');
-      }, 1500);
-    } catch (error: any) {
-      const apiError =
-        error.response?.data?.message ||
-        'Erro ao criar tenant. Verifique a conexão com a AWS.';
-      setErrorMessage(apiError);
+      navigate('/tenants');
+    } catch (err: unknown) {
+      const message = getErrorMessage(err, 'Erro ao criar aplicação.');
+      setErrorMessage(message);
     }
   };
 
