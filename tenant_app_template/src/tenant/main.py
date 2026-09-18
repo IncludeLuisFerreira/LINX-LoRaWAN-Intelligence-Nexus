@@ -9,6 +9,9 @@ from tenant.db import create_db_pool
 from tenant.grpc_client import SaasConfigClient, TenantBootstrapError
 from tenant.routers import ingest
 
+# Garante que os logs do tenant apareçam no docker logs: o uvicorn não
+# configura o root logger por padrão, então os logger.info daqui seriam
+# descartados sem um handler no root.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",

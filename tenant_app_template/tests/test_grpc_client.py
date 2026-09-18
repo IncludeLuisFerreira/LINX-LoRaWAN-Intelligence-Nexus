@@ -1,9 +1,10 @@
+from concurrent import futures
 from unittest.mock import MagicMock, patch
 
 import grpc
 import pytest
 
-from tenant.grpc import saas_agent_pb2
+from tenant.grpc import saas_agent_pb2, saas_agent_pb2_grpc
 from tenant.grpc_client import SaasConfigClient, TenantBootstrapError
 
 
@@ -94,3 +95,44 @@ def test_get_app_config_rpc_error_raises_bootstrap_error():
         client.get_app_config("missing")
 
     assert "NOT_FOUND" in str(exc.value)
+
+
+def test_get_app_config_passes_timeout():
+    stub = MagicMock()
+    stub.GetAppConfig.return_value = saas_agent_pb2.AppConfig(
+        app_id="app-abc123", db_host="h", db_port=5432, mqtt_topic="t"
+    )
+    client = _client(stub)
+
+    client.get_app_config("app-abc123")
+
+    assert stub.GetAppConfig.call_args.kwargs["timeout"] == 1.0
+
+
+class _AppConfigServicer(saas_agent_pb2_grpc.AgentBridgeServicer):
+    def GetAppConfig(self, request, context):  # noqa: N802
+        return saas_agent_pb2.AppConfig(
+            app_id=request.app_id,
+            db_host="postgres-tenant",
+            db_port=5432,
+            mqtt_topic="app/tenant1/#",
+        )
+
+
+def test_get_app_config_against_real_server():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+    saas_agent_pb2_grpc.add_AgentBridgeServicer_to_server(
+        _AppConfigServicer(), server
+    )
+    port = server.add_insecure_port("localhost:0")
+    server.start()
+    client = SaasConfigClient(server=f"localhost:{port}", timeout=5.0)
+    try:
+        config = client.get_app_config("app-abc123")
+    finally:
+        client.close()
+        server.stop(0)
+
+    assert config.db_host == "postgres-tenant"
+    assert config.db_port == 5432
+    assert config.mqtt_topic == "app/tenant1/#"

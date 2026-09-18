@@ -17,6 +17,8 @@ services:
   tenant_app:
     build: .
     restart: unless-stopped
+    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do SaaS Backend
+    # a partir do container (não use "localhost" aqui).
     environment:
       - CLIENT_AGENT_URL=${CLIENT_AGENT_URL}
       - APP_ID=${APP_ID}
