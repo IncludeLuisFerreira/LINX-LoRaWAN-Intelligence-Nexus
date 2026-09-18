@@ -31,7 +31,7 @@ const NewTenant: React.FC = () => {
       await tenantService.create(data);
       setSuccessMessage('Tenant criado com sucesso! Redirecionando...');
       setTimeout(() => {
-        navigate('/tenant');
+        navigate('/tenants');
       }, 1500);
     } catch (error: any) {
       const apiError =

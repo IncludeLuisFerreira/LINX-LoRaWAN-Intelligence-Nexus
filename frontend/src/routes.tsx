@@ -6,7 +6,9 @@ import { Layout } from './components/Layout';
 // Imports com lazy loading (opcional: você também pode usar lazy para o NewTenant se preferir)
 const Login = lazy(() => import('./pages/Login'));
 const Tenants = lazy(() => import('./pages/Tenants'));
-const NewTenant = lazy(() => import('./pages/tenant/NewTenant'));
+const NewTenant = lazy(() => import('./pages/tenants/NewTenant'));
+const TenantList = lazy(() => import('./pages/tenants/TenantList'));
+const NewApp = lazy(() => import('./pages/app/NewApp'));
 const AppDetail = lazy(() => import('./pages/AppDetail'));
 const Devices = lazy(() => import('./pages/Devices'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -16,15 +18,14 @@ export function AppRoutes() {
   return (
     <Suspense fallback={<Spinner />}>
       <Routes>
-        {/* Rotas Públicas */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
 
-        {/* Rotas Protegidas / Autenticadas (com Layout da aplicação) */}
         <Route element={<Layout />}>
+          <Route path="/tenants/list" element={<TenantList />} />
+          <Route path="/apps/new" element={<NewApp />} />
           <Route path="/tenants" element={<Tenants />} />
           <Route path="/tenants/new" element={<NewTenant />} />{' '}
-          {/* Colocado AQUI dentro do Layout */}
           <Route
             path="/tenants/:tenant_id/apps/:app_id"
             element={<AppDetail />}

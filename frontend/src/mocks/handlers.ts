@@ -55,11 +55,16 @@ export const handlers = [
     const body = (await request.json()) as {
       name: string;
       organizationId: string;
+      tenantId?: string;
     };
+
+    const orgId = body.tenantId || body.organizationId || '';
+
     const newApp = {
       id: String(Date.now()),
       name: body.name,
-      organizationId: body.organizationId,
+      organizationId: orgId,
+      tenantId: orgId,
       createdAt: new Date().toISOString(),
     };
     mockApps.push(newApp);

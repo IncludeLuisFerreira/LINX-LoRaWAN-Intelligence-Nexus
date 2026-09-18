@@ -23,47 +23,52 @@ Este projeto foi inicializado utilizando o **Vite** para um ambiente de desenvol
 
 ## 📁 Estrutura do Projeto
 
-Abaixo está a organização atualizada do diretório `frontend/`:
+Abaixo está a organização atualizada da raiz e do diretório `frontend/`:
 
 ```text
-frontend/
+.
 ├── .github/
 │   └── workflows/
 │       └── frontend-ci.yml   # Pipeline de CI/CD (GitHub Actions)
-├── .husky/                   # Hooks do Git configurados pelo Husky
-├── public/
-│   └── mockServiceWorker.js  # Service Worker estático gerado pelo MSW
-├── src/
-│   ├── assets/               # Imagens, ícones e recursos estáticos
-│   ├── components/           # Componentes genéricos e de layout (Layout, Spinner, etc.)
-│   ├── contexts/             # Contextos globais do React (ex: AuthContext)
-│   ├── hooks/                # Custom React Hooks
-│   ├── mocks/                # Configurações e handlers do MSW para desenvolvimento local
-│   │   ├── browser.ts
-│   │   └── handlers.ts
-│   ├── pages/                # Páginas/Rotas da aplicação
-│   │   ├── tenant/
-│   │   │   └── NewTenant.tsx # Tela de cadastro de Tenant com Zod + React Hook Form
-│   │   ├── AppDetail.tsx
-│   │   ├── Dashboard.tsx
-│   │   ├── Devices.tsx
-│   │   ├── Login.tsx
-│   │   ├── NotFound.tsx
-│   │   └── Tenants.tsx
-│   ├── services/             # Instância centralizada do Axios e serviços de API
-│   │   ├── api.ts            # Cliente Axios base com Interceptors
-│   │   └── tenant.ts         # Métodos de integração do módulo de Tenant
-│   ├── types/                # Definições de tipos e interfaces TypeScript
-│   ├── App.tsx               # Definição e agrupamento de rotas (AppRoutes)
-│   ├── index.css             # Estilos globais e diretivas do Tailwind CSS
-│   └── main.tsx              # Ponto de entrada do React e ativador do MSW em Dev
-├── .env                      # Variáveis de ambiente locais (não versionado)
-├── .env.example              # Modelo das variáveis de ambiente
-├── .oxlintrc.json            # Configuração do OxLint
-├── .prettierrc               # Regras de formatação do Prettier
-├── index.html                # Documento HTML principal
-├── openapi-stub.yaml         # Contrato OpenAPI 3.0 (Source of Truth da API REST)
-├── package.json              # Dependências e scripts do projeto
-├── postcss.config.js         # Processamento do Tailwind CSS
-├── tailwind.config.js        # Configuração de temas e plugins do Tailwind
-└── vite.config.ts            # Configuração do Vite
+└── frontend/
+    ├── .husky/               # Hooks do Git configurados pelo Husky
+    ├── public/
+    │   └── mockServiceWorker.js # Service Worker estático gerado pelo MSW
+    ├── src/
+    │   ├── assets/           # Imagens, ícones e recursos estáticos
+    │   ├── components/       # Componentes genéricos e de layout (Layout, Spinner, etc.)
+    │   ├── contexts/         # Contextos globais do React (ex: AuthContext)
+    │   ├── hooks/            # Custom React Hooks
+    │   ├── mocks/            # Configurações e handlers do MSW para desenvolvimento local
+    │   │   ├── browser.ts
+    │   │   └── handlers.ts
+    │   ├── pages/            # Páginas/Rotas da aplicação
+    │   │   ├── apps/
+    │   │   │   └── NewApp.tsx # Tela de cadastro de Aplicação
+    │   │   ├── tenant/
+    │   │   │   └── NewTenant.tsx # Tela de cadastro de Tenant
+    │   │   ├── AppDetail.tsx
+    │   │   ├── Dashboard.tsx
+    │   │   ├── Devices.tsx
+    │   │   ├── Login.tsx
+    │   │   ├── NotFound.tsx
+    │   │   └── Tenants.tsx   # Listagem e associação de Tenants/Aplicações
+    │   ├── services/         # Instância centralizada do Axios e serviços de API
+    │   │   ├── api.ts        # Cliente Axios base com Interceptors
+    │   │   ├── app.ts        # Métodos de integração do módulo de Aplicações
+    │   │   └── tenant.ts     # Métodos de integração do módulo de Tenant
+    │   ├── types/            # Definições de tipos e interfaces TypeScript
+    │   ├── App.tsx           # Componente principal de entrada da interface
+    │   ├── routes.tsx        # Definição e agrupamento de rotas (AppRoutes)
+    │   ├── index.css         # Estilos globais e diretivas do Tailwind CSS
+    │   └── main.tsx          # Ponto de entrada do React e ativador do MSW em Dev
+    ├── .env                  # Variáveis de ambiente locais (não versionado)
+    ├── .env.example          # Modelo das variáveis de ambiente
+    ├── .oxlintrc.json        # Configuração do OxLint
+    ├── .prettierrc           # Regras de formatação do Prettier
+    ├── index.html            # Documento HTML principal
+    ├── openapi-stub.yaml     # Contrato OpenAPI 3.0 (Source of Truth da API REST)
+    ├── package.json          # Dependências e scripts do projeto
+    ├── postcss.config.js     # Processamento do Tailwind CSS
+    ├── tailwind.config.js    # Configuração de temas e plugins do Tailwind
+    └── vite.config.ts        # Configuração do Vite
