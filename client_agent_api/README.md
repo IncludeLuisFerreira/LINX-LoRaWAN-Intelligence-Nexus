@@ -6,7 +6,9 @@ e roteando por `app_id`. No startup valida a conectividade gRPC com o SaaS
 Backend e resolve a configuração de cada tenant sob demanda via
 `GetAppConfig(app_id)`, com cache TTL.
 
-> A ingestão MQTT do tenant vive no `tenant_app_template`, não neste middleware.
+> Nesta sprint o consumer MQTT roda neste middleware e a persistência da
+> telemetria vive no `tenant_app_template` (Model A). Mover o consumer ao SaaS
+> Backend é a #47.
 
 ## 📋 O que foi feito
 
@@ -25,6 +27,7 @@ Backend e resolve a configuração de cada tenant sob demanda via
 | Método | Rota      | Descrição                                                        |
 | :----: | --------- | ---------------------------------------------------------------- |
 | `GET`  | `/health` | Health check: `{"status":"ok","saas_grpc":true}` (503 e `degraded` quando o SaaS está inacessível). |
+| `POST` | `/ingest` | Recebe telemetria validada e encaminha ao `/ingest` do tenant app. `201` em sucesso; `422` payload inválido; `502` tenant app inacessível. |
 
 ## 📁 Estrutura
 
@@ -75,6 +78,8 @@ Configuração por variáveis de ambiente:
 | `SAAS_GRPC_HOST`           | `saas:50051`    | Endereço `host:porta` do gRPC do SaaS Backend. |
 | `GRPC_TIMEOUT_SECONDS`     | `5`             | Timeout (s) das chamadas/checagem gRPC.        |
 | `CONFIG_CACHE_TTL_SECONDS` | `60`            | TTL (s) do cache de `GetAppConfig` por `app_id`. |
+| `TENANT_APP_URL`           | `http://localhost:8002` | URL base do tenant app (destino da ingestão).  |
+| `INGEST_TIMEOUT_SECONDS`   | `5`             | Timeout (s) do encaminhamento ao tenant app.    |
 
 > `SAAS_GRPC_HOST` precisa apontar para um endereço alcançável de dentro do
 > container do middleware. `localhost:50051` só funciona em dev na mesma máquina;
@@ -92,15 +97,17 @@ poetry run pytest
 
 ## 📡 Consumidor MQTT
 
-O `MqttConsumer` assina o tópico `application/+/device/+/event/up` no Mosquitto
-e loga o payload de cada uplink recebido. Configuração por variáveis de
-ambiente:
+O `MqttConsumer` assina o tópico `application/+/device/+/event/up` no Mosquitto,
+faz o parse mínimo (`dev_eui`, `payload`, e opcionalmente `rssi`/`snr`) e faz
+`POST` no `/ingest` do middleware, que encaminha ao tenant app. Configuração por
+variáveis de ambiente:
 
 | Variável            | Default                              | Descrição                    |
 | ------------------- | ------------------------------------ | ---------------------------- |
 | `MQTT_BROKER_HOST`  | `localhost`                          | Host do broker MQTT.         |
 | `MQTT_BROKER_PORT`  | `1883`                               | Porta do broker MQTT.        |
 | `MQTT_TOPIC`        | `application/+/device/+/event/up`    | Tópico de assinatura.        |
+| `INGEST_URL`        | `http://localhost:8001/ingest`       | Destino do POST de ingestão. |
 
 Subir o broker local (Mosquitto):
 
