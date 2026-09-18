@@ -3,6 +3,7 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request, Response, status
 
 from agent.config import AgentSettings
@@ -47,20 +48,25 @@ async def lifespan(app: FastAPI):
         )
     app.state.db_pool = db_pool
 
+    # --- Cliente HTTP Upstream (develop) ---
+    http_client = httpx.AsyncClient(
+        base_url=settings.tenant_app_url,
+        timeout=settings.ingest_timeout_seconds,
+    )
+    app.state.http_client = http_client
+
     yield
 
     # --- Teardown Gracioso dos Recursos ---
+    await http_client.aclose()
     if db_pool is not None:
         await db_pool.close()
         logger.info("Pool TimescaleDB encerrado.")
-
     client.close()
     logger.info("Canal gRPC encerrado.")
 
 
 app = FastAPI(title="LINX Client Agent API", lifespan=lifespan)
-
-# Registro das rotas da API
 app.include_router(ingest.router)
 
 
@@ -78,6 +84,10 @@ async def _is_saas_connected(fastapi_app: FastAPI) -> bool:
     fastapi_app.state.saas_connected = connected
     fastapi_app.state.saas_checked_at = now
     return connected
+
+
+# Registro das rotas da API
+app.include_router(ingest.router)
 
 
 @app.get("/health")

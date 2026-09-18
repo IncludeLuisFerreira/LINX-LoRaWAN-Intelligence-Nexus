@@ -8,7 +8,11 @@ authors = [
 requires-python = ">=3.12,<4.0"
 dependencies = [
     "fastapi (>=0.141.1,<0.142.0)",
-    "uvicorn[standard] (>=0.52.4,<0.53.0)"
+    "uvicorn[standard] (>=0.52.4,<0.53.0)",
+    "asyncpg (>=0.31.0,<0.32.0)",
+    "pydantic-settings (>=2.15.0,<3.0.0)",
+    "grpcio (>=1.84.0,<2.0.0)",
+    "protobuf (>=7.36.1,<8.0.0)"
 ]
 
 
@@ -25,7 +29,11 @@ dev = [
     "pytest-cov (>=7.1.0,<8.0.0)",
     "taskipy (>=1.14.1,<2.0.0)",
     "isort (>=9.0.1,<10.0.0)",
-    "httpx2 (>=2.12.0,<3.0.0)"
+    "httpx2 (>=2.12.0,<3.0.0)",
+    "asyncpg-stubs (>=0.31.3,<0.32.0)",
+    "grpcio-tools (>=1.84.0,<2.0.0)",
+    "types-grpcio (>=1.83.0.20260730,<2.0.0.0)",
+    "types-protobuf (>=7.35.0,<8.0.0)"
 ]
 
 [tool.poetry]
@@ -36,13 +44,23 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 
+[tool.coverage.run]
+omit = ["src/tenant/grpc/*"]
+
 [tool.black]
 line-length = 79
 target-version = ["py312"]
+extend-exclude = '''
+src/tenant/grpc
+'''
 
 [tool.isort]
 profile = "black"
 line_length = 79
+skip_glob = ["src/tenant/grpc/*"]
+
+[tool.mypy]
+exclude = ["src/tenant/grpc/"]
 
 [tool.taskipy.tasks]
 

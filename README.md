@@ -13,7 +13,7 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 
 **Subsistemas:**
 
-- `saas_backend/` — Core da plataforma: gerencia Organizações, Aplicações e Usuários; integra com ChirpStack/MQTT; orquestra provisionamento de contêineres por cliente.
+- `saas_backend/` — Microserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`), `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
 - `client_agent_api/` — Middleware de segurança e roteamento: valida JWT e direciona requisições ao contêiner isolado correto.
 - `tenant_app_template/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
 - `frontend/` — Dashboard React consumindo dados via `client_agent_api` e WebSocket.
@@ -28,7 +28,10 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 
 ```
 LINX/
-├── saas_backend/           # Core SaaS: orquestração, MQTT, gRPC, API REST
+├── saas_backend/           # Microserviços do SaaS (plano de controle)
+│   ├── shared/             #   biblioteca comum (linx_shared)
+│   ├── identity_api/       #   REST (FastAPI)      :8000
+│   └── agent_bridge/       #   gRPC (AgentBridge)  :50051
 ├── client_agent_api/       # Middleware: autenticação JWT + roteamento multi-tenant
 ├── tenant_app_template/    # Template do Docker Cliente (motor de regras + TimescaleDB)
 ├── frontend/               # Dashboard web (React + Vite + TailwindCSS)

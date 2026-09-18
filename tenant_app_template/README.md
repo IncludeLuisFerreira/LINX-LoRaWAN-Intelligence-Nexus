@@ -15,12 +15,51 @@ middleware: ele se comunica com o `client_agent_api` compartilhado.
 - [x] `Dockerfile` mínimo (`python:3.12-slim` + poetry + uvicorn).
 - [x] Schema TimescaleDB (`db/schema.sql`) com hypertable `telemetry`
       (`time`, `dev_eui`, `payload`, `rssi`, `snr`) e índice `(dev_eui, time DESC)`.
+- [x] Endpoint `POST /ingest`: valida o payload e persiste na hypertable
+      `telemetry` via `asyncpg`.
+- [x] Stubs gRPC do contrato `saas_agent.proto` em `src/tenant/grpc/`
+      (pacote `tenant.grpc`).
+- [x] Busca `GetAppConfig(APP_ID)` via gRPC no startup e loga
+      `AppConfig received` (prova de comunicação da S2).
 
 ## 📍 Endpoints
 
 | Método | Rota      | Descrição                                |
 | :----: | --------- | ---------------------------------------- |
 | `GET`  | `/health` | Health check retornando `{"status":"ok"}` |
+| `POST` | `/ingest` | Valida o payload e persiste na hypertable `telemetry`. `201` em sucesso; `422` payload inválido; `503` banco indisponível. |
+
+## 📥 Ingestão
+
+O `POST /ingest` recebe telemetria validada e a persiste no TimescaleDB do
+tenant. Corpo esperado:
+
+```json
+{"dev_eui": "dev1", "payload": {"t": 20}, "rssi": -70, "snr": 7.5}
+```
+
+Pipeline: `Mosquitto → mqtt_consumer (client_agent_api) → POST /ingest
+(client_agent_api) → POST /ingest (tenant_app) → TimescaleDB`.
+
+## 🔗 Conexão gRPC com o SaaS Backend
+
+No startup o tenant app abre um canal gRPC com o SaaS Backend e chama
+`GetAppConfig(APP_ID)`, logando `AppConfig received` com `app_id`, `db_host`,
+`db_port` e `mqtt_topic` (sem expor `db_user`/`db_password`). A falha da
+chamada não derruba o serviço: o app sobe normalmente e segue usando as envs
+`DB_*` para o pool do TimescaleDB.
+
+Configuração por variáveis de ambiente:
+
+| Variável               | Default           | Descrição                                   |
+| ---------------------- | ----------------- | ------------------------------------------- |
+| `APP_ID`               | `app-abc123`      | ID da aplicação no SaaS.                    |
+| `SAAS_GRPC_HOST`       | `localhost:50051` | Endereço `host:porta` do gRPC do SaaS.      |
+| `GRPC_TIMEOUT_SECONDS` | `5`               | Timeout (s) da chamada `GetAppConfig`.      |
+
+> `SAAS_GRPC_HOST` precisa apontar para um endereço alcançável de dentro do
+> container do tenant. `localhost:50051` só funciona em dev na mesma máquina;
+> em container use o IP privado/DNS do SaaS ou um alias de rede Docker.
 
 ## 🗄️ Banco de dados (TimescaleDB)
 
@@ -46,7 +85,12 @@ dispositivo.
 | `pyproject.toml`              | Dependências, pacote `tenant` e tasks de dev.   |
 | `poetry.lock`                 | Versões travadas das dependências.              |
 | `src/tenant/main.py`          | Aplicação FastAPI (`app`) e endpoint `/health`. |
-| `tests/test_main.py`          | Smoke test do `/health` com `TestClient`.       |
+| `src/tenant/config.py`        | `TenantSettings` (host gRPC, `app_id`, `DB_*`) via env. |
+| `src/tenant/grpc_client.py`   | `SaasConfigClient` (`GetAppConfig` + log `AppConfig received`). |
+| `src/tenant/grpc/`            | Stubs gRPC do contrato `saas_agent.proto`.      |
+| `tests/test_main.py`          | Smoke test do `/health` e do lifespan com `TestClient`. |
+| `tests/test_config.py`        | Testes dos defaults de `TenantSettings`.        |
+| `tests/test_grpc_client.py`   | Testes do `SaasConfigClient` (mapeamento, log, erros). |
 | `db/schema.sql`               | Schema TimescaleDB (hypertable `telemetry`).    |
 | `Dockerfile`                  | Imagem mínima para rodar o serviço.             |
 
@@ -108,11 +152,14 @@ Variáveis obrigatórias no `.env`:
 | ------------------ | ---------------------------- | -------------------------------------- |
 | `CLIENT_AGENT_URL` | `http://localhost:8001`      | URL base do middleware compartilhado.  |
 | `APP_ID`           | `app-abc123`                 | ID da aplicação no SaaS.               |
+| `SAAS_GRPC_HOST`   | `localhost:50051`            | Endereço `host:porta` do gRPC do SaaS. |
 | `MQTT_TOPIC`       | `au915_0/gateway/+/event/up` | Tópico MQTT de uplink.                 |
 | `TENANT_PORT`      | `8002`                       | Porta exposta do `tenant_app`.         |
 | `DB_USER`          | `tenant`                     | Usuário do PostgreSQL.                 |
 | `DB_PASSWORD`      | `secret`                     | Senha do PostgreSQL.                   |
 | `DB_NAME`          | `tenantdb`                   | Nome do banco.                         |
+| `DB_HOST`          | `timescaledb`                | Host do TimescaleDB (em dev fora do Docker use `localhost`). |
+| `DB_PORT`          | `5432`                       | Porta do TimescaleDB.                  |
 
 > O cliente HTTP tenant→middleware ainda não está implementado (issue
 > futura); aqui entra apenas a configuração/topologia.
