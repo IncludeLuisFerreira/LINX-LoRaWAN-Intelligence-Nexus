@@ -21,6 +21,7 @@ services:
       - CLIENT_AGENT_URL=${CLIENT_AGENT_URL}
       - APP_ID=${APP_ID}
       - MQTT_TOPIC=${MQTT_TOPIC}
+      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST}
       - DB_HOST=timescaledb
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
