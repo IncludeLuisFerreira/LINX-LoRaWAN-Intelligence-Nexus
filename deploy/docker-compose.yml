@@ -1,0 +1,112 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-linx}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      - POSTGRES_DB=${POSTGRES_DB:-linx}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${POSTGRES_USER:-linx} -d ${POSTGRES_DB:-linx}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  identity_api:
+    build:
+      context: ../saas_backend/.
+      dockerfile: identity_api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  agent_bridge:
+    build:
+      context: ../saas_backend/.
+      dockerfile: agent_bridge/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - GRPC_HOST=0.0.0.0
+      - GRPC_PORT=50051
+    ports:
+      # 50051 expõe GetAppConfig (sem auth). Restrinja no Security Group ao IP
+      # do Client Agent; nunca a 0.0.0.0/0. Ver README (Runbook — Security Group).
+      - "50051:50051"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  client_agent:
+    build:
+      context: ../client_agent_api/.
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8001:8001"
+
+  timescaledb:
+    image: timescale/timescaledb:2.13.0-pg14
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/0_schema.sql
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  tenant_app:
+    build: ../tenant_app_template/.
+    restart: unless-stopped
+    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do SaaS Backend
+    # a partir do container (não use "localhost" aqui).
+    environment:
+      - CLIENT_AGENT_URL=${CLIENT_AGENT_URL}
+      - APP_ID=${APP_ID}
+      - MQTT_TOPIC=${MQTT_TOPIC}
+      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST}
+      - DB_HOST=timescaledb
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      agent_bridge:
+        condition: service_started
+      identity_api:
+        condition: service_started
+    ports:
+      - "${TENANT_PORT}:${TENANT_PORT}"
+
+volumes:
+  pgdata:
+  timescaledb_data:
