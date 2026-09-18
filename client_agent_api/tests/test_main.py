@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from starlette.testclient import TestClient
 
@@ -49,3 +49,18 @@ def test_lifespan_registers_and_closes_client():
             assert client.app.state.saas_client is instance
             assert client.app.state.saas_connected is False
         instance.close.assert_called_once()
+
+
+def test_lifespan_creates_and_closes_http_client():
+    with (
+        patch("agent.main.SaasGrpcClient") as client_cls,
+        patch("agent.main.httpx.AsyncClient") as http_cls,
+    ):
+        client_cls.return_value.check_connectivity.return_value = True
+        http_instance = http_cls.return_value
+        http_instance.aclose = AsyncMock()
+
+        with TestClient(app) as client:
+            assert client.app.state.http_client is http_instance
+
+        http_instance.aclose.assert_awaited_once()
