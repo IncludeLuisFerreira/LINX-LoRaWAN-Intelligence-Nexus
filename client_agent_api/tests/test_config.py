@@ -16,6 +16,6 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
     settings = AgentSettings()
 
-    assert settings.saas_grpc_host == "saas:50051"
+    assert settings.saas_grpc_host == "agent_bridge:50051"
     assert settings.grpc_timeout_seconds == 5.0
     assert settings.config_cache_ttl_seconds == 60.0
