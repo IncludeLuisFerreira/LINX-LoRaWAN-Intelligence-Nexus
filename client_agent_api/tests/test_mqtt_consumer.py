@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 
+import httpx
 import paho.mqtt.client as mqtt
 
 from agent.mqtt_consumer import DEFAULT_TOPIC, MqttConsumer
@@ -63,3 +64,56 @@ def test_config_reads_env_vars(monkeypatch):
     assert consumer.broker_host == "broker.example.com"
     assert consumer.broker_port == 8883
     assert consumer.topic == "custom/+/topic"
+
+
+def test_on_message_posts_parsed_payload():
+    consumer = _consumer_with_mock_client()
+    consumer.http_client = MagicMock()
+    message = MagicMock()
+    message.topic = "application/1/device/dev1/event/up"
+    message.payload = b'{"dev_eui": "dev1", "payload": {"t": 20}}'
+
+    consumer.on_message(consumer.client, None, message)
+
+    consumer.http_client.post.assert_called_once_with(
+        consumer.ingest_url,
+        json={"dev_eui": "dev1", "payload": {"t": 20}},
+    )
+
+
+def test_on_message_invalid_json_does_not_post():
+    consumer = _consumer_with_mock_client()
+    consumer.http_client = MagicMock()
+    message = MagicMock()
+    message.topic = "application/1/device/dev1/event/up"
+    message.payload = b"not-json"
+
+    consumer.on_message(consumer.client, None, message)
+
+    consumer.http_client.post.assert_not_called()
+
+
+def test_on_message_missing_fields_does_not_post():
+    consumer = _consumer_with_mock_client()
+    consumer.http_client = MagicMock()
+    message = MagicMock()
+    message.topic = "application/1/device/dev1/event/up"
+    message.payload = b'{"foo": 1}'
+
+    consumer.on_message(consumer.client, None, message)
+
+    consumer.http_client.post.assert_not_called()
+
+
+def test_on_message_post_failure_is_logged(caplog):
+    consumer = _consumer_with_mock_client()
+    consumer.http_client = MagicMock()
+    consumer.http_client.post.side_effect = httpx.ConnectError("boom")
+    message = MagicMock()
+    message.topic = "application/1/device/dev1/event/up"
+    message.payload = b'{"dev_eui": "dev1", "payload": {"t": 20}}'
+
+    with caplog.at_level("ERROR"):
+        consumer.on_message(consumer.client, None, message)
+
+    assert "Falha ao encaminhar" in caplog.text
