@@ -15,12 +15,27 @@ middleware: ele se comunica com o `client_agent_api` compartilhado.
 - [x] `Dockerfile` mínimo (`python:3.12-slim` + poetry + uvicorn).
 - [x] Schema TimescaleDB (`db/schema.sql`) com hypertable `telemetry`
       (`time`, `dev_eui`, `payload`, `rssi`, `snr`) e índice `(dev_eui, time DESC)`.
+- [x] Endpoint `POST /ingest`: valida o payload e persiste na hypertable
+      `telemetry` via `asyncpg`.
 
 ## 📍 Endpoints
 
 | Método | Rota      | Descrição                                |
 | :----: | --------- | ---------------------------------------- |
 | `GET`  | `/health` | Health check retornando `{"status":"ok"}` |
+| `POST` | `/ingest` | Valida o payload e persiste na hypertable `telemetry`. `201` em sucesso; `422` payload inválido; `503` banco indisponível. |
+
+## 📥 Ingestão
+
+O `POST /ingest` recebe telemetria validada e a persiste no TimescaleDB do
+tenant. Corpo esperado:
+
+```json
+{"dev_eui": "dev1", "payload": {"t": 20}, "rssi": -70, "snr": 7.5}
+```
+
+Pipeline: `Mosquitto → mqtt_consumer (client_agent_api) → POST /ingest
+(client_agent_api) → POST /ingest (tenant_app) → TimescaleDB`.
 
 ## 🗄️ Banco de dados (TimescaleDB)
 
@@ -113,6 +128,8 @@ Variáveis obrigatórias no `.env`:
 | `DB_USER`          | `tenant`                     | Usuário do PostgreSQL.                 |
 | `DB_PASSWORD`      | `secret`                     | Senha do PostgreSQL.                   |
 | `DB_NAME`          | `tenantdb`                   | Nome do banco.                         |
+| `DB_HOST`          | `timescaledb`                | Host do TimescaleDB (em dev fora do Docker use `localhost`). |
+| `DB_PORT`          | `5432`                       | Porta do TimescaleDB.                  |
 
 > O cliente HTTP tenant→middleware ainda não está implementado (issue
 > futura); aqui entra apenas a configuração/topologia.

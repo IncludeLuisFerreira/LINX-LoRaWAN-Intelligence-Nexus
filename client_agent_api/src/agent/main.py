@@ -3,10 +3,12 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request, Response, status
 
 from agent.config import AgentSettings
 from agent.grpc_client import SaasGrpcClient
+from agent.routers import ingest
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +30,21 @@ async def lifespan(app: FastAPI):
     app.state.saas_connected = connected
     app.state.saas_checked_at = time.monotonic()
 
+    http_client = httpx.AsyncClient(
+        base_url=settings.tenant_app_url,
+        timeout=settings.ingest_timeout_seconds,
+    )
+    app.state.http_client = http_client
+
     yield
 
+    await http_client.aclose()
     client.close()
     logger.info("Canal gRPC encerrado.")
 
 
 app = FastAPI(title="LINX Client Agent API", lifespan=lifespan)
+app.include_router(ingest.router)
 
 
 async def _is_saas_connected(fastapi_app: FastAPI) -> bool:
