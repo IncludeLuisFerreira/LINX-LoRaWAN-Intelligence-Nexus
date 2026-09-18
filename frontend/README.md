@@ -13,7 +13,8 @@ Este projeto foi inicializado utilizando o **Vite** para um ambiente de desenvol
 * **[Axios](https://axios-http.com/)**: Cliente HTTP centralizado com suporte a interceptors de autenticação (JWT) e tratamento global de erros (401).
 * **[React Router](https://reactrouter.com/)**: Roteamento dinâmico SPA, suporte a `lazy loading` de páginas e agrupamento de rotas protegidas sob o layout principal.
 * **[React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)**: Gerenciamento de formulários com validações estritamente tipadas baseadas em schemas.
-* **[MSW (Mock Service Worker)](https://mswjs.io/)**: Interceptação de requisições HTTP locais via Service Worker para mocking de APIs baseado no contrato OpenAPI.
+* **[MSW (Mock Service Worker)](https://mswjs.io/)**: Interceptação de requisições HTTP via Service Worker para mocking de APIs baseado no contrato OpenAPI (suporte em dev e build de container).
+* **[Docker & Nginx](https://www.docker.com/)**: Containerização da aplicação servindo o build estático estendendo Nginx com suporte a fallback de rotas SPA (`try_files`).
 * **[OpenAPI / Redocly](https://redocly.com/)**: Especificação do contrato da API REST (`openapi-stub.yaml`) e linter para validação dos schemas.
 * **[OxLint](https://oxc.rs/) & [Prettier](https://prettier.io/)**: Análise estática ultrarrápida e formatador de código para manutenção da qualidade visual e lógica.
 * **[Husky](https://typicode.github.io/husky/) & [Lint-staged](https://github.com/lint-staged/lint-staged)**: Automação de hooks do Git para validação de linting e formatação antes dos commits.
@@ -30,6 +31,8 @@ Abaixo está a organização atualizada da raiz e do diretório `frontend/`:
 ├── .github/
 │   └── workflows/
 │       └── frontend-ci.yml   # Pipeline de CI/CD (GitHub Actions)
+├── scripts/
+│   └── deploy-frontend.sh    # Script Bash de automação para deploy (ECR/S3)
 └── frontend/
     ├── .husky/               # Hooks do Git configurados pelo Husky
     ├── public/
@@ -61,14 +64,17 @@ Abaixo está a organização atualizada da raiz e do diretório `frontend/`:
     │   ├── App.tsx           # Componente principal de entrada da interface
     │   ├── routes.tsx        # Definição e agrupamento de rotas (AppRoutes)
     │   ├── index.css         # Estilos globais e diretivas do Tailwind CSS
-    │   └── main.tsx          # Ponto de entrada do React e ativador do MSW em Dev
+    │   └── main.tsx          # Ponto de entrada do React com suporte a MSW via VITE_ENABLE_MOCKS
     ├── .env                  # Variáveis de ambiente locais (não versionado)
     ├── .env.example          # Modelo das variáveis de ambiente
     ├── .oxlintrc.json        # Configuração do OxLint
     ├── .prettierrc           # Regras de formatação do Prettier
+    ├── Dockerfile            # Configuração de build multi-stage e Nginx
+    ├── nginx.conf            # Bloco Nginx para roteamento de SPA (try_files $uri /index.html)
     ├── index.html            # Documento HTML principal
     ├── openapi-stub.yaml     # Contrato OpenAPI 3.0 (Source of Truth da API REST)
     ├── package.json          # Dependências e scripts do projeto
     ├── postcss.config.js     # Processamento do Tailwind CSS
     ├── tailwind.config.js    # Configuração de temas e plugins do Tailwind
     └── vite.config.ts        # Configuração do Vite
+    
