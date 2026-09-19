@@ -40,9 +40,9 @@ const NewTenant: React.FC = () => {
     setSuccessMessage(null);
     try {
       await tenantService.create(data);
-      navigate('/tenants');
+      setSuccessMessage('Tenant criado com sucesso!');
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Erro ao criar aplicação.');
+      const message = getErrorMessage(err, 'Erro ao criar tenant.');
       setErrorMessage(message);
     }
   };

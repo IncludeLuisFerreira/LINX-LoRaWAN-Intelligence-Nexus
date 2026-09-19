@@ -47,7 +47,7 @@ export const handlers = [
   }),
 
   // --- APPLICATIONS ---
-  http.get('/api/v1/applications', ({ request }) => {
+  http.get('*/api/v1/applications', ({ request }) => {
     const url = new URL(request.url);
     const organizationId = url.searchParams.get('organizationId');
 
