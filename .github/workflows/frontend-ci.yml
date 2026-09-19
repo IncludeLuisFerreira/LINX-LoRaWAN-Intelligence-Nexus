@@ -10,6 +10,8 @@ jobs:
   lint-and-test:
     name: Lint, Typecheck & OpenAPI Validation
     runs-on: ubuntu-latest
+    steps:
+      -uses: actions/checkout@v4
 
     defaults:
       run:
@@ -34,6 +36,11 @@ jobs:
 
       - name: Run Linter (OxLint / ESLint)
         run: npm run lint
+        working-directory: frontend
+
+      - name: Run Tests
+        run: npm test -- --passWithNoTests
+        working-directory: frontend
 
       - name: Check TypeScript Types
         run: npx tsc --noEmit
