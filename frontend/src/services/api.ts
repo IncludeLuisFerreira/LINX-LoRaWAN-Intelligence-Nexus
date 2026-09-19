@@ -30,3 +30,16 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export function getErrorMessage(
+  error: unknown,
+  fallbackMessage = 'Ocorreu um erro inesperado.',
+): string {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message || error.message || fallbackMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallbackMessage;
+}

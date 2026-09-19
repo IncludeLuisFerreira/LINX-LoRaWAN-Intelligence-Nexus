@@ -47,8 +47,16 @@ export const handlers = [
   }),
 
   // --- APPLICATIONS ---
-  http.get('*/api/v1/applications', () => {
-    return HttpResponse.json(mockApps);
+  http.get('*/api/v1/applications', ({ request }) => {
+    const url = new URL(request.url);
+    const organizationId = url.searchParams.get('organizationId');
+
+    // Filtra as aplicações pelo organizationId se ele for passado na Query String
+    const filtered = organizationId
+      ? mockApps.filter((app) => app.organizationId === organizationId)
+      : mockApps;
+
+    return HttpResponse.json(filtered);
   }),
 
   http.post('*/api/v1/applications', async ({ request }) => {
@@ -56,6 +64,7 @@ export const handlers = [
       name: string;
       organizationId: string;
     };
+
     const newApp = {
       id: String(Date.now()),
       name: body.name,
