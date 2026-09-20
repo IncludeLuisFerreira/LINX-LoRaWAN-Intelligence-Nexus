@@ -96,10 +96,16 @@ paths:
         '404':
           description: Tenant não encontrado
 
-  /applications:
+  /tenant/{tenant_id}/applications:
     get:
       summary: Listar aplicações
       operationId: getApplications
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: Lista de aplicações
@@ -114,6 +120,12 @@ paths:
     post:
       summary: Criar aplicação
       operationId: createApplication
+      parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -132,7 +144,7 @@ paths:
         '401':
           description: Não autorizado
 
-  /applications/{id}:
+  /tenant/{tenant_id}/applications/{id}:
     patch:
       summary: Atualizar aplicação
       operationId: updateApplication
