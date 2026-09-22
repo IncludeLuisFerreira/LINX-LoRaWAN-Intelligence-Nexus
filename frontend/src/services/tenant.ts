@@ -2,12 +2,15 @@ import { api } from './api';
 
 export interface TenantCreateInput {
   name: string;
+  description?: string;
 }
 
 export interface TenantOutput {
   id: string;
   name: string;
-  createdAt?: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export const tenantService = {

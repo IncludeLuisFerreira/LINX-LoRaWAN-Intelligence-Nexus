@@ -9,7 +9,7 @@ import { applicationService } from '../../services/app';
 import { getErrorMessage } from '../../services/api';
 
 const newAppSchema = z.object({
-  organizationId: z.string().min(1, 'Selecione um tenant obrigatoriamente'),
+  tenantId: z.string().min(1, 'Selecione um tenant obrigatoriamente'),
   name: z
     .string()
     .min(2, 'O nome da aplicação deve ter pelo menos 2 caracteres'),
@@ -32,12 +32,12 @@ const NewApp: React.FC = () => {
   } = useForm<NewAppFormData>({
     resolver: zodResolver(newAppSchema),
     defaultValues: {
-      organizationId: '',
+      tenantId: '',
       name: '',
     },
   });
 
-  const selectedOrganizationId = watch('organizationId');
+  const selectedTenantId = watch('tenantId');
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -69,10 +69,7 @@ const NewApp: React.FC = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      await applicationService.create({
-        organizationId: data.organizationId,
-        name: data.name,
-      });
+      await applicationService.create(data.tenantId, { name: data.name });
       setSuccessMessage('Aplicação vinculada com sucesso!');
     } catch (err: unknown) {
       setErrorMessage(
@@ -105,7 +102,7 @@ const NewApp: React.FC = () => {
             Tenant
           </label>
           <select
-            {...register('organizationId')}
+            {...register('tenantId')}
             disabled={loadingTenants}
             className="w-full px-3 py-2 text-black bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
           >
@@ -119,9 +116,9 @@ const NewApp: React.FC = () => {
                 </option>
               ))}
           </select>
-          {errors.organizationId && (
+          {errors.tenantId && (
             <p className="text-red-500 text-xs mt-1">
-              {errors.organizationId.message}
+              {errors.tenantId.message}
             </p>
           )}
         </div>
@@ -143,7 +140,7 @@ const NewApp: React.FC = () => {
 
         <button
           type="submit"
-          disabled={isSubmitting || !selectedOrganizationId}
+          disabled={isSubmitting || !selectedTenantId}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md disabled:opacity-50 transition-colors"
         >
           {isSubmitting ? 'Cadastrando...' : 'Criar Aplicação'}

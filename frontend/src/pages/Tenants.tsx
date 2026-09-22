@@ -7,22 +7,29 @@ import type { ApplicationOutput } from '../services/app';
 
 const TenantsPage: React.FC = () => {
   const [tenants, setTenants] = useState<TenantOutput[]>([]);
-  const [apps, setApps] = useState<ApplicationOutput[]>([]);
+  const [appsByTenant, setAppsByTenant] = useState<
+    Record<string, ApplicationOutput[]>
+  >({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [tenantsData, appsData] = await Promise.all([
-          tenantService.list(),
-          applicationService.listByTenant(),
-        ]);
-        setTenants(Array.isArray(tenantsData) ? tenantsData : []);
-        setApps(Array.isArray(appsData) ? appsData : []);
+        const tenantsData = await tenantService.list();
+        const safeTenants = Array.isArray(tenantsData) ? tenantsData : [];
+        setTenants(safeTenants);
+
+        const appsEntries = await Promise.all(
+          safeTenants.map(async (tenant) => {
+            const apps = await applicationService.listByTenant(tenant.id);
+            return [tenant.id, Array.isArray(apps) ? apps : []] as const;
+          }),
+        );
+        setAppsByTenant(Object.fromEntries(appsEntries));
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
         setTenants([]);
-        setApps([]);
+        setAppsByTenant({});
       } finally {
         setLoading(false);
       }
@@ -52,9 +59,7 @@ const TenantsPage: React.FC = () => {
       <div className="grid gap-6">
         {Array.isArray(tenants) && tenants.length > 0 ? (
           tenants.map((tenant) => {
-            const tenantApps = Array.isArray(apps)
-              ? apps.filter((app) => app.organizationId === tenant.id)
-              : [];
+            const tenantApps = appsByTenant[tenant.id] ?? [];
 
             return (
               <div
