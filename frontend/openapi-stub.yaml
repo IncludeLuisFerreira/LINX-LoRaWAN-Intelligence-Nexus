@@ -5,9 +5,10 @@ info:
   description: Contrato de API para gerenciamento de Organizações e Aplicações.
   license:
     name: MIT
+    url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8000/api/v1
+  - url: /api/v1
     description: Servidor de Desenvolvimento Local
 
 security:
@@ -149,6 +150,11 @@ paths:
       summary: Atualizar aplicação
       operationId: updateApplication
       parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
         - name: id
           in: path
           required: true
@@ -177,6 +183,11 @@ paths:
       summary: Deletar aplicação
       operationId: deleteApplication
       parameters:
+        - name: tenant_id
+          in: path
+          required: true
+          schema:
+            type: string
         - name: id
           in: path
           required: true
