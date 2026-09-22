@@ -9,9 +9,19 @@ theme:
     - search.suggest
     - content.code.copy
 
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
 nav:
   - Início: index.md
   - Arquitetura (PRD): PRD_PLATAFORMA_IOT.md
+  - Comunicação entre Serviços: comunicacao_entre_servicos.md
   - Módulos do Sistema:
       - SaaS Backend: saas_backend/README.md
       - Client Agent API: client_agent_api/README.md
