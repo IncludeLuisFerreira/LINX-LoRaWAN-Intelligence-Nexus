@@ -2,12 +2,13 @@ openapi: 3.0.0
 info:
   title: LINX SaaS API
   version: 0.1.0
-  description: Contrato de API para gerenciamento de Organizações e Aplicações.
+  description: Contrato de API para gerenciamento de Tenants e Aplicações.
   license:
     name: MIT
+    url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8000/api/v1
+  - url: /api/v1
     description: Servidor de Desenvolvimento Local
 
 security:
@@ -17,7 +18,7 @@ paths:
   /tenant:
     get:
       summary: Listar tenants
-      operationId: getTenants
+      operationId: listTenants
       responses:
         '200':
           description: Lista de tenants
@@ -32,6 +33,10 @@ paths:
     post:
       summary: Criar tenant
       operationId: createTenant
+      description: >
+        O backend expõe este recurso em `/api/v1/tenant/`; o FastAPI redireciona
+        chamadas sem a barra final, então este contrato documenta o caminho canônico
+        sem a barra por convenção OpenAPI.
       requestBody:
         required: true
         content:
@@ -41,25 +46,40 @@ paths:
       responses:
         '201':
           description: Tenant criado
+          headers:
+            Location:
+              description: URL do tenant criado
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
 
-  /tenant/{id}:
+  /tenant/{tenant_id}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      summary: Buscar tenant
+      operationId: getTenant
+      responses:
+        '200':
+          description: Tenant encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOut'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
     patch:
       summary: Atualizar tenant
       operationId: updateTenant
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
       requestBody:
         required: true
         content:
@@ -73,7 +93,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
@@ -82,12 +102,6 @@ paths:
     delete:
       summary: Deletar tenant
       operationId: deleteTenant
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
       responses:
         '204':
           description: Tenant removido com sucesso
@@ -96,10 +110,12 @@ paths:
         '404':
           description: Tenant não encontrado
 
-  /applications:
+  /tenant/{tenant_id}/applications:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
     get:
-      summary: Listar aplicações
-      operationId: getApplications
+      summary: Listar aplicações do tenant
+      operationId: listApplications
       responses:
         '200':
           description: Lista de aplicações
@@ -111,6 +127,8 @@ paths:
                   $ref: '#/components/schemas/ApplicationOut'
         '401':
           description: Não autorizado
+        '404':
+          description: Tenant não encontrado
     post:
       summary: Criar aplicação
       operationId: createApplication
@@ -123,25 +141,43 @@ paths:
       responses:
         '201':
           description: Aplicação criada
+          headers:
+            Location:
+              description: URL da aplicação criada
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
+        '404':
+          description: Tenant não encontrado
 
-  /applications/{id}:
+  /tenant/{tenant_id}/applications/{application_id}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/ApplicationId'
+    get:
+      summary: Buscar aplicação
+      operationId: getApplication
+      responses:
+        '200':
+          description: Aplicação encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação ou tenant não encontrado
     patch:
       summary: Atualizar aplicação
       operationId: updateApplication
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
       requestBody:
         required: true
         content:
@@ -155,28 +191,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
         '404':
-          description: Aplicação não encontrada
+          description: Aplicação ou tenant não encontrado
     delete:
       summary: Deletar aplicação
       operationId: deleteApplication
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
       responses:
         '204':
           description: Aplicação removida com sucesso
         '401':
           description: Não autorizado
         '404':
-          description: Aplicação não encontrada
+          description: Aplicação ou tenant não encontrado
 
 components:
   securitySchemes:
@@ -184,6 +214,25 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  parameters:
+    TenantId:
+      name: tenant_id
+      in: path
+      required: true
+      description: Identificador do tenant
+      schema:
+        type: string
+        format: uuid
+
+    ApplicationId:
+      name: application_id
+      in: path
+      required: true
+      description: Identificador da aplicação
+      schema:
+        type: string
+        format: uuid
 
   schemas:
     TenantCreate:
@@ -193,25 +242,45 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 100
+          default: ''
 
     TenantUpdate:
       type: object
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 100
 
     TenantOut:
       type: object
       required:
         - id
         - name
-        - createdAt
+        - description
+        - created_at
+        - updated_at
       properties:
         id:
           type: string
+          format: uuid
         name:
           type: string
-        createdAt:
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
 
@@ -219,33 +288,47 @@ components:
       type: object
       required:
         - name
-        - organizationId
       properties:
         name:
           type: string
-        organizationId:
+          minLength: 1
+          maxLength: 50
+        description:
           type: string
+          maxLength: 100
+          default: ''
 
     ApplicationUpdate:
       type: object
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 100
 
     ApplicationOut:
       type: object
       required:
         - id
         - name
-        - organizationId
-        - createdAt
+        - description
+        - created_at
+        - updated_at
       properties:
         id:
           type: string
+          format: uuid
         name:
           type: string
-        organizationId:
+        description:
           type: string
-        createdAt:
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
