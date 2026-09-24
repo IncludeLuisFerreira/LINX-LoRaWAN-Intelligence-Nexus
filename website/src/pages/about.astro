@@ -1,0 +1,22 @@
+---
+/**
+ * Página "About" (fora do escopo do spec da home).
+ * Mantida simples e consistente com o Layout global.
+ */
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Layout title="Sobre — LINX" description="Conheça a LINX.">
+  <Header />
+
+  <main id="main" class="container section">
+    <h1>Sobre a LINX</h1>
+    <p style="margin-top: 1rem; color: var(--color-text-secondary);">
+      Página em construção.
+    </p>
+  </main>
+
+  <Footer />
+</Layout>

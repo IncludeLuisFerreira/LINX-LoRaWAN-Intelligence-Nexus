@@ -1,0 +1,120 @@
+---
+/**
+ * UseCases
+ * -------------------------------------------------------------
+ * Três cenários reais. As imagens são placeholders (picsum) e
+ * devem ser substituídas por fotos próprias. fallback via gradiente.
+ */
+const cases = [
+  {
+    tag: 'Agricultura',
+    title: 'Agricultura de precisão',
+    text: 'Nível de silos, temperatura e umidade de estufas em tempo real, com alertas e acionamento de ventilação.',
+    img: 'https://picsum.photos/seed/linx-silo/720/480',
+    alt: 'Silos e estufas monitorados por sensores',
+  },
+  {
+    tag: 'Indústria',
+    title: 'Indústria e automação',
+    text: 'Regras de acionamento e monitoramento contínuo de linhas de produção, sem rede local dedicada.',
+    img: 'https://picsum.photos/seed/linx-plant/720/480',
+    alt: 'Linha de produção industrial',
+  },
+  {
+    tag: 'Logística',
+    title: 'Logística e infraestrutura',
+    text: 'Rastreio e telemetria distribuída de ativos remotos, com dados centralizados na nuvem.',
+    img: 'https://picsum.photos/seed/linx-route/720/480',
+    alt: 'Ativos remotos em rota logística',
+  },
+];
+---
+
+<section class="section section--alt" id="usecases">
+  <div class="container">
+    <span class="eyebrow" data-reveal>Soluções</span>
+    <h2 class="section__title" data-reveal>Feito para quem opera no mundo real</h2>
+
+    <div class="cases">
+      {
+        cases.map((c, i) => (
+          <article class="case card" data-tilt data-reveal style={`--reveal-delay:${i * 90}ms`}>
+            <div class="case__media">
+              <img src={c.img} alt={c.alt} loading="lazy" width="720" height="480" />
+              <span class="case__tag">{c.tag}</span>
+            </div>
+            <div class="case__body">
+              <h3 class="case__title">{c.title}</h3>
+              <p class="case__text">{c.text}</p>
+            </div>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .cases {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-top: 2.5rem;
+  }
+
+  .case {
+    overflow: hidden;
+    transition: transform var(--transition), box-shadow var(--transition);
+    transform-style: preserve-3d;
+  }
+
+  .case__media {
+    position: relative;
+    aspect-ratio: 3 / 2;
+    background: linear-gradient(135deg, #0b1f33, #0d9488);
+  }
+
+  .case__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.9);
+  }
+
+  .case__tag {
+    position: absolute;
+    left: 0.875rem;
+    bottom: 0.875rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #fff;
+    background: rgba(11, 31, 51, 0.72);
+    backdrop-filter: blur(6px);
+    border-radius: 100px;
+  }
+
+  .case__body {
+    padding: 1.25rem 1.375rem 1.5rem;
+  }
+
+  .case__title {
+    font-size: 1.125rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .case__text {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+  }
+
+  @media (max-width: 899px) {
+    .cases {
+      grid-template-columns: 1fr;
+      max-width: 460px;
+    }
+  }
+</style>
