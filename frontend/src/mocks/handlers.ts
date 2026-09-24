@@ -18,16 +18,18 @@ interface MockApplication {
 
 const now = () => new Date().toISOString();
 
+const tenantAlfaId = crypto.randomUUID();
+
 const mockTenants: MockTenant[] = [
   {
-    id: '1',
+    id: tenantAlfaId,
     name: 'Organização Alfa',
     description: '',
     created_at: now(),
     updated_at: now(),
   },
   {
-    id: '2',
+    id: crypto.randomUUID(),
     name: 'Organização Beta',
     description: '',
     created_at: now(),
@@ -36,9 +38,9 @@ const mockTenants: MockTenant[] = [
 ];
 
 const mockAppsByTenant: Record<string, MockApplication[]> = {
-  '1': [
+  [tenantAlfaId]: [
     {
-      id: '101',
+      id: crypto.randomUUID(),
       name: 'App Sensores',
       description: '',
       created_at: now(),
@@ -51,8 +53,32 @@ function findTenant(tenantId: string): MockTenant | undefined {
   return mockTenants.find((tenant) => tenant.id === tenantId);
 }
 
+function findApp(
+  tenantId: string,
+  applicationId: string,
+): MockApplication | undefined {
+  return (mockAppsByTenant[tenantId] ?? []).find(
+    (app) => app.id === applicationId,
+  );
+}
+
 function tenantNotFound() {
   return HttpResponse.json({ detail: 'Tenant not found!' }, { status: 404 });
+}
+
+function applicationNotFound() {
+  return HttpResponse.json(
+    { detail: 'Application not found!' },
+    { status: 404 },
+  );
+}
+
+function validationError(detail: string) {
+  return HttpResponse.json({ detail }, { status: 422 });
+}
+
+function createdLocation(request: Request, path: string) {
+  return `${new URL(request.url).origin}${path}`;
 }
 
 export const handlers = [
@@ -67,14 +93,19 @@ export const handlers = [
       description?: string;
     };
     const newTenant: MockTenant = {
-      id: String(Date.now()),
+      id: crypto.randomUUID(),
       name: body.name,
       description: body.description ?? '',
       created_at: now(),
       updated_at: now(),
     };
     mockTenants.push(newTenant);
-    return HttpResponse.json(newTenant, { status: 201 });
+    return HttpResponse.json(newTenant, {
+      status: 201,
+      headers: {
+        Location: createdLocation(request, `/api/v1/tenant/${newTenant.id}`),
+      },
+    });
   }),
 
   http.get('*/api/v1/tenant/:tenant_id', ({ params }) => {
@@ -91,6 +122,9 @@ export const handlers = [
       name?: string;
       description?: string;
     };
+    if (body.description !== undefined && body.description.length === 0) {
+      return validationError('description must not be empty');
+    }
     if (body.name !== undefined) tenant.name = body.name;
     if (body.description !== undefined) tenant.description = body.description;
     tenant.updated_at = now();
@@ -98,9 +132,11 @@ export const handlers = [
   }),
 
   http.delete('*/api/v1/tenant/:tenant_id', ({ params }) => {
-    const index = mockTenants.findIndex((t) => t.id === String(params.tenant_id));
+    const id = String(params.tenant_id);
+    const index = mockTenants.findIndex((t) => t.id === id);
     if (index === -1) return tenantNotFound();
     mockTenants.splice(index, 1);
+    delete mockAppsByTenant[id];
     return new HttpResponse(null, { status: 204 });
   }),
 
@@ -120,7 +156,7 @@ export const handlers = [
       description?: string;
     };
     const newApp: MockApplication = {
-      id: String(Date.now()),
+      id: crypto.randomUUID(),
       name: body.name,
       description: body.description ?? '',
       created_at: now(),
@@ -129,7 +165,15 @@ export const handlers = [
     const apps = mockAppsByTenant[tenant.id] ?? [];
     apps.push(newApp);
     mockAppsByTenant[tenant.id] = apps;
-    return HttpResponse.json(newApp, { status: 201 });
+    return HttpResponse.json(newApp, {
+      status: 201,
+      headers: {
+        Location: createdLocation(
+          request,
+          `/api/v1/tenant/${tenant.id}/applications/${newApp.id}`,
+        ),
+      },
+    });
   }),
 
   http.get(
@@ -137,15 +181,8 @@ export const handlers = [
     ({ params }) => {
       const tenant = findTenant(String(params.tenant_id));
       if (!tenant) return tenantNotFound();
-      const app = (mockAppsByTenant[tenant.id] ?? []).find(
-        (a) => a.id === String(params.application_id),
-      );
-      if (!app) {
-        return HttpResponse.json(
-          { detail: 'Application not found!' },
-          { status: 404 },
-        );
-      }
+      const app = findApp(tenant.id, String(params.application_id));
+      if (!app) return applicationNotFound();
       return HttpResponse.json(app);
     },
   ),
@@ -155,19 +192,15 @@ export const handlers = [
     async ({ params, request }) => {
       const tenant = findTenant(String(params.tenant_id));
       if (!tenant) return tenantNotFound();
-      const app = (mockAppsByTenant[tenant.id] ?? []).find(
-        (a) => a.id === String(params.application_id),
-      );
-      if (!app) {
-        return HttpResponse.json(
-          { detail: 'Application not found!' },
-          { status: 404 },
-        );
-      }
+      const app = findApp(tenant.id, String(params.application_id));
+      if (!app) return applicationNotFound();
       const body = (await request.json()) as {
         name?: string;
         description?: string;
       };
+      if (body.description !== undefined && body.description.length === 0) {
+        return validationError('description must not be empty');
+      }
       if (body.name !== undefined) app.name = body.name;
       if (body.description !== undefined) app.description = body.description;
       app.updated_at = now();
@@ -184,12 +217,7 @@ export const handlers = [
       const index = apps.findIndex(
         (a) => a.id === String(params.application_id),
       );
-      if (index === -1) {
-        return HttpResponse.json(
-          { detail: 'Application not found!' },
-          { status: 404 },
-        );
-      }
+      if (index === -1) return applicationNotFound();
       apps.splice(index, 1);
       return new HttpResponse(null, { status: 204 });
     },

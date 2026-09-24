@@ -15,7 +15,7 @@ export interface TenantOutput {
 
 export const tenantService = {
   create: async (data: TenantCreateInput): Promise<TenantOutput> => {
-    const response = await api.post<TenantOutput>('/tenant', data);
+    const response = await api.post<TenantOutput>('/tenant/', data);
     return response.data;
   },
   list: async (): Promise<TenantOutput[]> => {

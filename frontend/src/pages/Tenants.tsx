@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom'; // 1. Garante que o Link está importado
 import { tenantService } from '../services/tenant';
-import { applicationService } from '../services/app';
+import { loadApplicationsByTenant } from '../services/app';
 import type { TenantOutput } from '../services/tenant';
 import type { ApplicationOutput } from '../services/app';
 
@@ -18,14 +18,7 @@ const TenantsPage: React.FC = () => {
         const tenantsData = await tenantService.list();
         const safeTenants = Array.isArray(tenantsData) ? tenantsData : [];
         setTenants(safeTenants);
-
-        const appsEntries = await Promise.all(
-          safeTenants.map(async (tenant) => {
-            const apps = await applicationService.listByTenant(tenant.id);
-            return [tenant.id, Array.isArray(apps) ? apps : []] as const;
-          }),
-        );
-        setAppsByTenant(Object.fromEntries(appsEntries));
+        setAppsByTenant(await loadApplicationsByTenant(safeTenants));
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
         setTenants([]);

@@ -33,6 +33,10 @@ paths:
     post:
       summary: Criar tenant
       operationId: createTenant
+      description: >
+        O backend expõe este recurso em `/api/v1/tenant/`; o FastAPI redireciona
+        chamadas sem a barra final, então este contrato documenta o caminho canônico
+        sem a barra por convenção OpenAPI.
       requestBody:
         required: true
         content:
@@ -42,11 +46,16 @@ paths:
       responses:
         '201':
           description: Tenant criado
+          headers:
+            Location:
+              description: URL do tenant criado
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
@@ -84,7 +93,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TenantOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
@@ -141,7 +150,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
@@ -182,7 +191,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationOut'
-        '400':
+        '422':
           description: Dados inválidos
         '401':
           description: Não autorizado
@@ -249,6 +258,7 @@ components:
           maxLength: 50
         description:
           type: string
+          minLength: 1
           maxLength: 100
 
     TenantOut:
