@@ -272,6 +272,9 @@ firmware/
 # generated types
 .astro/
 
+# brainstorming visual companion
+.superpowers/
+
 # dependencies
 node_modules/
 
