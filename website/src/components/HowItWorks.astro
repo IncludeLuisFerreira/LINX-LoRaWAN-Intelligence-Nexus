@@ -1,0 +1,85 @@
+---
+/**
+ * HowItWorks
+ * -------------------------------------------------------------
+ * Três passos do sensor à nuvem. Numeração monoespaçada e linha
+ * superior que separa os passos.
+ */
+const steps = [
+  {
+    n: '01',
+    title: 'Instale o sensor',
+    text: 'A rede de gateways LoRaWAN da LINX já cobre a região. Você só fixa os sensores — nenhum gateway no seu site.',
+  },
+  {
+    n: '02',
+    title: 'Leia o QR Code',
+    text: 'Vincule o dispositivo à aplicação certa em segundos, pelo celular, com provisionamento automático na nuvem.',
+  },
+  {
+    n: '03',
+    title: 'Opere os dados',
+    text: 'Telemetria, regras e acionamentos disponíveis na hora, com isolamento por aplicação e sem provisionar servidores.',
+  },
+];
+---
+
+<section class="section section--alt" id="how">
+  <div class="container">
+    <span class="eyebrow" data-reveal>Como funciona</span>
+    <h2 class="section__title" data-reveal>Do sensor à nuvem em três passos</h2>
+
+    <ol class="steps">
+      {
+        steps.map((s, i) => (
+          <li class="step" data-reveal style={`--reveal-delay:${i * 110}ms`}>
+            <span class="step__n">{s.n}</span>
+            <h3 class="step__title">{s.title}</h3>
+            <p class="step__text">{s.text}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(1.5rem, 4vw, 2.5rem);
+    margin: 2.5rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .step {
+    padding-top: 1.25rem;
+    border-top: 2px solid var(--color-border);
+  }
+
+  .step__n {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+
+  .step__title {
+    margin: 0.625rem 0 0.5rem;
+    font-size: 1.25rem;
+  }
+
+  .step__text {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: var(--color-text-secondary);
+  }
+
+  @media (max-width: 767px) {
+    .steps {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+  }
+</style>

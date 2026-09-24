@@ -1,0 +1,306 @@
+---
+/**
+ * Header / Navegação
+ * -------------------------------------------------------------
+ * - Barra clara e fixa, com blur e borda inferior ao rolar.
+ * - Links por âncora: Plataforma, Soluções, Segurança, Contato.
+ * - Botões "Entrar" (outline) e "Criar conta" (teal).
+ * - Drawer lateral no mobile.
+ */
+const navItems = [
+  { label: 'Plataforma', href: '#features' },
+  { label: 'Como funciona', href: '#how' },
+  { label: 'Segurança', href: '#security' },
+  { label: 'Soluções', href: '#usecases' },
+  { label: 'Contato', href: '#contact' },
+];
+---
+
+<header class="site-header" id="header">
+  <div class="container header__inner">
+    <a class="logo" href="/" aria-label="LINX — página inicial">
+      <span class="logo__mark" aria-hidden="true"></span>
+      <span class="logo__text">LIN<span class="logo__x">X</span></span>
+    </a>
+
+    <nav class="nav" aria-label="Navegação principal">
+      {navItems.map((item) => (
+        <a class="nav__link" href={item.href} data-nav>{item.label}</a>
+      ))}
+    </nav>
+
+    <div class="auth">
+      <a class="btn btn--outline" href="/login">Entrar</a>
+      <a class="btn btn--primary" href="/signup">Criar conta</a>
+    </div>
+
+    <button
+      class="menu-toggle"
+      type="button"
+      aria-label="Abrir menu"
+      aria-expanded="false"
+      aria-controls="mobile-drawer"
+    >
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <div class="drawer" id="mobile-drawer">
+    <nav class="drawer__nav" aria-label="Navegação mobile">
+      {navItems.map((item) => (
+        <a class="drawer__link" href={item.href} data-nav>{item.label}</a>
+      ))}
+      <div class="drawer__auth">
+        <a class="btn btn--outline" href="/login">Entrar</a>
+        <a class="btn btn--primary" href="/signup">Criar conta</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid transparent;
+    transition: border-color var(--transition), background var(--transition),
+      box-shadow var(--transition);
+  }
+
+  .site-header.is-scrolled {
+    border-bottom-color: var(--color-border);
+    box-shadow: 0 6px 24px rgba(11, 31, 51, 0.05);
+  }
+
+  .header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    height: 72px;
+  }
+
+  /* --- Logo --- */
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    text-decoration: none;
+  }
+
+  .logo__mark {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: var(--color-accent);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  }
+
+  .logo__text {
+    font-weight: 800;
+    font-size: 1.375rem;
+    letter-spacing: -0.03em;
+  }
+
+  .logo__x {
+    color: var(--color-accent);
+  }
+
+  /* --- Navegação desktop --- */
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+  }
+
+  .nav__link {
+    position: relative;
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    transition: color var(--transition);
+  }
+
+  .nav__link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -6px;
+    height: 2px;
+    background: var(--color-accent);
+    border-radius: 2px;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--transition);
+  }
+
+  .nav__link:hover,
+  .nav__link.is-active {
+    color: var(--color-text);
+  }
+
+  .nav__link.is-active::after {
+    transform: scaleX(1);
+  }
+
+  /* --- Autenticação --- */
+  .auth {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  /* --- Hambúrguer --- */
+  .menu-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+
+  .menu-toggle span {
+    display: block;
+    height: 2px;
+    width: 24px;
+    margin-inline: auto;
+    background: var(--color-text);
+    transition: transform var(--transition), opacity var(--transition);
+  }
+
+  /* --- Drawer mobile --- */
+  .drawer {
+    position: fixed;
+    inset: 72px 0 0 auto;
+    width: min(320px, 85vw);
+    background: var(--color-surface);
+    border-left: 1px solid var(--color-border);
+    padding: 1.75rem 1.5rem;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform var(--transition), visibility var(--transition);
+  }
+
+  .drawer.is-open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .drawer__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .drawer__link {
+    color: var(--color-text);
+    text-decoration: none;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    transition: color var(--transition);
+  }
+
+  .drawer__link:hover,
+  .drawer__link.is-active {
+    color: var(--color-accent-strong);
+  }
+
+  .drawer__auth {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .drawer__auth .btn {
+    width: 100%;
+  }
+
+  /* --- Responsivo --- */
+  @media (max-width: 899px) {
+    .nav,
+    .auth {
+      display: none;
+    }
+
+    .menu-toggle {
+      display: flex;
+    }
+  }
+
+  @media (min-width: 900px) {
+    .drawer {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  /**
+   * 1. Aplica .is-scrolled ao rolar.
+   * 2. Abre/fecha o drawer mobile, com foco e Escape.
+   * 3. Destaca o link da seção visível.
+   */
+  const header = document.querySelector('.site-header');
+  const toggle = document.querySelector<HTMLButtonElement>('.menu-toggle');
+  const drawer = document.querySelector<HTMLElement>('.drawer');
+  const navLinks = document.querySelectorAll<HTMLAnchorElement>('[data-nav]');
+
+  const onScroll = () => header?.classList.toggle('is-scrolled', window.scrollY > 8);
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  const setDrawer = (open: boolean) => {
+    if (!drawer || !toggle) return;
+    drawer.classList.toggle('is-open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+  };
+
+  toggle?.addEventListener('click', () =>
+    setDrawer(!drawer?.classList.contains('is-open')),
+  );
+
+  drawer?.querySelectorAll('a').forEach((link) =>
+    link.addEventListener('click', () => setDrawer(false)),
+  );
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setDrawer(false);
+  });
+
+  const sections = [...navLinks]
+    .map((link) => document.querySelector(link.getAttribute('href') || ''))
+    .filter((el): el is Element => el !== null);
+
+  if (sections.length) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          navLinks.forEach((link) =>
+            link.classList.toggle(
+              'is-active',
+              link.getAttribute('href') === `#${entry.target.id}`,
+            ),
+          );
+        });
+      },
+      { rootMargin: '-45% 0px -45% 0px' },
+    );
+    sections.forEach((section) => observer.observe(section));
+  }
+</script>

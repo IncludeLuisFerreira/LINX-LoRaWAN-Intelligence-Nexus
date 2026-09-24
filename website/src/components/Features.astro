@@ -1,0 +1,243 @@
+---
+/**
+ * Features (bento)
+ * -------------------------------------------------------------
+ * Grade assimétrica de recursos. Cards com tilt + spotlight no
+ * cursor (aplicado pelo script global via [data-tilt]).
+ * Os ícones são SVG inline com traço consistente (1.75).
+ */
+type Feature = {
+  title: string;
+  description: string;
+  size: 'big' | 'sm' | 'half';
+  accent?: boolean;
+  icon: string; // chave do ícone
+};
+
+const features: Feature[] = [
+  {
+    size: 'big',
+    icon: 'qr',
+    title: 'Plug and play por QR Code',
+    description:
+      'Cadastre o sensor lendo o QR Code (padrão TR005). O roteamento e a persistência da telemetria são automáticos.',
+  },
+  {
+    size: 'sm',
+    icon: 'cube',
+    accent: true,
+    title: 'Isolamento por aplicação',
+    description:
+      'Cada aplicação roda em contêiner dedicado, com banco e motor de regras próprios.',
+  },
+  {
+    size: 'half',
+    icon: 'bolt',
+    title: 'Motor de regras e downlink',
+    description:
+      '“Temperatura acima de 40 °C liga o exaustor” — avaliado na nuvem e enviado ao dispositivo.',
+  },
+  {
+    size: 'half',
+    icon: 'pulse',
+    title: 'Telemetria em tempo real',
+    description:
+      'Dashboards via WebSocket com séries temporais no TimescaleDB, sem polling.',
+  },
+  {
+    size: 'sm',
+    icon: 'upload',
+    title: 'FUOTA',
+    description: 'Atualização de firmware em lote por multicast.',
+  },
+  {
+    size: 'sm',
+    icon: 'shield',
+    title: 'Auditoria e RBAC',
+    description: 'Perfis por organização, aplicação e técnico de campo.',
+  },
+  {
+    size: 'sm',
+    icon: 'antenna',
+    title: 'Rede de gateways inclusa',
+    description: 'Cobertura LoRaWAN provida como serviço pela LINX.',
+  },
+];
+
+const icons: Record<string, string> = {
+  qr: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM19 19h2v2h-2zM14 19h2v2h-2zM19 14h2v2h-2z"/>',
+  cube: '<path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="M4 7l8 4 8-4M12 11v10"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
+  pulse: '<path d="M3 12h4l2.5-7 4 14L16 12h5"/>',
+  upload: '<path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+  shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="M9.5 12l1.8 1.8L15 10"/>',
+  antenna: '<path d="M12 13v7M8 20h8"/><path d="M6.5 9.5a7 7 0 0 1 11 0"/><path d="M9 12a4 4 0 0 1 6 0"/><circle cx="12" cy="4.5" r="1.5"/>',
+};
+---
+
+<section class="section" id="features">
+  <div class="container">
+    <span class="eyebrow" data-reveal>Plataforma</span>
+    <h2 class="section__title" data-reveal>
+      Tudo o que a operação precisa, sem tocar em infraestrutura
+    </h2>
+    <p class="section__lead" data-reveal>
+      Da leitura do sensor ao acionamento remoto, cada peça roda isolada na
+      nuvem e pronta para escalar.
+    </p>
+
+    <div class="bento">
+      {
+        features.map((f, i) => (
+          <article
+            class:list={['bento__card', `bento__card--${f.size}`, { 'is-accent': f.accent }]}
+            data-tilt
+            data-reveal
+            style={`--reveal-delay:${(i % 3) * 80}ms`}
+          >
+            <span
+              class="bento__icon"
+              aria-hidden="true"
+              set:html={`<svg viewBox="0 0 24 24">${icons[f.icon]}</svg>`}
+            />
+            <h3 class="bento__title">{f.title}</h3>
+            <p class="bento__text">{f.description}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+    margin-top: 2.5rem;
+  }
+
+  .bento__card {
+    position: relative;
+    overflow: hidden;
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
+    transition: transform var(--transition), box-shadow var(--transition);
+    transform-style: preserve-3d;
+  }
+
+  /* Spotlight que segue o cursor (usa --mx/--my do script global) */
+  .bento__card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      220px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(13, 148, 136, 0.1),
+      transparent 60%
+    );
+    opacity: 0;
+    transition: opacity var(--transition);
+    pointer-events: none;
+  }
+
+  .bento__card:hover::after {
+    opacity: 1;
+  }
+
+  .bento__card--big {
+    grid-column: span 4;
+  }
+  .bento__card--half {
+    grid-column: span 3;
+  }
+  .bento__card--sm {
+    grid-column: span 2;
+  }
+
+  .bento__card.is-accent {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+
+  .bento__card.is-accent::after {
+    background: radial-gradient(
+      220px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(255, 255, 255, 0.18),
+      transparent 60%
+    );
+  }
+
+  .bento__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+
+  .bento__icon :global(svg) {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .is-accent .bento__icon {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+  }
+
+  .bento__title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .bento__text {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+  }
+
+  .is-accent .bento__title {
+    color: #fff;
+  }
+
+  .is-accent .bento__text {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  @media (max-width: 899px) {
+    .bento {
+      grid-template-columns: 1fr 1fr;
+    }
+    .bento__card--big,
+    .bento__card--half,
+    .bento__card--sm {
+      grid-column: span 2;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .bento {
+      grid-template-columns: 1fr;
+    }
+    .bento__card--big,
+    .bento__card--half,
+    .bento__card--sm {
+      grid-column: span 1;
+    }
+  }
+</style>

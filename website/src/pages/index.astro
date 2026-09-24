@@ -1,11 +1,38 @@
 ---
-import Welcome from '../components/Welcome.astro';
+/**
+ * Página inicial (one-page híbrida)
+ * -------------------------------------------------------------
+ * Ordem: Header → Hero → Prova social → Plataforma → Como funciona
+ * → Segurança → Soluções → Contato → Footer.
+ * Cada seção tem id próprio para links diretos e rolagem suave.
+ */
 import Layout from '../layouts/Layout.astro';
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+import Header from '../components/Header.astro';
+import Hero from '../components/Hero.astro';
+import SocialProof from '../components/SocialProof.astro';
+import Features from '../components/Features.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import Security from '../components/Security.astro';
+import UseCases from '../components/UseCases.astro';
+import Contact from '../components/Contact.astro';
+import Footer from '../components/Footer.astro';
 ---
 
-<Layout>
-	<Welcome />
+<Layout
+  title="LINX — Sensores conectados. Infraestrutura zero."
+  description="Plataforma IoT LoRaWAN gerenciada: conecte seus sensores à nuvem com segurança e provisionamento por QR Code. Sem gateways no seu site."
+>
+  <Header />
+
+  <main id="main">
+    <Hero />
+    <SocialProof />
+    <Features />
+    <HowItWorks />
+    <Security />
+    <UseCases />
+    <Contact />
+  </main>
+
+  <Footer />
 </Layout>

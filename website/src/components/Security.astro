@@ -1,0 +1,147 @@
+---
+/**
+ * Security
+ * -------------------------------------------------------------
+ * Seção de segurança em duas colunas: benefícios à esquerda e um
+ * card "terminal" com a jornada de uma requisição (middleware LINX).
+ * O card entra com reveal; as linhas surgem em cascata via CSS.
+ */
+const points = [
+  'Isolamento de dados por contêiner e por organização',
+  'Autenticação JWT e RBAC ponta a ponta',
+  'Comunicação TLS 1.3 entre dispositivo, nuvem e dashboard',
+  'Trilhas de auditoria para acionamentos e FUOTA',
+];
+---
+
+<section class="section" id="security">
+  <div class="container security">
+    <div class="security__copy">
+      <span class="eyebrow" data-reveal>Segurança</span>
+      <h2 class="section__title" data-reveal>
+        Segurança por padrão, não por configuração
+      </h2>
+      <p class="section__lead" data-reveal>
+        Autenticação, autorização e criptografia fazem parte da arquitetura — o
+        dado nunca cruza ambientes sem necessidade.
+      </p>
+
+      <ul class="security__list">
+        {
+          points.map((p, i) => (
+            <li data-reveal style={`--reveal-delay:${i * 90}ms`}>
+              <span aria-hidden="true">
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 10.5l4 4 8-9" />
+                </svg>
+              </span>
+              {p}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+
+    <div class="security__code card" data-reveal>
+      <div class="security__code-head">
+        <span class="dot"></span>
+        <span class="mono">requisição · middleware LINX</span>
+      </div>
+      <pre class="terminal mono" aria-label="Exemplo de requisição roteada pelo middleware LINX"><code><span class="l"><b class="m-post">POST</b> /v1/apps/estufa-norte/telemetry</span><span class="l dim">authorization: Bearer &lt;jwt&gt;</span><span class="l dim">x-linx-tenant: org_4821</span><span class="l"><b class="m-ok">200</b> roteado → app_estufa_norte</span><span class="l"><b class="m-ok">200</b> persistido · tsdb:42ms</span><span class="l"><b class="m-ok">200</b> push via websocket</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<style>
+  .security {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(2rem, 5vw, 3.5rem);
+    align-items: center;
+  }
+
+  .security__list {
+    margin: 1.75rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .security__list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.9375rem;
+  }
+
+  .security__list li:first-child {
+    border-top: 1px solid var(--color-border);
+  }
+
+  .security__list span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    border-radius: 50%;
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+
+  .security__code {
+    padding: 1.25rem 1.25rem 1.5rem;
+    background: #0b1f33;
+    border-color: #0b1f33;
+  }
+
+  .security__code-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-success);
+  }
+
+  .terminal {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.9;
+    color: rgba(255, 255, 255, 0.92);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .l {
+    display: block;
+  }
+
+  .dim {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .m-post {
+    color: #5eead4;
+  }
+
+  .m-ok {
+    color: #4ade80;
+  }
+
+  @media (max-width: 899px) {
+    .security {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
