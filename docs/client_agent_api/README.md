@@ -75,7 +75,7 @@ Configuração por variáveis de ambiente:
 
 | Variável                   | Default         | Descrição                                      |
 | -------------------------- | --------------- | ---------------------------------------------- |
-| `SAAS_GRPC_HOST`           | `saas:50051`    | Endereço `host:porta` do gRPC do SaaS Backend. |
+| `SAAS_GRPC_HOST`           | `agent_bridge:50051` | Endereço `host:porta` do gRPC do SaaS Backend. |
 | `GRPC_TIMEOUT_SECONDS`     | `5`             | Timeout (s) das chamadas/checagem gRPC.        |
 | `CONFIG_CACHE_TTL_SECONDS` | `60`            | TTL (s) do cache de `GetAppConfig` por `app_id`. |
 | `TENANT_APP_URL`           | `http://localhost:8002` | URL base do tenant app (destino da ingestão).  |
