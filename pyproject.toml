@@ -1,0 +1,25 @@
+[project]
+name = "lynx"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "includeLuisFerreira",email = "prgluisfelipe@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+# Repositório de documentação (MkDocs) — não empacota código próprio.
+package-mode = false
+
+[dependency-groups]
+dev = [
+    "mkdocs-material (>=9.7.7,<10.0.0)"
+]

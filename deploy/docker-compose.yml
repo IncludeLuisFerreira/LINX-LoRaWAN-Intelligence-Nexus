@@ -65,6 +65,17 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Hosts são nomes de serviço do Compose, não "localhost".
+      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST:-agent_bridge:50051}
+      - TENANT_APP_URL=${TENANT_APP_URL:-http://tenant_app:8002}
+      - GRPC_TIMEOUT_SECONDS=${GRPC_TIMEOUT_SECONDS:-5}
+      - CONFIG_CACHE_TTL_SECONDS=${CONFIG_CACHE_TTL_SECONDS:-60}
+    depends_on:
+      agent_bridge:
+        condition: service_started
+      tenant_app:
+        condition: service_started
     ports:
       - "8001:8001"
 
@@ -72,9 +83,9 @@ services:
     image: timescale/timescaledb:2.13.0-pg14
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER:?DB_USER must be set}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
+      - POSTGRES_DB=${DB_NAME:?DB_NAME must be set}
     volumes:
       - ./db/schema.sql:/docker-entrypoint-initdb.d/0_schema.sql
       - timescaledb_data:/var/lib/postgresql/data
@@ -89,10 +100,10 @@ services:
     # SAAS_GRPC_HOST deve apontar para o endereço alcançável do SaaS Backend
     # a partir do container (não use "localhost" aqui).
     environment:
-      - CLIENT_AGENT_URL=${CLIENT_AGENT_URL}
+      - CLIENT_AGENT_URL=${CLIENT_AGENT_URL:-http://client_agent:8001}
       - APP_ID=${APP_ID}
       - MQTT_TOPIC=${MQTT_TOPIC}
-      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST}
+      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST:-agent_bridge:50051}
       - DB_HOST=timescaledb
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
@@ -105,7 +116,7 @@ services:
       identity_api:
         condition: service_started
     ports:
-      - "${TENANT_PORT}:${TENANT_PORT}"
+      - "${TENANT_PORT:-8002}:8002"
 
 volumes:
   pgdata:
