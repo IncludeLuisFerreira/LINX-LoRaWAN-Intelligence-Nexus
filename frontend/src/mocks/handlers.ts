@@ -1,18 +1,85 @@
 import { http, HttpResponse } from 'msw';
 
-const mockTenants = [
-  { id: '1', name: 'Organização Alfa', createdAt: new Date().toISOString() },
-  { id: '2', name: 'Organização Beta', createdAt: new Date().toISOString() },
-];
+interface MockTenant {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
 
-const mockApps = [
+interface MockApplication {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const now = () => new Date().toISOString();
+
+const tenantAlfaId = crypto.randomUUID();
+
+const mockTenants: MockTenant[] = [
   {
-    id: '101',
-    name: 'App Sensores',
-    organizationId: '1',
-    createdAt: new Date().toISOString(),
+    id: tenantAlfaId,
+    name: 'Organização Alfa',
+    description: '',
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: crypto.randomUUID(),
+    name: 'Organização Beta',
+    description: '',
+    created_at: now(),
+    updated_at: now(),
   },
 ];
+
+const mockAppsByTenant: Record<string, MockApplication[]> = {
+  [tenantAlfaId]: [
+    {
+      id: crypto.randomUUID(),
+      name: 'App Sensores',
+      description: '',
+      created_at: now(),
+      updated_at: now(),
+    },
+  ],
+};
+
+function findTenant(tenantId: string): MockTenant | undefined {
+  return mockTenants.find((tenant) => tenant.id === tenantId);
+}
+
+function findApp(
+  tenantId: string,
+  applicationId: string,
+): MockApplication | undefined {
+  return (mockAppsByTenant[tenantId] ?? []).find(
+    (app) => app.id === applicationId,
+  );
+}
+
+function tenantNotFound() {
+  return HttpResponse.json({ detail: 'Tenant not found!' }, { status: 404 });
+}
+
+function applicationNotFound() {
+  return HttpResponse.json(
+    { detail: 'Application not found!' },
+    { status: 404 },
+  );
+}
+
+function validationError(detail: string) {
+  return HttpResponse.json({ detail }, { status: 422 });
+}
+
+function createdLocation(request: Request, path: string) {
+  return `${new URL(request.url).origin}${path}`;
+}
 
 export const handlers = [
   // --- TENANTS ---
@@ -21,63 +88,138 @@ export const handlers = [
   }),
 
   http.post('*/api/v1/tenant', async ({ request }) => {
-    const body = (await request.json()) as { name: string };
-    const newTenant = {
-      id: String(Date.now()),
-      name: body.name,
-      createdAt: new Date().toISOString(),
-    };
-    mockTenants.push(newTenant);
-    return HttpResponse.json(newTenant, { status: 201 });
-  }),
-
-  http.patch('*/api/v1/tenant/:id', async ({ params, request }) => {
-    const { id } = params;
-    const body = (await request.json()) as { name: string };
-    const tenant = mockTenants.find((o) => o.id === id);
-    if (tenant && body.name) tenant.name = body.name;
-    return HttpResponse.json(tenant ?? null, { status: tenant ? 200 : 404 });
-  }),
-
-  http.delete('*/api/v1/tenant/:id', ({ params }) => {
-    const { id } = params;
-    const index = mockTenants.findIndex((o) => o.id === id);
-    if (index !== -1) mockTenants.splice(index, 1);
-    return new HttpResponse(null, { status: index !== -1 ? 204 : 404 });
-  }),
-
-  // --- APPLICATIONS ---
-  http.get('*/api/v1/applications', () => {
-    return HttpResponse.json(mockApps);
-  }),
-
-  http.post('*/api/v1/applications', async ({ request }) => {
     const body = (await request.json()) as {
       name: string;
-      organizationId: string;
+      description?: string;
     };
-    const newApp = {
-      id: String(Date.now()),
+    const newTenant: MockTenant = {
+      id: crypto.randomUUID(),
       name: body.name,
-      organizationId: body.organizationId,
-      createdAt: new Date().toISOString(),
+      description: body.description ?? '',
+      created_at: now(),
+      updated_at: now(),
     };
-    mockApps.push(newApp);
-    return HttpResponse.json(newApp, { status: 201 });
+    mockTenants.push(newTenant);
+    return HttpResponse.json(newTenant, {
+      status: 201,
+      headers: {
+        Location: createdLocation(request, `/api/v1/tenant/${newTenant.id}`),
+      },
+    });
   }),
 
-  http.patch('*/api/v1/applications/:id', async ({ params, request }) => {
-    const { id } = params;
-    const body = (await request.json()) as { name: string };
-    const app = mockApps.find((a) => a.id === id);
-    if (app && body.name) app.name = body.name;
-    return HttpResponse.json(app);
+  http.get('*/api/v1/tenant/:tenant_id', ({ params }) => {
+    const tenant = findTenant(String(params.tenant_id));
+    if (!tenant) return tenantNotFound();
+    return HttpResponse.json(tenant);
   }),
 
-  http.delete('*/api/v1/applications/:id', ({ params }) => {
-    const { id } = params;
-    const index = mockApps.findIndex((a) => a.id === id);
-    if (index !== -1) mockApps.splice(index, 1);
+  http.patch('*/api/v1/tenant/:tenant_id', async ({ params, request }) => {
+    const tenant = findTenant(String(params.tenant_id));
+    if (!tenant) return tenantNotFound();
+
+    const body = (await request.json()) as {
+      name?: string;
+      description?: string;
+    };
+    if (body.description !== undefined && body.description.length === 0) {
+      return validationError('description must not be empty');
+    }
+    if (body.name !== undefined) tenant.name = body.name;
+    if (body.description !== undefined) tenant.description = body.description;
+    tenant.updated_at = now();
+    return HttpResponse.json(tenant);
+  }),
+
+  http.delete('*/api/v1/tenant/:tenant_id', ({ params }) => {
+    const id = String(params.tenant_id);
+    const index = mockTenants.findIndex((t) => t.id === id);
+    if (index === -1) return tenantNotFound();
+    mockTenants.splice(index, 1);
+    delete mockAppsByTenant[id];
     return new HttpResponse(null, { status: 204 });
   }),
+
+  // --- APPLICATIONS (tenant-scoped) ---
+  http.get('*/api/v1/tenant/:tenant_id/applications', ({ params }) => {
+    const tenant = findTenant(String(params.tenant_id));
+    if (!tenant) return tenantNotFound();
+    return HttpResponse.json(mockAppsByTenant[tenant.id] ?? []);
+  }),
+
+  http.post('*/api/v1/tenant/:tenant_id/applications', async ({ params, request }) => {
+    const tenant = findTenant(String(params.tenant_id));
+    if (!tenant) return tenantNotFound();
+
+    const body = (await request.json()) as {
+      name: string;
+      description?: string;
+    };
+    const newApp: MockApplication = {
+      id: crypto.randomUUID(),
+      name: body.name,
+      description: body.description ?? '',
+      created_at: now(),
+      updated_at: now(),
+    };
+    const apps = mockAppsByTenant[tenant.id] ?? [];
+    apps.push(newApp);
+    mockAppsByTenant[tenant.id] = apps;
+    return HttpResponse.json(newApp, {
+      status: 201,
+      headers: {
+        Location: createdLocation(
+          request,
+          `/api/v1/tenant/${tenant.id}/applications/${newApp.id}`,
+        ),
+      },
+    });
+  }),
+
+  http.get(
+    '*/api/v1/tenant/:tenant_id/applications/:application_id',
+    ({ params }) => {
+      const tenant = findTenant(String(params.tenant_id));
+      if (!tenant) return tenantNotFound();
+      const app = findApp(tenant.id, String(params.application_id));
+      if (!app) return applicationNotFound();
+      return HttpResponse.json(app);
+    },
+  ),
+
+  http.patch(
+    '*/api/v1/tenant/:tenant_id/applications/:application_id',
+    async ({ params, request }) => {
+      const tenant = findTenant(String(params.tenant_id));
+      if (!tenant) return tenantNotFound();
+      const app = findApp(tenant.id, String(params.application_id));
+      if (!app) return applicationNotFound();
+      const body = (await request.json()) as {
+        name?: string;
+        description?: string;
+      };
+      if (body.description !== undefined && body.description.length === 0) {
+        return validationError('description must not be empty');
+      }
+      if (body.name !== undefined) app.name = body.name;
+      if (body.description !== undefined) app.description = body.description;
+      app.updated_at = now();
+      return HttpResponse.json(app);
+    },
+  ),
+
+  http.delete(
+    '*/api/v1/tenant/:tenant_id/applications/:application_id',
+    ({ params }) => {
+      const tenant = findTenant(String(params.tenant_id));
+      if (!tenant) return tenantNotFound();
+      const apps = mockAppsByTenant[tenant.id] ?? [];
+      const index = apps.findIndex(
+        (a) => a.id === String(params.application_id),
+      );
+      if (index === -1) return applicationNotFound();
+      apps.splice(index, 1);
+      return new HttpResponse(null, { status: 204 });
+    },
+  ),
 ];
