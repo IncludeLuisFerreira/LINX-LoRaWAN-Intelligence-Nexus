@@ -1,46 +1,160 @@
-# Astro Starter Kit: Basics
+# LINX — Website
 
-```sh
-npm create astro@latest -- --template basics
+Site institucional da **LINX (LoRaWAN Intelligence Nexus)**, plataforma SaaS IoT
+gerenciada. O site comunica quatro impressões centrais: **segurança, IoT,
+tecnologia e facilidade**.
+
+- **Stack:** [Astro](https://docs.astro.build) 7 + CSS puro + JavaScript vanilla.
+- **3D:** [`three.js`](https://threejs.org) apenas no hero (carregado
+  dinamicamente).
+- **Sem framework de UI.** Interatividade com `IntersectionObserver` e eventos
+  nativos.
+
+> O contrato de marca (cores, tipografia, movimento) fica em
+> [`DESIGN.md`](./DESIGN.md) e nos tokens de
+> [`src/styles/global.css`](./src/styles/global.css). **Leia o `DESIGN.md` antes
+> de mudar o visual.**
+
+---
+
+## Como rodar
+
+Requer Node `>=22.12.0`.
+
+```bash
+npm install
+npm run dev      # servidor de desenvolvimento (http://localhost:4321)
+
+# No dia a dia deste repositório, use o modo background:
+npx astro dev --background
+npx astro dev status
+npx astro dev logs
+npx astro dev stop
+
+npm run build    # build de produção em ./dist
+npm run preview  # pré-visualiza o build
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+---
 
-## 🚀 Project Structure
+## Estrutura
 
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
+```
+website/
+├── DESIGN.md                     # contrato de marca (OpenDesign)
+├── public/                       # estáticos servidos na raiz (favicon)
+├── src/
+│   ├── layouts/
+│   │   └── Layout.astro          # <head>, fontes, CSS global e script de movimento
+│   ├── pages/
+│   │   ├── index.astro           # home (one-page) — compõe as seções
+│   │   └── about.astro           # página "Sobre"
+│   ├── components/
+│   │   ├── Header.astro          # nav sticky + Entrar/Criar conta + drawer mobile
+│   │   ├── Hero.astro            # proposta de valor + cena three.js
+│   │   ├── SocialProof.astro     # clientes + métricas com contador
+│   │   ├── Features.astro        # grade bento de recursos
+│   │   ├── HowItWorks.astro      # 3 passos
+│   │   ├── Security.astro        # segurança + exemplo de requisição
+│   │   ├── UseCases.astro        # casos de uso (agro/indústria/logística)
+│   │   ├── Contact.astro         # CTA final + formulário de e-mail
+│   │   └── Footer.astro          # rodapé
+│   └── styles/
+│       └── global.css            # tokens, reset, utilitários, botões, movimento
+└── docs/superpowers/             # specs e planos anteriores (histórico)
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+### Ordem das seções
 
-## 🧞 Commands
+Definida em [`src/pages/index.astro`](./src/pages/index.astro):
+`Header → Hero → SocialProof → Features → HowItWorks → Security → UseCases →
+Contact → Footer`.
 
-All commands are run from the root of the project, from a terminal:
+---
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+## Como modificar
 
-## 👀 Want to learn more?
+### Trocar cores e tipografia
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Edite os tokens em `src/styles/global.css` (`:root`) e replique a decisão no
+`DESIGN.md`. Os componentes usam **apenas** variáveis (`var(--color-…)`), então
+a mudança se propaga pelo site inteiro. **Nunca** use cor literal em componente.
+
+### Trocar/ajustar conteúdo
+
+A maioria dos textos de lista vive no *frontmatter* (bloco `---`) de cada
+componente, como arrays. Regras práticas:
+
+- **Header**: itens de menu em `navItems`.
+- **SocialProof**: clientes em `customers`, métricas em `metrics`. Para o
+  contador, o `<strong>` usa `data-count`, `data-decimals` e `data-suffix`.
+- **Features**: cards em `features` (`size`: `big` | `half` | `sm`; `accent`
+  pinta o card de teal; `icon` referencia o objeto `icons`).
+- **HowItWorks**: passos em `steps`.
+- **Security**: tópicos em `points`.
+- **UseCases**: cards em `cases`.
+- **Footer**: colunas em `columns`, links legais em `legalLinks`, redes em
+  `socials`.
+
+### Adicionar uma seção
+
+1. Crie `src/components/MinhaSecao.astro` seguindo um componente existente
+   (frontmatter + `<style>` com escopo local).
+2. Use as classes utilitárias globais (`container`, `section`, `section--alt`,
+   `eyebrow`, `section__title`, `card`, `btn btn--primary`…).
+3. Importe e insira em `src/pages/index.astro` na ordem desejada.
+4. Dê um `id` à seção e, se quiser link no menu, adicione o item em
+   `navItems` no `Header.astro`.
+
+### Imagens
+
+As imagens dos casos de uso são **placeholders** (`picsum.photos`) e devem ser
+trocadas por fotos próprias. Coloque os arquivos em `public/` e referencie com
+caminho absoluto (`/minha-foto.jpg`), mantendo `loading="lazy"` e
+`width`/`height`.
+
+---
+
+## Movimento
+
+O comportamento é controlado por atributos de dados:
+
+| Atributo | Efeito | Onde é tratado |
+| --- | --- | --- |
+| `data-reveal` | Entra em cascata quando aparece na tela. Atraso opcional via `--reveal-delay`. | Script em `Layout.astro` |
+| `data-count` (+ `data-decimals`, `data-suffix`) | Contador animado ao entrar na tela. | Script em `Layout.astro` |
+| `data-tilt` | Tilt 3D + spotlight que segue o cursor. | Script em `Layout.astro` |
+| `#hero-canvas` | Cena 3D (malha viva). | Script em `Hero.astro` |
+
+- A cena do hero usa uma **esfera uniforme (Fibonacci)** de nós + nuvem central
+  e pulsos de dados. Ajuste quantidade de nós, raio e velocidade no script de
+  `Hero.astro`.
+- Tudo é desligado com `prefers-reduced-motion: reduce`; a cena pausa quando
+  fora da tela ou com a aba oculta e reduz nós no mobile.
+
+---
+
+## Acessibilidade
+
+- HTML semântico, `skip-link` ("Pular para o conteúdo"), foco visível.
+- Contraste AA; o card de destaque (teal) usa **texto branco**.
+- Botões de ícone com `aria-label`; formulários com `<label>`.
+- Ao adicionar interatividade, preserve navegação por teclado (`Escape` fecha o
+  drawer no `Header.astro`).
+
+---
+
+## Pendências / backend
+
+- **Formulário de contato** (`Contact.astro`) faz `POST /api/subscribe`, que
+  **ainda não existe**. Implementar endpoint no backend ou trocar por outro
+  destino.
+- Métricas e textos são **placeholder plausível** — substituir por dados reais.
+
+---
+
+## Deploy
+
+O serviço já possui `Dockerfile` e `nginx.conf` (ver histórico do repositório e
+`deploy/`). O build gera `dist/` estático; o nginx serve os arquivos e aplica
+cache/headers.
