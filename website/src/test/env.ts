@@ -6,3 +6,4 @@ export const AUTH0_SCOPE = 'openid profile email';
 export const SITE_URL = 'http://localhost:4321';
 export const POST_LOGIN_REDIRECT = '/';
 export const SESSION_SECRET = 'test-session-secret-com-32-caracteres-ou-mais';
+export const ALLOWED_ORIGINS = '';

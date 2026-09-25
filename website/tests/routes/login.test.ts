@@ -5,6 +5,7 @@ const authorizeUrl = 'https://tenant.example.auth0.com/authorize?x=1';
 
 vi.mock('../../src/lib/auth0', () => ({
   buildAuthorizeUrl: vi.fn(async () => authorizeUrl),
+  callbackUrl: (origin: string) => `${origin}/api/auth/callback`,
 }));
 
 import { buildAuthorizeUrl } from '../../src/lib/auth0';
@@ -22,6 +23,7 @@ describe('GET /api/auth/login', () => {
     );
 
     const res = await GET({
+      request: new Request(url),
       url,
       cookies,
       redirect: createRedirect(),
@@ -37,20 +39,26 @@ describe('GET /api/auth/login', () => {
     expect(call.state).toBe(store.get('linx_oauth_state'));
     expect(call.nonce).toBe(store.get('linx_oauth_nonce'));
     expect(call.codeChallenge).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(call.redirectUri).toBe(
+      'http://localhost:4321/api/auth/callback',
+    );
     expect(call.screenHint).toBe('signup');
   });
 
   it('gera state/nonce/verifier aleatórios a cada requisição', async () => {
     const first = createCookies();
     const second = createCookies();
+    const url = new URL('http://localhost:4321/api/auth/login');
 
     await GET({
-      url: new URL('http://localhost:4321/api/auth/login'),
+      request: new Request(url),
+      url,
       cookies: first.cookies,
       redirect: createRedirect(),
     } as never);
     await GET({
-      url: new URL('http://localhost:4321/api/auth/login'),
+      request: new Request(url),
+      url,
       cookies: second.cookies,
       redirect: createRedirect(),
     } as never);

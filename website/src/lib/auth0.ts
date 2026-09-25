@@ -30,8 +30,8 @@ function getIssuer(): string {
   return `https://${AUTH0_DOMAIN}/`;
 }
 
-export function callbackUrl(): string {
-  return new URL('/api/auth/callback', SITE_URL).toString();
+export function callbackUrl(origin: string = SITE_URL): string {
+  return new URL('/api/auth/callback', origin).toString();
 }
 
 async function getDiscovery(): Promise<DiscoveryDocument> {
@@ -53,6 +53,7 @@ export async function buildAuthorizeUrl(params: {
   state: string;
   nonce: string;
   codeChallenge: string;
+  redirectUri: string;
   screenHint?: string | null;
   loginHint?: string | null;
 }): Promise<string> {
@@ -60,7 +61,7 @@ export async function buildAuthorizeUrl(params: {
   const url = new URL(authorization_endpoint);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', AUTH0_CLIENT_ID);
-  url.searchParams.set('redirect_uri', callbackUrl());
+  url.searchParams.set('redirect_uri', params.redirectUri);
   url.searchParams.set('scope', AUTH0_SCOPE);
   url.searchParams.set('state', params.state);
   url.searchParams.set('nonce', params.nonce);
@@ -75,6 +76,7 @@ export async function buildAuthorizeUrl(params: {
 export async function exchangeCode(
   code: string,
   codeVerifier: string,
+  redirectUri: string,
 ): Promise<{ id_token?: string; access_token?: string }> {
   const { token_endpoint } = await getDiscovery();
   const body = new URLSearchParams({
@@ -83,7 +85,7 @@ export async function exchangeCode(
     client_secret: AUTH0_CLIENT_SECRET,
     code,
     code_verifier: codeVerifier,
-    redirect_uri: callbackUrl(),
+    redirect_uri: redirectUri,
   });
 
   const res = await fetch(token_endpoint, {

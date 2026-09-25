@@ -37,6 +37,14 @@ export default defineConfig({
         optional: true,
         default: '/',
       }),
+      // Origens extras (separadas por vírgula) autorizadas a iniciar o OAuth,
+      // além do SITE_URL e dos domínios VERCEL_*.
+      ALLOWED_ORIGINS: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+        default: '',
+      }),
       SITE_URL: envField.string({ context: 'server', access: 'secret' }),
       SESSION_SECRET: envField.string({
         context: 'server',

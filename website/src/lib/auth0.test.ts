@@ -82,18 +82,26 @@ async function signIdToken(options: {
 }
 
 describe('callbackUrl', () => {
-  it('aponta para /api/auth/callback no SITE_URL', () => {
+  it('aponta para /api/auth/callback no SITE_URL por padrão', () => {
     expect(callbackUrl()).toBe('http://localhost:4321/api/auth/callback');
+  });
+
+  it('usa a origem informada', () => {
+    expect(callbackUrl('https://preview.vercel.app')).toBe(
+      'https://preview.vercel.app/api/auth/callback',
+    );
   });
 });
 
 describe('buildAuthorizeUrl', () => {
   it('inclui os parâmetros obrigatórios e PKCE S256', async () => {
+    const redirectUri = 'https://preview.vercel.app/api/auth/callback';
     const url = new URL(
       await buildAuthorizeUrl({
         state: 'estado',
         nonce: 'nonce',
         codeChallenge: 'desafio',
+        redirectUri,
       }),
     );
 
@@ -101,7 +109,7 @@ describe('buildAuthorizeUrl', () => {
     expect(url.pathname).toBe('/authorize');
     expect(url.searchParams.get('response_type')).toBe('code');
     expect(url.searchParams.get('client_id')).toBe(CLIENT_ID);
-    expect(url.searchParams.get('redirect_uri')).toBe(callbackUrl());
+    expect(url.searchParams.get('redirect_uri')).toBe(redirectUri);
     expect(url.searchParams.get('scope')).toBe('openid profile email');
     expect(url.searchParams.get('state')).toBe('estado');
     expect(url.searchParams.get('nonce')).toBe('nonce');
@@ -116,6 +124,7 @@ describe('buildAuthorizeUrl', () => {
         state: 's',
         nonce: 'n',
         codeChallenge: 'c',
+        redirectUri: callbackUrl(),
         screenHint: 'signup',
         loginHint: 'user@example.com',
       }),
@@ -131,7 +140,9 @@ describe('exchangeCode', () => {
     tokenResponder = () =>
       json({ id_token: 'id-token', access_token: 'access-token' });
 
-    await expect(exchangeCode('code', 'verifier')).resolves.toEqual({
+    await expect(
+      exchangeCode('code', 'verifier', callbackUrl()),
+    ).resolves.toEqual({
       id_token: 'id-token',
       access_token: 'access-token',
     });
@@ -140,9 +151,9 @@ describe('exchangeCode', () => {
   it('lança quando o token_endpoint responde erro', async () => {
     tokenResponder = () => new Response('invalid_grant', { status: 400 });
 
-    await expect(exchangeCode('code', 'verifier')).rejects.toThrow(
-      /Troca de code falhou/,
-    );
+    await expect(
+      exchangeCode('code', 'verifier', callbackUrl()),
+    ).rejects.toThrow(/Troca de code falhou/);
   });
 });
 
