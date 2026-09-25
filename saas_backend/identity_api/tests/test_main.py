@@ -43,13 +43,6 @@ def test_health_degraded_when_db_is_down():
     assert response.json() == {"status": "degraded", "db": False}
 
 
-def test_home_html_response():
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "text/html" in response.headers["content-type"]
-
-
 def test_health_reports_real_database_as_up():
     response = client.get("/health")
 

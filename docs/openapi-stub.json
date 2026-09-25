@@ -25,24 +25,6 @@
         }
       }
     },
-    "/": {
-      "get": {
-        "summary": "Home",
-        "operationId": "home__get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/tenant/": {
       "post": {
         "tags": [
