@@ -21,8 +21,11 @@ describe('POST /api/auth/logout', () => {
 
   it('limpa a sessão e redireciona para o logout do Auth0', async () => {
     const { cookies } = createCookies();
+    const url = new URL('http://localhost:4321/api/auth/logout');
 
     const res = await POST({
+      request: new Request(url),
+      url,
       cookies,
       redirect: createRedirect(),
     } as never);

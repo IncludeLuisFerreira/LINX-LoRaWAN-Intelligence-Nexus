@@ -1,12 +1,13 @@
 import type { APIRoute } from 'astro';
 import { POST_LOGIN_REDIRECT } from 'astro:env/server';
-import { exchangeCode, verifyIdToken } from '../../../lib/auth0';
+import { callbackUrl, exchangeCode, verifyIdToken } from '../../../lib/auth0';
+import { resolveRequestOrigin } from '../../../lib/origin';
 import { safeRelativePath } from '../../../lib/redirect';
 import { setSession } from '../../../lib/session';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url, cookies, redirect }) => {
+export const GET: APIRoute = async ({ request, url, cookies, redirect }) => {
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const oauthError = url.searchParams.get('error');
@@ -36,7 +37,8 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   }
 
   try {
-    const tokens = await exchangeCode(code, codeVerifier);
+    const redirectUri = callbackUrl(resolveRequestOrigin(request, url));
+    const tokens = await exchangeCode(code, codeVerifier, redirectUri);
     if (!tokens.id_token) throw new Error('id_token ausente');
     const user = await verifyIdToken(tokens.id_token, nonce);
     await setSession(cookies, user);

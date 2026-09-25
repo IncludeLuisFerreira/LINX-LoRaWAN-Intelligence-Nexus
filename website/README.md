@@ -158,6 +158,18 @@ A sessão fica num cookie `linx_session` **httpOnly, SameSite=Lax e cifrado**
 website e **não é compartilhado com o app da plataforma**. Por isso o callback
 redireciona para `POST_LOGIN_REDIRECT` (same-origin) e não para o app.
 
+O `redirect_uri` do OAuth é calculado a partir da **origem da requisição**
+(`X-Forwarded-Host`/`Host`), validada contra uma allowlist: `SITE_URL`,
+`ALLOWED_ORIGINS` e os domínios `VERCEL_*` injetados pela plataforma. Assim o
+login funciona tanto em produção quanto nos **preview deployments** da Vercel
+sem reconfigurar `SITE_URL`. Host fora da allowlist cai de volta para `SITE_URL`
+(evita host header injection).
+
+> No Auth0, cadastre as **Allowed Callback URLs** e **Allowed Logout URLs**
+> cobrindo produção e previews, ex.:
+> `https://SEU-SITE.vercel.app/api/auth/callback` e
+> `https://*-SEU-TIME.vercel.app/api/auth/callback`.
+
 > Integração de SSO entre website e app é trabalho futuro. O app atual usa
 > autenticação própria e não lê este cookie.
 

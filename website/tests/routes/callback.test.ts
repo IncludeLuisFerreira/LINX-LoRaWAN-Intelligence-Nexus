@@ -4,6 +4,7 @@ import { createCookies, createRedirect } from '../../src/test/context';
 vi.mock('../../src/lib/auth0', () => ({
   exchangeCode: vi.fn(),
   verifyIdToken: vi.fn(),
+  callbackUrl: (origin: string) => `${origin}/api/auth/callback`,
 }));
 
 vi.mock('../../src/lib/session', () => ({
@@ -26,6 +27,7 @@ function context(
     url.searchParams.set(key, value);
   }
   return {
+    request: new Request(url),
     url,
     cookies: cookies.cookies,
     redirect: createRedirect(),

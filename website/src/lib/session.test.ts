@@ -40,9 +40,10 @@ describe('session', () => {
     const { cookies, store } = createCookies();
     await setSession(cookies, USER);
 
-    const token = store.get(COOKIE_NAME)!;
-    const tampered = `${token.slice(0, -1)}${token.endsWith('a') ? 'b' : 'a'}`;
-    store.set(COOKIE_NAME, tampered);
+    const parts = store.get(COOKIE_NAME)!.split('.');
+    const ciphertext = parts[3];
+    parts[3] = `${ciphertext[0] === 'A' ? 'B' : 'A'}${ciphertext.slice(1)}`;
+    store.set(COOKIE_NAME, parts.join('.'));
 
     expect(await getSession(cookies)).toBeNull();
   });
