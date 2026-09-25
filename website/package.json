@@ -8,11 +8,14 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "start": "node ./dist/server/entry.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/node": "^11.1.6",
     "astro": "^7.3.4",
+    "jose": "^6.2.12",
     "three": "^0.186.1"
   },
   "allowScripts": {

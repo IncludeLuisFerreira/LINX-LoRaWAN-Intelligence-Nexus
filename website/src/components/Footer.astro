@@ -5,6 +5,8 @@
  * Rodapé escuro com 4 colunas (marca + Produto/Soluções/Empresa)
  * e barra inferior com copyright e links legais.
  */
+import linxSimbolo from '../img/LINX-simbolo.svg';
+
 type FooterColumn = {
   title: string;
   links: { label: string; href: string }[];
@@ -48,9 +50,9 @@ const legalLinks = [
 ];
 
 const socials = [
-  { name: 'LinkedIn', href: 'https://linkedin.com/company/linx', icon: 'linkedin' },
-  { name: 'GitHub', href: 'https://github.com/linx', icon: 'github' },
-  { name: 'X (Twitter)', href: 'https://x.com/linx', icon: 'x' },
+  { name: 'LinkedIn', href: '#', icon: 'linkedin' },
+  { name: 'GitHub', href: 'https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus', icon: 'github' },
+  { name: 'X (Twitter)', href: '#', icon: 'x' },
 ];
 
 const year = new Date().getFullYear();
@@ -61,7 +63,7 @@ const year = new Date().getFullYear();
     <div class="footer__grid">
       <div class="footer__brand">
         <a class="footer__logo" href="/" aria-label="LINX — página inicial">
-          <span class="footer__mark" aria-hidden="true"></span>
+          <img class="footer__mark" src={linxSimbolo.src} alt="" aria-hidden="true" />
           <span class="footer__name">LIN<span class="footer__x">X</span></span>
         </a>
         <p class="footer__tagline">
@@ -143,19 +145,18 @@ const year = new Date().getFullYear();
   .footer__logo {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.65rem;
     text-decoration: none;
   }
 
   .footer__mark {
-    width: 18px;
-    height: 18px;
-    border-radius: 5px;
-    background: var(--color-accent);
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
   }
 
   .footer__name {
-    font-size: 1.375rem;
+    font-size: 1.5rem;
     font-weight: 800;
     color: #fff;
     letter-spacing: -0.03em;
