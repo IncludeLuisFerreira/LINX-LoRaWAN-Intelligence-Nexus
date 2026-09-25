@@ -7,6 +7,8 @@
  * - Botões "Entrar" (outline) e "Criar conta" (teal).
  * - Drawer lateral no mobile.
  */
+import linxSimbolo from '../img/LINX-simbolo.svg';
+
 const navItems = [
   { label: 'Plataforma', href: '#features' },
   { label: 'Como funciona', href: '#how' },
@@ -19,7 +21,7 @@ const navItems = [
 <header class="site-header" id="header">
   <div class="container header__inner">
     <a class="logo" href="/" aria-label="LINX — página inicial">
-      <span class="logo__mark" aria-hidden="true"></span>
+      <img class="logo__mark" src={linxSimbolo.src} alt="" aria-hidden="true" />
       <span class="logo__text">LIN<span class="logo__x">X</span></span>
     </a>
 
@@ -30,8 +32,16 @@ const navItems = [
     </nav>
 
     <div class="auth">
-      <a class="btn btn--outline" href="/login">Entrar</a>
-      <a class="btn btn--primary" href="/signup">Criar conta</a>
+      <div class="auth__group" data-auth-guest>
+        <a class="btn btn--outline" href="/api/auth/login">Entrar</a>
+        <a class="btn btn--primary" href="/api/auth/login?screen_hint=signup">Criar conta</a>
+      </div>
+      <div class="auth__group" data-auth-member hidden>
+        <span class="auth__name" data-auth-name></span>
+        <form action="/api/auth/logout" method="post">
+          <button class="btn btn--outline" type="submit">Sair</button>
+        </form>
+      </div>
     </div>
 
     <button
@@ -51,8 +61,16 @@ const navItems = [
         <a class="drawer__link" href={item.href} data-nav>{item.label}</a>
       ))}
       <div class="drawer__auth">
-        <a class="btn btn--outline" href="/login">Entrar</a>
-        <a class="btn btn--primary" href="/signup">Criar conta</a>
+        <div class="auth__group" data-auth-guest>
+          <a class="btn btn--outline" href="/api/auth/login">Entrar</a>
+          <a class="btn btn--primary" href="/api/auth/login?screen_hint=signup">Criar conta</a>
+        </div>
+        <div class="auth__group" data-auth-member hidden>
+          <span class="auth__name" data-auth-name></span>
+          <form action="/api/auth/logout" method="post">
+            <button class="btn btn--outline" type="submit">Sair</button>
+          </form>
+        </div>
       </div>
     </nav>
   </div>
@@ -88,21 +106,19 @@ const navItems = [
   .logo {
     display: inline-flex;
     align-items: center;
-    gap: 0.55rem;
+    gap: 0.65rem;
     text-decoration: none;
   }
 
   .logo__mark {
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    background: var(--color-accent);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
   }
 
   .logo__text {
     font-weight: 800;
-    font-size: 1.375rem;
+    font-size: 1.5rem;
     letter-spacing: -0.03em;
   }
 
@@ -154,6 +170,26 @@ const navItems = [
     display: flex;
     align-items: center;
     gap: 0.6rem;
+  }
+
+  .auth__group {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .auth__group[hidden] {
+    display: none;
+  }
+
+  .auth__name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .auth__group form {
+    display: inline-flex;
   }
 
   /* --- Hambúrguer --- */
@@ -223,6 +259,19 @@ const navItems = [
     margin-top: 0.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid var(--color-border);
+  }
+
+  .drawer__auth .auth__group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .drawer__auth .auth__name {
+    text-align: center;
+  }
+
+  .drawer__auth .auth__group form {
+    width: 100%;
   }
 
   .drawer__auth .btn {
@@ -303,4 +352,39 @@ const navItems = [
     );
     sections.forEach((section) => observer.observe(section));
   }
+
+  /**
+   * Hidrata o estado de autenticação: consulta /api/auth/me e, se houver
+   * sessão, troca os botões de entrar/criar conta por nome + sair.
+   */
+  const hydrateAuth = async () => {
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { accept: 'application/json' },
+      });
+      if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        user?: { name?: string; nickname?: string; email?: string } | null;
+      };
+      if (!data.user) return;
+
+      document
+        .querySelectorAll<HTMLElement>('[data-auth-guest]')
+        .forEach((el) => (el.hidden = true));
+      document
+        .querySelectorAll<HTMLElement>('[data-auth-member]')
+        .forEach((el) => (el.hidden = false));
+
+      const label =
+        data.user.name || data.user.nickname || data.user.email || 'Minha conta';
+      document
+        .querySelectorAll<HTMLElement>('[data-auth-name]')
+        .forEach((el) => (el.textContent = label));
+    } catch {
+      // Falha silenciosa: mantém o estado deslogado.
+    }
+  };
+
+  hydrateAuth();
 </script>

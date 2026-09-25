@@ -28,6 +28,9 @@ downloads/
 eggs/
 .eggs/
 lib/
+# Exceção: o site Astro (Node) usa src/lib — não é o diretório de pacotes Python
+!website/src/lib/
+!website/src/lib/**
 lib64/
 parts/
 sdist/

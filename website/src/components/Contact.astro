@@ -2,8 +2,8 @@
 /**
  * Contact / CTA final
  * -------------------------------------------------------------
- * Faixa de conversão com captura de e-mail.
- * Envia POST para /api/subscribe (backend a implementar).
+ * Faixa de conversão com CTA para criação de conta via Auth0.
+ * O formulário de e-mail foi removido; o fluxo acontece no Auth0.
  */
 ---
 
@@ -17,19 +17,12 @@
       primeiro sensor hoje.
     </p>
 
-    <form class="cta__form" action="/api/subscribe" method="post" data-reveal>
-      <label class="sr-only" for="cta-email">E-mail</label>
-      <input
-        class="cta__input"
-        id="cta-email"
-        name="email"
-        type="email"
-        placeholder="seu@email.com"
-        autocomplete="email"
-        required
-      />
-      <button class="btn btn--primary" type="submit">Ativar plataforma</button>
-    </form>
+    <div class="cta__actions" data-reveal>
+      <a class="btn btn--primary btn--lg" href="/api/auth/login?screen_hint=signup">
+        Ativar plataforma
+      </a>
+      <a class="btn btn--outline btn--lg" href="/api/auth/login">Entrar</a>
+    </div>
 
     <p class="cta__micro" data-reveal>
       Sem cartão de crédito · Rede de gateways inclusa · Cancelamento a qualquer
@@ -59,32 +52,11 @@
     color: var(--color-text-secondary);
   }
 
-  .cta__form {
+  .cta__actions {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 0.75rem;
-  }
-
-  .cta__input {
-    flex: 1;
-    min-width: 0;
-    padding: 0.95rem 1.25rem;
-    font-family: inherit;
-    font-size: 1rem;
-    color: var(--color-text);
-    background: #fff;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    transition: border-color var(--transition), box-shadow var(--transition);
-  }
-
-  .cta__input::placeholder {
-    color: var(--color-text-muted);
-  }
-
-  .cta__input:focus {
-    outline: none;
-    border-color: var(--color-accent);
-    box-shadow: var(--ring);
   }
 
   .cta__micro {
@@ -94,11 +66,11 @@
   }
 
   @media (max-width: 559px) {
-    .cta__form {
+    .cta__actions {
       flex-direction: column;
     }
 
-    .cta__form .btn {
+    .cta__actions .btn {
       width: 100%;
     }
   }
