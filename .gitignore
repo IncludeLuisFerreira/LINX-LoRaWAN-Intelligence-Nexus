@@ -275,6 +275,9 @@ firmware/
 # generated types
 .astro/
 
+# vercel
+.vercel/
+
 # brainstorming visual companion
 .superpowers/
 

@@ -48,3 +48,15 @@ jobs:
           POST_LOGIN_REDIRECT: /
           SITE_URL: http://localhost:4321
           SESSION_SECRET: ci-session-secret-com-mais-de-32-caracteres
+
+      - name: Build (Vercel adapter)
+        run: npm run build
+        env:
+          VERCEL: '1'
+          AUTH0_DOMAIN: ci.example.auth0.com
+          AUTH0_CLIENT_ID: ci-client-id
+          AUTH0_CLIENT_SECRET: ci-client-secret
+          AUTH0_SCOPE: openid profile email
+          POST_LOGIN_REDIRECT: /
+          SITE_URL: http://localhost:4321
+          SESSION_SECRET: ci-session-secret-com-mais-de-32-caracteres
