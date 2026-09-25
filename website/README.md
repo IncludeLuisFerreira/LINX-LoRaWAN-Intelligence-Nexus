@@ -144,6 +144,31 @@ O comportamento é controlado por atributos de dados:
 
 ---
 
+## Autenticação (Auth0)
+
+O login usa **OAuth2/OIDC com Authorization Code + PKCE** em `/api/auth/*`:
+
+- `GET /api/auth/login` — inicia o fluxo (aceita `screen_hint` e `login_hint`).
+- `GET /api/auth/callback` — valida `state`/`nonce`, troca o code e cria a sessão.
+- `GET /api/auth/me` — retorna o usuário da sessão (ou `401`).
+- `POST /api/auth/logout` — limpa a sessão e encerra no Auth0.
+
+A sessão fica num cookie `linx_session` **httpOnly, SameSite=Lax e cifrado**
+(JWE via `jose`). O cookie é **host-only**: pertence apenas ao domínio do
+website e **não é compartilhado com o app da plataforma**. Por isso o callback
+redireciona para `POST_LOGIN_REDIRECT` (same-origin) e não para o app.
+
+> Integração de SSO entre website e app é trabalho futuro. O app atual usa
+> autenticação própria e não lê este cookie.
+
+As proteções de CSRF das rotas sob demanda usam o `security.checkOrigin` do
+Astro, habilitado explicitamente em `astro.config.mjs`.
+
+Testes: `npm run test:run` (Vitest, alias de `astro:env/server` em
+`src/test/env.ts`).
+
+---
+
 ## Pendências / backend
 
 - **Formulário de contato** (`Contact.astro`) faz `POST /api/subscribe`, que

@@ -4,7 +4,7 @@ import { SESSION_SECRET } from 'astro:env/server';
 import type { Auth0User } from './auth0';
 
 const COOKIE_NAME = 'linx_session';
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 let keyPromise: Promise<Uint8Array> | null = null;
 

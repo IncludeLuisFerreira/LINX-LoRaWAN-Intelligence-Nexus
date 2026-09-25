@@ -8,6 +8,9 @@ export default defineConfig({
   // Apenas as rotas /api/auth/* optam por renderização sob demanda.
   output: 'static',
   adapter: node({ mode: 'standalone' }),
+  // Protege rotas sob demanda contra requisições cross-origin (CSRF).
+  // Explícito para não depender do default entre versões do Astro.
+  security: { checkOrigin: true },
   env: {
     schema: {
       AUTH0_DOMAIN: envField.string({ context: 'server', access: 'secret' }),
@@ -23,7 +26,12 @@ export default defineConfig({
         access: 'secret',
         default: 'openid profile email',
       }),
-      APP_URL: envField.string({ context: 'server', access: 'secret' }),
+      POST_LOGIN_REDIRECT: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+        default: '/',
+      }),
       SITE_URL: envField.string({ context: 'server', access: 'secret' }),
       SESSION_SECRET: envField.string({
         context: 'server',
