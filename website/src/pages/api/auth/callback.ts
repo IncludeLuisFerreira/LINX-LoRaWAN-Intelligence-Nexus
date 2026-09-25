@@ -1,21 +1,28 @@
 import type { APIRoute } from 'astro';
-import { APP_URL } from 'astro:env/server';
+import { POST_LOGIN_REDIRECT } from 'astro:env/server';
 import { exchangeCode, verifyIdToken } from '../../../lib/auth0';
+import { safeRelativePath } from '../../../lib/redirect';
 import { setSession } from '../../../lib/session';
 
 export const prerender = false;
 
 export const GET: APIRoute = async ({ url, cookies, redirect }) => {
-  const oauthError = url.searchParams.get('error');
-  if (oauthError) {
-    return new Response(`Falha na autenticação: ${oauthError}`, { status: 400 });
-  }
-
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
+  const oauthError = url.searchParams.get('error');
+
   const expectedState = cookies.get('linx_oauth_state')?.value;
   const nonce = cookies.get('linx_oauth_nonce')?.value;
   const codeVerifier = cookies.get('linx_oauth_verifier')?.value;
+
+  cookies.delete('linx_oauth_state', { path: '/' });
+  cookies.delete('linx_oauth_nonce', { path: '/' });
+  cookies.delete('linx_oauth_verifier', { path: '/' });
+
+  if (oauthError) {
+    console.error('[auth/callback] Auth0 retornou erro:', oauthError);
+    return new Response('Não foi possível concluir o login.', { status: 400 });
+  }
 
   if (
     !code ||
@@ -38,9 +45,5 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
     return new Response('Não foi possível concluir o login.', { status: 401 });
   }
 
-  cookies.delete('linx_oauth_state', { path: '/' });
-  cookies.delete('linx_oauth_nonce', { path: '/' });
-  cookies.delete('linx_oauth_verifier', { path: '/' });
-
-  return redirect(APP_URL);
+  return redirect(safeRelativePath(POST_LOGIN_REDIRECT));
 };
