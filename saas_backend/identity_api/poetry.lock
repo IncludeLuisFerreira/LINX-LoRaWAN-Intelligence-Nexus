@@ -770,24 +770,6 @@ mypy-extensions = ">=1.1.0"
 colors = ["colorama"]
 
 [[package]]
-name = "jinja2"
-version = "3.1.6"
-description = "A very fast and expressive template engine."
-optional = false
-python-versions = ">=3.7"
-groups = ["main"]
-files = [
-    {file = "jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"},
-    {file = "jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"},
-]
-
-[package.dependencies]
-MarkupSafe = ">=2.0"
-
-[package.extras]
-i18n = ["Babel (>=2.7)"]
-
-[[package]]
 name = "librt"
 version = "0.15.0"
 description = "Mypyc runtime library"
@@ -2417,4 +2399,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "2bd6906be9ef7e3cd46bba1179ab2fc005138a87680ebd8a46e82e436c25f512"
+content-hash = "060f8b90f6b659c08cda2baf81b1099dee9b9500d241734ec52bbc5573235441"
