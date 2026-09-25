@@ -24,6 +24,7 @@
     "esbuild": true
   },
   "devDependencies": {
+    "@astrojs/vercel": "^11.0.11",
     "vitest": "^5.0.2"
   }
 }

@@ -1,13 +1,18 @@
 // @ts-check
 import { defineConfig, envField } from 'astro/config';
 import node from '@astrojs/node';
+import vercel from '@astrojs/vercel';
+
+// Na Vercel usamos o adapter oficial (Build Output API + funções).
+// Fora dela (Docker/nginx/VPS) mantemos o servidor Node standalone.
+const isVercel = Boolean(process.env.VERCEL);
 
 // https://astro.build/config
 export default defineConfig({
   // A home e as páginas de marketing continuam estáticas (prerender).
   // Apenas as rotas /api/auth/* optam por renderização sob demanda.
   output: 'static',
-  adapter: node({ mode: 'standalone' }),
+  adapter: isVercel ? vercel() : node({ mode: 'standalone' }),
   // Protege rotas sob demanda contra requisições cross-origin (CSRF).
   // Explícito para não depender do default entre versões do Astro.
   security: { checkOrigin: true },
