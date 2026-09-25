@@ -1,0 +1,8 @@
+export const AUTH0_DOMAIN = 'tenant.example.auth0.com';
+export const AUTH0_CLIENT_ID = 'test-client-id';
+export const AUTH0_CLIENT_SECRET = 'test-client-secret';
+export const AUTH0_AUDIENCE = '';
+export const AUTH0_SCOPE = 'openid profile email';
+export const SITE_URL = 'http://localhost:4321';
+export const POST_LOGIN_REDIRECT = '/';
+export const SESSION_SECRET = 'test-session-secret-com-32-caracteres-ou-mais';

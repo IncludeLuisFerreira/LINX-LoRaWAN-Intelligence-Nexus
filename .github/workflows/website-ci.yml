@@ -1,0 +1,50 @@
+name: Website CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - "website/**"
+      - ".github/workflows/website-ci.yml"
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - "website/**"
+      - ".github/workflows/website-ci.yml"
+
+jobs:
+  test-and-build:
+    name: Test & Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./website
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: './website/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:run
+
+      - name: Build
+        run: npm run build
+        env:
+          AUTH0_DOMAIN: ci.example.auth0.com
+          AUTH0_CLIENT_ID: ci-client-id
+          AUTH0_CLIENT_SECRET: ci-client-secret
+          AUTH0_SCOPE: openid profile email
+          POST_LOGIN_REDIRECT: /
+          SITE_URL: http://localhost:4321
+          SESSION_SECRET: ci-session-secret-com-mais-de-32-caracteres
