@@ -45,7 +45,7 @@
 - [ ] [#36 feat(backend): pipeline Mosquitto → mqtt_consumer → POST /ingest → TimescaleDB](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/36)
 - [ ] [#37 feat(devops): deploy Client Agent on second EC2 (or port 8001)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/37)
 - [ ] [#38 feat(backend): log AppConfig received via gRPC (proof of communication)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/38)
-- [ ] [#39 docs(backend): README with curl for create tenant + ingest telemetry](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/39)
+- [x] [#39 docs(backend): README with curl for create tenant + ingest telemetry](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/39)
 
 ## Sprint 3 — ChirpStack, Uplink Ponta-a-Ponta e WebSocket
 
