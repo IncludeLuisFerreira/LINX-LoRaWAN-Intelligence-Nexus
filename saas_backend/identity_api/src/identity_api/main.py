@@ -11,6 +11,7 @@ app = FastAPI(title="LINX SAAS Backend")
 
 
 @app.get("/health")
+@app.head("/health", include_in_schema=False)
 def health(response: Response, db: Session = Depends(get_db)) -> dict:
     try:
         db.execute(text("SELECT 1"))

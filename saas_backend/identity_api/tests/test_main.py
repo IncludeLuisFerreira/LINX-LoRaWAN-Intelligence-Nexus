@@ -32,6 +32,16 @@ def test_health_ok_when_db_is_up():
     assert response.json() == {"status": "ok", "db": True}
 
 
+def test_health_supports_head():
+    _override_db(_OkSession())
+    try:
+        response = client.head("/health")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+
 def test_health_degraded_when_db_is_down():
     _override_db(_BrokenSession())
     try:
