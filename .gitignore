@@ -256,6 +256,9 @@ redisdata/
 data/
 lorawan-devices/
 
+# Certificados TLS gerados localmente (self-signed)
+deploy/certs/
+
 # === Logs ===
 *.log
 

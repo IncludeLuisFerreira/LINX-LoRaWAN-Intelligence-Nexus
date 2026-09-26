@@ -202,3 +202,32 @@ Resposta esperada (`200`):
 3. `cd saas_backend && cp .env.example .env` e defina uma senha forte.
 4. `./scripts/deploy.sh`.
 5. Verifique de fora: `curl -i http://<ec2-ip>:8000/health`.
+
+### TLS na borda (nginx)
+
+A stack `deploy/docker-compose.yml` sobe um serviço `nginx` que termina TLS na
+porta `443` e redireciona `80 → 443`. O certificado é **self-signed** (dev).
+
+```bash
+cd deploy
+export TLS_CERT_HOST=<IP-publico-ou-hostname-da-ec2>
+./scripts/gen-self-signed-cert.sh
+docker compose up -d --build
+```
+
+Gere o certificado **antes** de subir a stack: sem `deploy/certs/*.pem` o
+container `nginx` falha ao iniciar.
+
+Verificação:
+
+```bash
+curl -kI https://<IP-publico-ou-hostname>/health   # 200
+curl -I  http://<IP-publico-ou-hostname>/health    # 301 Location: https://...
+curl -vkI https://<IP-publico-ou-hostname>/health  # handshake TLS visível
+```
+
+> `-k` é necessário porque o certificado é self-signed; o navegador exibirá um
+> aviso de certificado não confiável. As portas `80` e `443` precisam estar
+> liberadas no Security Group da EC2.
+
+Isto fecha a **RNF-004** (HTTPS na borda) da Sprint 2.
