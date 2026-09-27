@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from uuid import UUID
 
 from chirpstack_api import api
@@ -16,10 +17,23 @@ from identity_api.config import settings
 router = APIRouter(prefix="/api/v1", tags=["Device"])
 
 
-def get_chirpstack_client() -> ChirpStackClient:
-    return ChirpStackClient(
+def get_chirpstack_client() -> Generator[ChirpStackClient, None, None]:
+    client = ChirpStackClient(
         settings.chirpstack_host, settings.chirpstack_api_token
     )
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+def _delete_device_best_effort(
+    chirpstack: ChirpStackClient, dev_eui: str
+) -> None:
+    try:
+        chirpstack.delete_device(dev_eui)
+    except ExternalServiceError:
+        pass
 
 
 @router.get(
@@ -49,6 +63,12 @@ def create_device(
     db: Session = Depends(get_db),
     chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
 ):
+    if not settings.chirpstack_device_profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ChirpStack device profile is not configured!",
+        )
+
     application = db.get(Application, payload.app_id)
     if not application:
         raise HTTPException(
@@ -74,7 +94,9 @@ def create_device(
     )
     try:
         chirpstack.create_device(chirpstack_device)
+        chirpstack.create_device_keys(payload.dev_eui, payload.app_key)
     except ExternalServiceError as exc:
+        _delete_device_best_effort(chirpstack, payload.dev_eui)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to provision device in ChirpStack: {exc.message}",
@@ -91,6 +113,7 @@ def create_device(
         db.commit()
     except IntegrityError:
         db.rollback()
+        _delete_device_best_effort(chirpstack, payload.dev_eui)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Device already exists!",

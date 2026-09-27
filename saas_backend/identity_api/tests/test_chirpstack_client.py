@@ -95,3 +95,50 @@ def test_delete_device_wraps_rpc_error(monkeypatch):
     assert error.operation == "delete_device"
     assert error.message == "device already exists"
     assert isinstance(error.original_error, grpc.RpcError)
+
+
+def test_create_device_keys_propagates_dev_eui_app_key_and_token(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    monkeypatch.setattr(api, "DeviceServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    client.create_device_keys(
+        "1122334455667788", "00112233445566778899aabbccddeeff"
+    )
+
+    fake_stub.CreateKeys.assert_called_once()
+    args, kwargs = fake_stub.CreateKeys.call_args
+    assert args[0].device_keys.dev_eui == "1122334455667788"
+    assert args[0].device_keys.nwk_key == "00112233445566778899aabbccddeeff"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+
+
+def test_create_device_keys_wraps_rpc_error(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.CreateKeys.side_effect = _FakeRpcError()
+    monkeypatch.setattr(api, "DeviceServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    with pytest.raises(ExternalServiceError) as exc_info:
+        client.create_device_keys(
+            "1122334455667788", "00112233445566778899aabbccddeeff"
+        )
+
+    error = exc_info.value
+    assert error.service == "chirpstack"
+    assert error.operation == "create_device_keys"
+    assert error.message == "device already exists"
+    assert isinstance(error.original_error, grpc.RpcError)
+
+
+def test_close_closes_channel():
+    fake_channel = MagicMock()
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+    client.close()
+
+    fake_channel.close.assert_called_once()

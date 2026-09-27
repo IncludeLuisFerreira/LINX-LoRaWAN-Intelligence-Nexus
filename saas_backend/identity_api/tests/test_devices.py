@@ -11,6 +11,7 @@ from linx_shared.models.device import Device
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
+from identity_api.config import settings
 from identity_api.main import app
 from identity_api.routes.devices import get_chirpstack_client
 
@@ -21,12 +22,19 @@ class FakeChirpStackClient:
     def __init__(self) -> None:
         self.created: list[api.Device] = []
         self.deleted: list[str] = []
+        self.created_keys: list[tuple[str, str]] = []
         self.error: ExternalServiceError | None = None
+        self.keys_error: ExternalServiceError | None = None
 
     def create_device(self, device: api.Device) -> None:
         if self.error is not None:
             raise self.error
         self.created.append(device)
+
+    def create_device_keys(self, dev_eui: str, app_key: str) -> None:
+        if self.keys_error is not None:
+            raise self.keys_error
+        self.created_keys.append((dev_eui, app_key))
 
     def delete_device(self, dev_eui: str) -> None:
         if self.error is not None:
@@ -48,12 +56,24 @@ class DeviceContext:
         return self.chirpstack.deleted
 
     @property
+    def created_keys(self) -> list[tuple[str, str]]:
+        return self.chirpstack.created_keys
+
+    @property
     def error(self) -> ExternalServiceError | None:
         return self.chirpstack.error
 
     @error.setter
     def error(self, value: ExternalServiceError | None) -> None:
         self.chirpstack.error = value
+
+    @property
+    def keys_error(self) -> ExternalServiceError | None:
+        return self.chirpstack.keys_error
+
+    @keys_error.setter
+    def keys_error(self, value: ExternalServiceError | None) -> None:
+        self.chirpstack.keys_error = value
 
     def count_devices(self) -> int:
         session = Session(
@@ -67,8 +87,13 @@ class DeviceContext:
 
 
 @pytest.fixture(autouse=True)
-def chirpstack() -> Generator[DeviceContext, None, None]:
+def chirpstack(monkeypatch) -> Generator[DeviceContext, None, None]:
     """Isola o banco em uma transação revertida e mocka o ChirpStack."""
+    monkeypatch.setattr(
+        settings,
+        "chirpstack_device_profile_id",
+        "11111111-1111-1111-1111-111111111111",
+    )
     connection = engine.connect()
     transaction = connection.begin()
 
@@ -218,6 +243,51 @@ def test_create_device_chirpstack_failure_returns_502_and_does_not_save(
     assert response.json() == {
         "detail": "Failed to provision device in ChirpStack: boom"
     }
+    assert chirpstack.count_devices() == 0
+
+
+def test_create_device_provisions_keys_in_chirpstack(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    client.post("/api/v1/devices", json=_payload(app_id))
+
+    assert chirpstack.created_keys == [
+        ("1122334455667788", "00112233445566778899aabbccddeeff")
+    ]
+
+
+def test_create_device_keys_failure_compensates_and_returns_502(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    chirpstack.keys_error = ExternalServiceError(
+        "chirpstack", "create_device_keys", "boom"
+    )
+
+    response = client.post("/api/v1/devices", json=_payload(app_id))
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to provision device in ChirpStack: boom"
+    }
+    assert chirpstack.deleted == ["1122334455667788"]
+    assert chirpstack.count_devices() == 0
+
+
+def test_create_device_missing_device_profile_returns_500(
+    chirpstack, monkeypatch
+):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    monkeypatch.setattr(settings, "chirpstack_device_profile_id", "")
+
+    response = client.post("/api/v1/devices", json=_payload(app_id))
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "ChirpStack device profile is not configured!"
+    }
+    assert chirpstack.created == []
     assert chirpstack.count_devices() == 0
 
 

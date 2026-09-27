@@ -39,3 +39,21 @@ class ChirpStackClient:
                 message=str(exc.details()),
                 original_error=exc,
             ) from exc
+
+    def create_device_keys(self, dev_eui: str, app_key: str) -> None:
+        stub = api.DeviceServiceStub(self._channel)
+        request = api.CreateDeviceKeysRequest(
+            device_keys=api.DeviceKeys(dev_eui=dev_eui, nwk_key=app_key)
+        )
+        try:
+            stub.CreateKeys(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="create_device_keys",
+                message=str(exc.details()),
+                original_error=exc,
+            ) from exc
+
+    def close(self) -> None:
+        self._channel.close()
