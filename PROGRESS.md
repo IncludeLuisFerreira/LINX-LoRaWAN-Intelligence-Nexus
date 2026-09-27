@@ -54,7 +54,7 @@
 - [ ] [#42 feat(frontend): dashboard line chart (Recharts/Chart.js) consuming REST history](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/42)
 - [ ] [#43 feat(frontend): connect dashboard to Client Agent WebSocket (real-time)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/43)
 - [ ] [#44 feat(frontend): polling fallback GET /telemetry every 5s](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/44)
-- [ ] [#45 feat(backend): ChirpStack gRPC client (chirpstack-api)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/45)
+- [x] [#45 feat(backend): ChirpStack gRPC client (chirpstack-api)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/45)
 - [ ] [#46 feat(backend): POST /api/v1/devices (validate, save, provision ChirpStack)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/46)
 - [ ] [#47 feat(backend): routing service (uplink MQTT → device_routes → client agent)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/47)
 - [ ] [#48 feat(devops): ChirpStack Application publishing to uplink topic](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/48)
