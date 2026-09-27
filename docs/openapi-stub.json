@@ -506,6 +506,128 @@
           }
         }
       }
+    },
+    "/api/v1/devices": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "List Devices",
+        "operationId": "list_devices_api_v1_devices_get",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceResponse"
+                  },
+                  "title": "Response List Devices Api V1 Devices Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Create Device",
+        "operationId": "create_device_api_v1_devices_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}": {
+      "delete": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Delete Device",
+        "operationId": "delete_device_api_v1_devices__device_id__delete",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -601,6 +723,80 @@
         },
         "type": "object",
         "title": "ApplicationUpdate"
+      },
+      "DeviceCreate": {
+        "properties": {
+          "dev_eui": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{16}$",
+            "title": "Dev Eui"
+          },
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "App Id"
+          },
+          "join_eui": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{16}$",
+            "title": "Join Eui"
+          },
+          "app_key": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{32}$",
+            "title": "App Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dev_eui",
+          "app_id",
+          "join_eui",
+          "app_key"
+        ],
+        "title": "DeviceCreate"
+      },
+      "DeviceResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "dev_eui": {
+            "type": "string",
+            "title": "Dev Eui"
+          },
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "App Id"
+          },
+          "join_eui": {
+            "type": "string",
+            "title": "Join Eui"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dev_eui",
+          "app_id",
+          "join_eui",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DeviceResponse"
       },
       "HTTPValidationError": {
         "properties": {

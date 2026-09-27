@@ -62,3 +62,36 @@ def test_create_device_wraps_rpc_error(monkeypatch):
     assert error.operation == "create_device"
     assert error.message == "device already exists"
     assert isinstance(error.original_error, grpc.RpcError)
+
+
+def test_delete_device_propagates_dev_eui_and_token(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    monkeypatch.setattr(api, "DeviceServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    client.delete_device("1122334455667788")
+
+    fake_stub.Delete.assert_called_once()
+    args, kwargs = fake_stub.Delete.call_args
+    assert args[0].dev_eui == "1122334455667788"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+
+
+def test_delete_device_wraps_rpc_error(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.Delete.side_effect = _FakeRpcError()
+    monkeypatch.setattr(api, "DeviceServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    with pytest.raises(ExternalServiceError) as exc_info:
+        client.delete_device("1122334455667788")
+
+    error = exc_info.value
+    assert error.service == "chirpstack"
+    assert error.operation == "delete_device"
+    assert error.message == "device already exists"
+    assert isinstance(error.original_error, grpc.RpcError)

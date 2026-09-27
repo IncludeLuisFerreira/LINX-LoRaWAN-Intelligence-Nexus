@@ -26,3 +26,16 @@ class ChirpStackClient:
                 message=str(exc.details()),
                 original_error=exc,
             ) from exc
+
+    def delete_device(self, dev_eui: str) -> None:
+        stub = api.DeviceServiceStub(self._channel)
+        request = api.DeleteDeviceRequest(dev_eui=dev_eui)
+        try:
+            stub.Delete(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="delete_device",
+                message=str(exc.details()),
+                original_error=exc,
+            ) from exc

@@ -14,7 +14,7 @@ saas_backend/
 │   └── src/linx_shared/
 │       ├── core/config.py     # Settings (DATABASE_URL, DB_CONNECT_TIMEOUT)
 │       ├── db/                # engine, SessionLocal, get_db, Base
-│       ├── models/            # tenant, application, user, tenant_user, device_routes
+│       ├── models/            # tenant, application, user, tenant_user, device_routes, devices
 │       ├── schemas/           # schemas Pydantic da API
 │       └── grpc/              # stubs do contrato AgentBridge
 │
@@ -64,6 +64,9 @@ Serviço FastAPI com os recursos de identidade/catálogo:
 |  `GET`  | `/api/v1/tenant/{id}/applications/{app_id}` | Busca uma application.                |
 | `PATCH` | `/api/v1/tenant/{id}/applications/{app_id}` | Atualiza parcialmente uma application.|
 | `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}` | Remove uma application (`204`).       |
+| `POST`  | `/api/v1/devices`                          | Cria um device (`201`) e provisiona no ChirpStack. |
+|  `GET`  | `/api/v1/devices?app_id={id}`              | Lista os devices de uma application.               |
+| `DELETE`| `/api/v1/devices/{id}`                     | Remove um device (`204`) e deleta no ChirpStack.   |
 
 ### `agent_bridge` (gRPC — porta 50051)
 
@@ -189,6 +192,9 @@ Resposta esperada (`200`):
 | `DB_CONNECT_TIMEOUT` | Timeout de conexão com o banco (segundos).                       | `5`                             |
 | `GRPC_HOST`          | Endereço de bind do `agent_bridge`.                              | `0.0.0.0`                       |
 | `GRPC_PORT`          | Porta do `agent_bridge`.                                         | `50051`                         |
+| `CHIRPSTACK_HOST`    | Endereço gRPC do ChirpStack.                                     | `localhost:8080`                |
+| `CHIRPSTACK_API_TOKEN` | Token Bearer de acesso à API do ChirpStack.                    | *(obrigatório)*                 |
+| `CHIRPSTACK_DEVICE_PROFILE_ID` | UUID do Device Profile usado ao provisionar devices.  | *(vazio)*                       |
 
 > **Atenção (P0):** o gRPC ainda não tem autenticação e `GetAppConfig` devolve
 > usuário/senha do Postgres. Restrinja a porta `50051` no Security Group ao IP
