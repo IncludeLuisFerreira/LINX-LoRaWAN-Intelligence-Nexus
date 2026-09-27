@@ -1,5 +1,6 @@
 from linx_shared.db.base_class import Base
 from linx_shared.models.application import Application
+from linx_shared.models.device import Device
 from linx_shared.models.device_route import DeviceRoute
 from linx_shared.models.tenant import Tenant
 from linx_shared.models.tenant_user import TenantUser
@@ -12,4 +13,5 @@ __all__ = [
     "User",
     "TenantUser",
     "DeviceRoute",
+    "Device",
 ]
