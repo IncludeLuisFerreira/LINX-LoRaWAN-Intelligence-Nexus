@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from identity_api.routes.application import router as application_router
+from identity_api.routes.devices import router as devices_router
 from identity_api.routes.tenant import router
 
 app = FastAPI(title="LINX SAAS Backend")
@@ -30,3 +31,4 @@ def health(response: Response, db: Session = Depends(get_db)) -> dict:
 
 app.include_router(router)
 app.include_router(application_router)
+app.include_router(devices_router)

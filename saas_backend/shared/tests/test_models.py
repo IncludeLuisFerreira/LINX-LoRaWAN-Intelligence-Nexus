@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from linx_shared.models import (
     Application,
     Base,
+    Device,
     DeviceRoute,
     Tenant,
     TenantUser,
@@ -17,6 +18,7 @@ def test_all_tables_registered():
     assert set(Base.metadata.tables) == {
         "application",
         "device_routes",
+        "devices",
         "tenant",
         "tenant_user",
         "user",
@@ -24,7 +26,7 @@ def test_all_tables_registered():
 
 
 def test_models_have_uuid_pk():
-    for model in (Tenant, Application, User, DeviceRoute):
+    for model in (Tenant, Application, User, DeviceRoute, Device):
         pk = list(model.__table__.primary_key.columns)[0]
         assert pk.name == "id"
         assert isinstance(pk.type, PGUUID)
@@ -55,6 +57,18 @@ def test_device_route_application_foreign_key():
 def test_device_route_application_relationship():
     assert DeviceRoute.application.property.mapper.class_ is Application
     assert Application.device_routes.property.mapper.class_ is DeviceRoute
+
+
+def test_device_dev_eui_is_unique_and_indexed():
+    column = Device.__table__.c.dev_eui
+    assert column.unique is True
+    assert column.index is True
+
+
+def test_device_application_foreign_key():
+    fk = list(Device.__table__.foreign_keys)[0]
+    assert fk.target_fullname == "application.id"
+    assert fk.ondelete == "CASCADE"
 
 
 def test_tenant_application_relationship():
@@ -90,6 +104,7 @@ def test_db_base_import_registers_models():
         check=True,
     )
     expected = (
-        "['application', 'device_routes', 'tenant', 'tenant_user', 'user']"
+        "['application', 'device_routes', 'devices', 'tenant', "
+        "'tenant_user', 'user']"
     )
     assert result.stdout.strip() == expected
