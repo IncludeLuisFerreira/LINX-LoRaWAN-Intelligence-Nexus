@@ -141,6 +141,32 @@ services:
     ports:
       - "${TENANT_PORT:-8002}:8002"
 
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ../infra/configuration/mosquitto/config:/mosquitto/config:ro
+
+  routing:
+    build:
+      context: ../saas_backend/.
+      dockerfile: routing/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mosquitto}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
+      - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
+      - HTTP_TIMEOUT_SECONDS=${HTTP_TIMEOUT_SECONDS:-5}
+    depends_on:
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+
 volumes:
   pgdata:
   timescaledb_data:
