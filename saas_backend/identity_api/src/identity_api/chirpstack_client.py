@@ -1,6 +1,5 @@
 import grpc
 from chirpstack_api import api
-
 from linx_shared.core.exceptions import ExternalServiceError
 
 
