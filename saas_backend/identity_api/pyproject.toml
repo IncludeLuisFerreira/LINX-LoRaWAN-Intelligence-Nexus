@@ -23,6 +23,7 @@ sqlalchemy = ">=2.0.52,<3.0.0"
 psycopg = { version = ">=3.3.4,<4.0.0", extras = ["binary"] }
 alembic = ">=1.19.1,<2.0.0"
 pydantic = ">=2.13.5,<3.0.0"
+chirpstack-api = "^4.19.0"
 
 [dependency-groups]
 dev = [
@@ -53,6 +54,10 @@ line_length = 79
 
 [[tool.mypy.overrides]]
 module = ["grpc", "grpc.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["chirpstack_api", "chirpstack_api.*"]
 ignore_missing_imports = true
 
 [tool.taskipy.tasks]
