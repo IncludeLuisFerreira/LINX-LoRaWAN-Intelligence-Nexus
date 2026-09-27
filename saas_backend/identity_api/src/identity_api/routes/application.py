@@ -25,9 +25,12 @@ def create_application(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    tenant = db.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found!")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found!",
+        )
 
     new_application = Application(
         tenant_id=tenant_id,
@@ -44,12 +47,17 @@ def create_application(
 
 
 @router.get(
-    "/{tenant_id}/applications", response_model=list[ApplicationResponse]
+    "/{tenant_id}/applications",
+    status_code=status.HTTP_200_OK,
+    response_model=list[ApplicationResponse],
 )
 def list_applications(tenant_id: UUID, db: Session = Depends(get_db)):
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    tenant = db.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found!")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found!",
+        )
 
     applications = (
         db.query(Application).filter(Application.tenant_id == tenant_id).all()
@@ -59,30 +67,31 @@ def list_applications(tenant_id: UUID, db: Session = Depends(get_db)):
 
 @router.get(
     "/{tenant_id}/applications/{application_id}",
+    status_code=status.HTTP_200_OK,
     response_model=ApplicationResponse,
 )
 def get_application(
     tenant_id: UUID, application_id: UUID, db: Session = Depends(get_db)
 ):
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    tenant = db.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found!")
-
-    application = (
-        db.query(Application)
-        .filter(
-            Application.id == application_id,
-            Application.tenant_id == tenant_id,
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found!",
         )
-        .first()
-    )
-    if not application:
-        raise HTTPException(status_code=404, detail="Application not found!")
+
+    application = db.get(Application, application_id)
+    if not application or application.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found!",
+        )
     return application
 
 
 @router.patch(
     "/{tenant_id}/applications/{application_id}",
+    status_code=status.HTTP_200_OK,
     response_model=ApplicationResponse,
 )
 def update_application(
@@ -91,20 +100,19 @@ def update_application(
     payload: ApplicationUpdate,
     db: Session = Depends(get_db),
 ):
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    tenant = db.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found!")
-
-    application = (
-        db.query(Application)
-        .filter(
-            Application.id == application_id,
-            Application.tenant_id == tenant_id,
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found!",
         )
-        .first()
-    )
-    if not application:
-        raise HTTPException(status_code=404, detail="Application not found!")
+
+    application = db.get(Application, application_id)
+    if not application or application.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found!",
+        )
 
     update_data = payload.model_dump(exclude_unset=True)
 
@@ -123,20 +131,19 @@ def update_application(
 def delete_application(
     tenant_id: UUID, application_id: UUID, db: Session = Depends(get_db)
 ):
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    tenant = db.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found!")
-
-    application = (
-        db.query(Application)
-        .filter(
-            Application.id == application_id,
-            Application.tenant_id == tenant_id,
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found!",
         )
-        .first()
-    )
-    if not application:
-        raise HTTPException(status_code=404, detail="Application not found!")
+
+    application = db.get(Application, application_id)
+    if not application or application.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found!",
+        )
 
     db.delete(application)
     db.commit()
