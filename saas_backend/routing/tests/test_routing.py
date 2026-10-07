@@ -348,3 +348,50 @@ def test_handle_uplink_invalid_topic_does_not_route(monkeypatch):
     router._handle_uplink("weird/topic", b'{"a": 1}')
 
     fake_route_uplink.assert_not_called()
+
+
+def test_handle_uplink_non_dict_json_does_not_route(monkeypatch, caplog):
+    router = _router_with_mock_client()
+    fake_route_uplink = MagicMock()
+    monkeypatch.setattr("routing.routing.route_uplink", fake_route_uplink)
+
+    with caplog.at_level("WARNING"):
+        router._handle_uplink("application/1/device/dev1/event/up", b"[1, 2]")
+
+    fake_route_uplink.assert_not_called()
+    assert "não é um objeto JSON" in caplog.text
+
+
+def test_worker_processes_queue_item(monkeypatch):
+    router = _router_with_mock_client()
+    seen = {}
+
+    def fake_route_uplink(dev_eui, payload, **kwargs):
+        seen["dev_eui"] = dev_eui
+        seen["payload"] = payload
+        router._stop_event.set()
+
+    monkeypatch.setattr("routing.routing.route_uplink", fake_route_uplink)
+
+    router._q.put(
+        (
+            "application/1/device/dev1/event/up",
+            b'{"dev_eui": "dev1", "payload": {"t": 20}}',
+        )
+    )
+
+    router._worker()
+
+    assert seen["dev_eui"] == "dev1"
+    assert seen["payload"] == {"dev_eui": "dev1", "payload": {"t": 20}}
+    assert router._q.qsize() == 0
+
+
+def test_stop_disconnects_and_joins():
+    router = _router_with_mock_client()
+
+    router.stop()
+
+    assert router._stop_event.is_set()
+    router.client.disconnect.assert_called_once()
+    router.http_client.close.assert_called_once()

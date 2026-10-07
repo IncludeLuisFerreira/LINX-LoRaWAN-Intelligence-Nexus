@@ -3,6 +3,7 @@
 import json
 import logging
 import queue
+import signal
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -38,6 +39,10 @@ def build_ingest_payload(
 ) -> dict[str, Any]:
     """Mapeia um evento de uplink do ChirpStack para o contrato do /ingest."""
     obj = event.get("object")
+    if not isinstance(obj, dict):
+        logger.warning(
+            "Evento sem 'object' para o dev_eui %s; payload vazio", dev_eui
+        )
     payload = obj if isinstance(obj, dict) else {}
     body: dict[str, Any] = {"dev_eui": dev_eui, "payload": payload}
     rx_info = event.get("rxInfo")
@@ -194,6 +199,12 @@ class UplinkRouter:
             logger.warning("Payload MQTT inválido, ignorando: %s", exc)
             return
 
+        if not isinstance(event, dict):
+            logger.warning(
+                "Payload MQTT não é um objeto JSON, ignorando: %r", event
+            )
+            return
+
         route_uplink(
             dev_eui,
             event,
@@ -244,7 +255,15 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    UplinkRouter().start()
+    router = UplinkRouter()
+
+    def _shutdown(signum, frame):
+        logger.info("Sinal %s recebido; encerrando...", signum)
+        router.stop()
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+    router.start()
 
 
 if __name__ == "__main__":
