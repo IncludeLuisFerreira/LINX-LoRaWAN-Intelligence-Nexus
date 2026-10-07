@@ -103,7 +103,7 @@
   [integration.mqtt]
     server="tcp://$MQTT_BROKER_HOST:1883/"
     json=true
-    event_topic_template="application/{{ .ApplicationID }}/device/{{ .DevEUI }}/event/{{ .EventType }}"
+    event_topic="application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
 
 # Gateway backend configuration.
 [gateway.backend]
