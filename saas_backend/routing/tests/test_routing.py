@@ -155,6 +155,53 @@ def test_route_uplink_post_failure_logs_and_returns_false(caplog):
     assert "Falha ao encaminhar" in caplog.text
 
 
+def test_route_uplink_rejects_non_http_scheme(caplog):
+    route = SimpleNamespace(agent_endpoint="ftp://agent:21")
+    factory = _session_factory_returning(route)
+    http = _ok_http()
+
+    with caplog.at_level("WARNING"):
+        assert (
+            route_uplink("dev1", {}, session_factory=factory, http_client=http)
+            is False
+        )
+
+    http.post.assert_not_called()
+    assert "esquema inválido" in caplog.text
+
+
+class _Session:
+    def __init__(self, route):
+        self._route = route
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def scalar(self, *_args, **_kwargs):
+        return self._route
+
+
+def test_route_uplink_two_dev_euis_go_to_distinct_endpoints():
+    endpoints = iter(["http://agent1:8001", "http://agent2:8002"])
+
+    def factory():
+        return _Session(SimpleNamespace(agent_endpoint=next(endpoints)))
+
+    http = _ok_http()
+
+    assert route_uplink("dev1", {}, session_factory=factory, http_client=http)
+    assert route_uplink("dev2", {}, session_factory=factory, http_client=http)
+
+    posted_urls = [call.args[0] for call in http.post.call_args_list]
+    assert posted_urls == [
+        "http://agent1:8001/ingest",
+        "http://agent2:8002/ingest",
+    ]
+
+
 def test_route_uplink_db_error_returns_false(caplog):
     http = _ok_http()
 

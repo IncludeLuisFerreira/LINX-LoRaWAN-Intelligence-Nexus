@@ -6,12 +6,13 @@ import queue
 import threading
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 import paho.mqtt.client as mqtt
 from linx_shared.db.base import SessionLocal
 from linx_shared.models.device_route import DeviceRoute
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from routing.config import settings
@@ -65,7 +66,9 @@ def route_uplink(
     try:
         with session_factory() as session:
             route = session.scalar(
-                select(DeviceRoute).where(DeviceRoute.dev_eui == dev_eui)
+                select(DeviceRoute).where(
+                    func.lower(DeviceRoute.dev_eui) == dev_eui.lower()
+                )
             )
     except SQLAlchemyError:
         logger.exception("Falha ao consultar rota do dev_eui %s", dev_eui)
@@ -84,6 +87,16 @@ def route_uplink(
         )
         return False
 
+    scheme = urlsplit(endpoint).scheme.lower()
+    if scheme not in ("http", "https"):
+        logger.warning(
+            "agent_endpoint do dev_eui %s com esquema inválido %r; "
+            "descartando uplink",
+            dev_eui,
+            scheme,
+        )
+        return False
+
     url = f"{endpoint.rstrip('/')}/ingest"
 
     client = http_client
@@ -94,7 +107,7 @@ def route_uplink(
             url, json=build_ingest_payload(dev_eui, payload)
         )
         response.raise_for_status()
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
         logger.error(
             "Falha ao encaminhar uplink do dev_eui %s para %s: %s",
             dev_eui,
