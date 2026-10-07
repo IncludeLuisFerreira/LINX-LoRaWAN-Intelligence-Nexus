@@ -1,4 +1,5 @@
-from collections.abc import Generator
+import logging
+from functools import lru_cache
 from uuid import UUID
 
 from chirpstack_api import api
@@ -16,15 +17,27 @@ from identity_api.config import settings
 
 router = APIRouter(prefix="/api/v1", tags=["Device"])
 
+logger = logging.getLogger(__name__)
 
-def get_chirpstack_client() -> Generator[ChirpStackClient, None, None]:
-    client = ChirpStackClient(
-        settings.chirpstack_host, settings.chirpstack_api_token
+
+@lru_cache
+def _build_chirpstack_client() -> ChirpStackClient:
+    return ChirpStackClient(
+        settings.chirpstack_host,
+        settings.chirpstack_api_token,
+        use_tls=settings.chirpstack_use_tls,
+        ca_cert=settings.chirpstack_ca_cert,
     )
-    try:
-        yield client
-    finally:
-        client.close()
+
+
+def get_chirpstack_client() -> ChirpStackClient:
+    return _build_chirpstack_client()
+
+
+def close_chirpstack_client() -> None:
+    if _build_chirpstack_client.cache_info().currsize:
+        _build_chirpstack_client().close()
+        _build_chirpstack_client.cache_clear()
 
 
 def _delete_device_best_effort(
@@ -33,7 +46,9 @@ def _delete_device_best_effort(
     try:
         chirpstack.delete_device(dev_eui)
     except ExternalServiceError:
-        pass
+        logger.warning(
+            "Failed to delete device %s in ChirpStack; continuing", dev_eui
+        )
 
 
 @router.get(
@@ -92,11 +107,14 @@ def create_device(
         device_profile_id=settings.chirpstack_device_profile_id,
         join_eui=payload.join_eui,
     )
+    created = False
     try:
         chirpstack.create_device(chirpstack_device)
+        created = True
         chirpstack.create_device_keys(payload.dev_eui, payload.app_key)
     except ExternalServiceError as exc:
-        _delete_device_best_effort(chirpstack, payload.dev_eui)
+        if created:
+            _delete_device_best_effort(chirpstack, payload.dev_eui)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Failed to provision device in ChirpStack: {exc.message}",
@@ -113,7 +131,6 @@ def create_device(
         db.commit()
     except IntegrityError:
         db.rollback()
-        _delete_device_best_effort(chirpstack, payload.dev_eui)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Device already exists!",
@@ -135,14 +152,8 @@ def delete_device(
             detail="Device not found!",
         )
 
-    try:
-        chirpstack.delete_device(device.dev_eui)
-    except ExternalServiceError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to delete device in ChirpStack: {exc.message}",
-        ) from exc
-
+    dev_eui = device.dev_eui
     db.delete(device)
     db.commit()
+    _delete_device_best_effort(chirpstack, dev_eui)
     return None

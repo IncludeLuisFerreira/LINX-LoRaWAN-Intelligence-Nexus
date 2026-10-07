@@ -1,19 +1,27 @@
 from collections.abc import Generator
 from dataclasses import dataclass
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from chirpstack_api import api
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.db.base import engine, get_db
 from linx_shared.models.device import Device
+from linx_shared.schemas.device import DeviceCreate
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from identity_api.config import settings
 from identity_api.main import app
-from identity_api.routes.devices import get_chirpstack_client
+from identity_api.routes import devices as devices_module
+from identity_api.routes.devices import (
+    create_device,
+    get_chirpstack_client,
+)
 
 client = TestClient(app)
 
@@ -24,9 +32,12 @@ class FakeChirpStackClient:
         self.deleted: list[str] = []
         self.created_keys: list[tuple[str, str]] = []
         self.error: ExternalServiceError | None = None
+        self.create_error: ExternalServiceError | None = None
         self.keys_error: ExternalServiceError | None = None
 
     def create_device(self, device: api.Device) -> None:
+        if self.create_error is not None:
+            raise self.create_error
         if self.error is not None:
             raise self.error
         self.created.append(device)
@@ -66,6 +77,14 @@ class DeviceContext:
     @error.setter
     def error(self, value: ExternalServiceError | None) -> None:
         self.chirpstack.error = value
+
+    @property
+    def create_error(self) -> ExternalServiceError | None:
+        return self.chirpstack.create_error
+
+    @create_error.setter
+    def create_error(self, value: ExternalServiceError | None) -> None:
+        self.chirpstack.create_error = value
 
     @property
     def keys_error(self) -> ExternalServiceError | None:
@@ -246,6 +265,93 @@ def test_create_device_chirpstack_failure_returns_502_and_does_not_save(
     assert chirpstack.count_devices() == 0
 
 
+def test_create_device_create_failure_does_not_delete(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    chirpstack.create_error = ExternalServiceError(
+        "chirpstack", "create_device", "boom"
+    )
+
+    response = client.post("/api/v1/devices", json=_payload(app_id))
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to provision device in ChirpStack: boom"
+    }
+    assert chirpstack.deleted == []
+    assert chirpstack.count_devices() == 0
+
+
+def test_create_device_commit_integrity_error_returns_409_without_delete():
+    fake = FakeChirpStackClient()
+    app_id = uuid4()
+    application = SimpleNamespace(id=app_id)
+
+    class _StubQuery:
+        def filter(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return None
+
+    class _StubDb:
+        def __init__(self) -> None:
+            self.rolled_back = False
+
+        def get(self, model, pk):
+            return application
+
+        def query(self, model):
+            return _StubQuery()
+
+        def add(self, obj) -> None:
+            return None
+
+        def commit(self) -> None:
+            raise IntegrityError("stmt", {}, Exception("duplicate"))
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    db = _StubDb()
+    payload = DeviceCreate(
+        dev_eui="1122334455667788",
+        app_id=app_id,
+        join_eui="0011223344556677",
+        app_key="00112233445566778899aabbccddeeff",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        create_device(payload=payload, db=db, chirpstack=fake)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Device already exists!"
+    assert fake.deleted == []
+    assert db.rolled_back is True
+
+
+def test_get_chirpstack_client_returns_singleton(monkeypatch):
+    devices_module._build_chirpstack_client.cache_clear()
+    constructed: list[tuple] = []
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            constructed.append((args, kwargs))
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(devices_module, "ChirpStackClient", _FakeClient)
+    try:
+        first = devices_module.get_chirpstack_client()
+        second = devices_module.get_chirpstack_client()
+
+        assert first is second
+        assert len(constructed) == 1
+    finally:
+        devices_module._build_chirpstack_client.cache_clear()
+
+
 def test_create_device_provisions_keys_in_chirpstack(chirpstack):
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)
@@ -357,9 +463,7 @@ def test_delete_non_existent_device_returns_404(chirpstack):
     assert chirpstack.deleted == []
 
 
-def test_delete_device_chirpstack_failure_returns_502_and_does_not_remove(
-    chirpstack,
-):
+def test_delete_device_removes_local_even_when_chirpstack_fails(chirpstack):
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)
     created = client.post("/api/v1/devices", json=_payload(app_id)).json()
@@ -369,8 +473,6 @@ def test_delete_device_chirpstack_failure_returns_502_and_does_not_remove(
 
     response = client.delete(f"/api/v1/devices/{created['id']}")
 
-    assert response.status_code == 502
-    assert response.json() == {
-        "detail": "Failed to delete device in ChirpStack: boom"
-    }
-    assert chirpstack.count_devices() == 1
+    assert response.status_code == 204
+    assert chirpstack.count_devices() == 0
+    assert chirpstack.deleted == []
