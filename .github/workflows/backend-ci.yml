@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, identity_api, agent_bridge]
+        package: [shared, identity_api, agent_bridge, routing]
     defaults:
       run:
         working-directory: saas_backend
@@ -61,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, identity_api, agent_bridge]
+        package: [shared, identity_api, agent_bridge, routing]
     services:
       postgres:
         image: postgres:15-alpine
@@ -96,6 +96,7 @@ jobs:
           poetry -C shared install
           poetry -C identity_api install
           poetry -C agent_bridge install
+          poetry -C routing install
 
       - name: Apply migrations
         run: poetry -C identity_api run alembic -c ../alembic.ini upgrade head
