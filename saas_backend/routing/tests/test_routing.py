@@ -174,6 +174,8 @@ def test_route_uplink_db_error_returns_false(caplog):
 
 def _router_with_mock_client():
     router = UplinkRouter()
+    router.http_client.close()
+    router.http_client = MagicMock()
     router.client = MagicMock()
     return router
 
@@ -202,9 +204,8 @@ def test_on_connect_failure_does_not_subscribe():
     router.client.subscribe.assert_not_called()
 
 
-def test_on_message_routes_uplink(monkeypatch):
+def test_on_message_enqueues_without_routing(monkeypatch):
     router = _router_with_mock_client()
-    router.http_client = MagicMock()
     fake_route_uplink = MagicMock(return_value=True)
     monkeypatch.setattr("routing.routing.route_uplink", fake_route_uplink)
     message = MagicMock()
@@ -213,6 +214,20 @@ def test_on_message_routes_uplink(monkeypatch):
 
     router.on_message(router.client, None, message)
 
+    assert router._q.qsize() == 1
+    fake_route_uplink.assert_not_called()
+
+
+def test_handle_uplink_routes(monkeypatch):
+    router = _router_with_mock_client()
+    fake_route_uplink = MagicMock(return_value=True)
+    monkeypatch.setattr("routing.routing.route_uplink", fake_route_uplink)
+
+    router._handle_uplink(
+        "application/1/device/dev1/event/up",
+        b'{"dev_eui": "dev1", "payload": {"t": 20}}',
+    )
+
     fake_route_uplink.assert_called_once()
     args, kwargs = fake_route_uplink.call_args
     assert args[0] == "dev1"
@@ -220,27 +235,21 @@ def test_on_message_routes_uplink(monkeypatch):
     assert kwargs["http_client"] is router.http_client
 
 
-def test_on_message_invalid_json_does_not_route(monkeypatch):
+def test_handle_uplink_invalid_json_does_not_route(monkeypatch):
     router = _router_with_mock_client()
     fake_route_uplink = MagicMock()
     monkeypatch.setattr("routing.routing.route_uplink", fake_route_uplink)
-    message = MagicMock()
-    message.topic = "application/1/device/dev1/event/up"
-    message.payload = b"not-json"
 
-    router.on_message(router.client, None, message)
+    router._handle_uplink("application/1/device/dev1/event/up", b"not-json")
 
     fake_route_uplink.assert_not_called()
 
 
-def test_on_message_invalid_topic_does_not_route(monkeypatch):
+def test_handle_uplink_invalid_topic_does_not_route(monkeypatch):
     router = _router_with_mock_client()
     fake_route_uplink = MagicMock()
     monkeypatch.setattr("routing.routing.route_uplink", fake_route_uplink)
-    message = MagicMock()
-    message.topic = "weird/topic"
-    message.payload = b'{"a": 1}'
 
-    router.on_message(router.client, None, message)
+    router._handle_uplink("weird/topic", b'{"a": 1}')
 
     fake_route_uplink.assert_not_called()

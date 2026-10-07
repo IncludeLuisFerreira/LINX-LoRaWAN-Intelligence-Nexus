@@ -2,6 +2,8 @@
 
 import json
 import logging
+import queue
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -17,6 +19,8 @@ from routing.config import settings
 logger = logging.getLogger(__name__)
 
 DEFAULT_TOPIC = "application/+/device/+/event/up"
+
+NUM_OF_WORKERS = 4
 
 
 def extract_dev_eui(topic: str) -> str | None:
@@ -114,11 +118,19 @@ def route_uplink(
 class UplinkRouter:
     """Consome o tópico MQTT de uplink e roteia via :func:`route_uplink`."""
 
-    def __init__(self, session_factory: Callable[..., Any] = SessionLocal):
+    def __init__(
+        self,
+        session_factory: Callable[..., Any] = SessionLocal,
+        num_workers: int = NUM_OF_WORKERS,
+    ):
         self.broker_host = settings.mqtt_broker_host
         self.broker_port = settings.mqtt_broker_port
         self.topic = settings.mqtt_topic
         self.session_factory = session_factory
+        self.num_workers = num_workers
+        self._stop_event = threading.Event()
+        self._workers: list[threading.Thread] = []
+        self._q: queue.Queue[tuple[str, bytes]] = queue.Queue(maxsize=1000)
         self.http_client = httpx.Client(timeout=settings.http_timeout_seconds)
         self.client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2
@@ -145,26 +157,51 @@ class UplinkRouter:
             )
 
     def on_message(self, client, userdata, message) -> None:
-        dev_eui = extract_dev_eui(message.topic)
+        try:
+            self._q.put_nowait((message.topic, message.payload))
+        except queue.Full:
+            logger.error(
+                "Fila de uplinks cheia (%d); descartado do tópico %s",
+                self._q.maxsize,
+                message.topic,
+            )
+
+    def _handle_uplink(self, topic: str, payload: bytes) -> None:
+        dev_eui = extract_dev_eui(topic)
         if dev_eui is None:
             logger.warning(
                 "Não foi possível extrair dev_eui do tópico %s; ignorando",
-                message.topic,
+                topic,
             )
             return
 
         try:
-            payload = json.loads(message.payload.decode())
+            event = json.loads(payload.decode())
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             logger.warning("Payload MQTT inválido, ignorando: %s", exc)
             return
 
         route_uplink(
             dev_eui,
-            payload,
+            event,
             session_factory=self.session_factory,
             http_client=self.http_client,
         )
+
+    def _worker(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                topic, payload = self._q.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            try:
+                self._handle_uplink(topic, payload)
+            except Exception:
+                logger.exception(
+                    "Falha ao processar uplink do tópico %s", topic
+                )
+            finally:
+                self._q.task_done()
 
     def on_disconnect(
         self, client, userdata, disconnect_flags, reason_code, properties=None
@@ -172,12 +209,21 @@ class UplinkRouter:
         logger.info("Desconectado do broker MQTT: reason_code=%s", reason_code)
 
     def start(self) -> None:
+        for i in range(self.num_workers):
+            worker = threading.Thread(
+                target=self._worker, name=f"uplink-worker-{i}", daemon=True
+            )
+            worker.start()
+            self._workers.append(worker)
         self.client.connect(self.broker_host, self.broker_port)
         self.client.loop_forever()
 
     def stop(self) -> None:
-        self.http_client.close()
+        self._stop_event.set()
         self.client.disconnect()
+        for worker in self._workers:
+            worker.join(timeout=5.0)
+        self.http_client.close()
 
 
 def main() -> None:
