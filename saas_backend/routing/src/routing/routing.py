@@ -28,6 +28,24 @@ def extract_dev_eui(topic: str) -> str | None:
     return dev_eui or None
 
 
+def build_ingest_payload(
+    dev_eui: str, event: dict[str, Any]
+) -> dict[str, Any]:
+    """Mapeia um evento de uplink do ChirpStack para o contrato do /ingest."""
+    obj = event.get("object")
+    payload = obj if isinstance(obj, dict) else {}
+    body: dict[str, Any] = {"dev_eui": dev_eui, "payload": payload}
+    rx_info = event.get("rxInfo")
+    if isinstance(rx_info, list) and rx_info:
+        first = rx_info[0]
+        if isinstance(first, dict):
+            if "rssi" in first:
+                body["rssi"] = first["rssi"]
+            if "snr" in first:
+                body["snr"] = first["snr"]
+    return body
+
+
 def route_uplink(
     dev_eui: str,
     payload: dict[str, Any],
@@ -68,7 +86,9 @@ def route_uplink(
     if client is None:
         client = httpx.Client(timeout=settings.http_timeout_seconds)
     try:
-        response = client.post(url, json=payload)
+        response = client.post(
+            url, json=build_ingest_payload(dev_eui, payload)
+        )
         response.raise_for_status()
     except httpx.HTTPError as exc:
         logger.error(

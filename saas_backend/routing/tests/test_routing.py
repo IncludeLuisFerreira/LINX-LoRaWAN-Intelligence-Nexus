@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from routing.routing import (
     DEFAULT_TOPIC,
     UplinkRouter,
+    build_ingest_payload,
     extract_dev_eui,
     route_uplink,
 )
@@ -52,7 +53,11 @@ def test_route_uplink_posts_to_agent_endpoint():
     route = SimpleNamespace(agent_endpoint="http://agent:8001")
     factory = _session_factory_returning(route)
     http = _ok_http()
-    payload = {"dev_eui": "dev1", "payload": {"t": 20}}
+    payload = {
+        "object": {"t": 20},
+        "rxInfo": [{"rssi": -60, "snr": 7.5}],
+        "deviceInfo": {"devEui": "dev1"},
+    }
 
     assert (
         route_uplink(
@@ -61,7 +66,15 @@ def test_route_uplink_posts_to_agent_endpoint():
         is True
     )
 
-    http.post.assert_called_once_with("http://agent:8001/ingest", json=payload)
+    http.post.assert_called_once_with(
+        "http://agent:8001/ingest",
+        json={
+            "dev_eui": "dev1",
+            "payload": {"t": 20},
+            "rssi": -60,
+            "snr": 7.5,
+        },
+    )
 
 
 def test_route_uplink_without_route_logs_and_returns_false(caplog):
@@ -99,7 +112,32 @@ def test_route_uplink_strips_trailing_slash():
 
     route_uplink("dev1", {}, session_factory=factory, http_client=http)
 
-    http.post.assert_called_once_with("http://agent:8001/ingest", json={})
+    http.post.assert_called_once_with(
+        "http://agent:8001/ingest", json={"dev_eui": "dev1", "payload": {}}
+    )
+
+
+def test_build_ingest_payload_extracts_object_and_radio():
+    event = {
+        "object": {"t": 20},
+        "rxInfo": [{"rssi": -60, "snr": 7.5}],
+        "deviceInfo": {"devEui": "dev1"},
+    }
+
+    assert build_ingest_payload("dev1", event) == {
+        "dev_eui": "dev1",
+        "payload": {"t": 20},
+        "rssi": -60,
+        "snr": 7.5,
+    }
+
+
+def test_build_ingest_payload_missing_object_is_empty():
+    result = build_ingest_payload("dev1", {})
+
+    assert result["payload"] == {}
+    assert "rssi" not in result
+    assert "snr" not in result
 
 
 def test_route_uplink_post_failure_logs_and_returns_false(caplog):
