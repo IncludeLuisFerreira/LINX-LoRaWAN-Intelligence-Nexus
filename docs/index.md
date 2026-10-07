@@ -190,6 +190,7 @@ volumes:
   [integration.mqtt]
     server="tcp://$MQTT_BROKER_HOST:1883/"
     json=true
+    event_topic="application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
 
 [gateway.backend]
   type="mqtt"
