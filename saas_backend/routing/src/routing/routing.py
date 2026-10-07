@@ -1,13 +1,15 @@
 """Roteamento de uplinks MQTT para o Client Agent dono do dispositivo."""
 
+import ipaddress
 import json
 import logging
 import queue
 import signal
 import threading
+import time
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 import paho.mqtt.client as mqtt
@@ -20,9 +22,13 @@ from routing.config import settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TOPIC = "application/+/device/+/event/up"
-
 NUM_OF_WORKERS = 4
+CONNECT_MAX_ATTEMPTS = 5
+CONNECT_BACKOFF_SECONDS = 1.0
+POST_MAX_ATTEMPTS = 3
+POST_RETRY_BACKOFF_SECONDS = 0.5
+WORKER_JOIN_BUFFER_SECONDS = 5.0
+BLOCKED_METADATA_HOST = "169.254.169.254"
 
 
 def extract_dev_eui(topic: str) -> str | None:
@@ -54,6 +60,95 @@ def build_ingest_payload(
             if "snr" in first:
                 body["snr"] = first["snr"]
     return body
+
+
+def redact_url(url: str) -> str:
+    """Mascara a userinfo embutida na URL para logging seguro."""
+    parts = urlsplit(url)
+    if parts.username is None and parts.password is None:
+        return url
+    host = parts.hostname or ""
+    netloc = host
+    if parts.port is not None:
+        netloc = f"{host}:{parts.port}"
+    return urlunsplit(
+        (
+            parts.scheme,
+            f"***@{netloc}",
+            parts.path,
+            parts.query,
+            parts.fragment,
+        )
+    )
+
+
+def _is_blocked_host(host: str) -> bool:
+    normalized = host.strip("[]").lower()
+    if normalized == BLOCKED_METADATA_HOST:
+        return True
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+    return address.is_link_local
+
+
+def _endpoint_error(endpoint: str) -> str | None:
+    parts = urlsplit(endpoint)
+    scheme = parts.scheme.lower()
+    if scheme not in ("http", "https"):
+        return f"esquema inválido {scheme!r}"
+    host = (parts.hostname or "").lower()
+    if not host:
+        return "host ausente"
+    if _is_blocked_host(host):
+        return f"host bloqueado (link-local) {host!r}"
+    allowlist = settings.agent_endpoint_allowlist
+    if allowlist and host not in {item.lower() for item in allowlist}:
+        return f"host {host!r} fora da allowlist"
+    return None
+
+
+def _transient_error(exc: Exception) -> tuple[bool, Exception]:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500, exc
+    if isinstance(exc, httpx.TransportError):
+        return True, exc
+    return False, exc
+
+
+def _post_with_retry(
+    client: httpx.Client,
+    url: str,
+    body: dict[str, Any],
+    dev_eui: str,
+) -> httpx.Response | None:
+    safe_url = redact_url(url)
+    for attempt in range(1, POST_MAX_ATTEMPTS + 1):
+        try:
+            response = client.post(url, json=body)
+            response.raise_for_status()
+            return response
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            retryable, detail = _transient_error(exc)
+            if not retryable or attempt == POST_MAX_ATTEMPTS:
+                logger.error(
+                    "Falha ao encaminhar uplink do dev_eui %s para %s: %s",
+                    dev_eui,
+                    safe_url,
+                    detail,
+                )
+                return None
+            logger.warning(
+                "Falha transitória ao encaminhar uplink do dev_eui %s para "
+                "%s (tentativa %d/%d); repetindo",
+                dev_eui,
+                safe_url,
+                attempt,
+                POST_MAX_ATTEMPTS,
+            )
+            time.sleep(POST_RETRY_BACKOFF_SECONDS)
+    return None
 
 
 def route_uplink(
@@ -92,13 +187,12 @@ def route_uplink(
         )
         return False
 
-    scheme = urlsplit(endpoint).scheme.lower()
-    if scheme not in ("http", "https"):
-        logger.warning(
-            "agent_endpoint do dev_eui %s com esquema inválido %r; "
-            "descartando uplink",
+    invalid = _endpoint_error(endpoint)
+    if invalid is not None:
+        logger.error(
+            "agent_endpoint do dev_eui %s inválido (%s); descartando uplink",
             dev_eui,
-            scheme,
+            invalid,
         )
         return False
 
@@ -108,18 +202,11 @@ def route_uplink(
     if client is None:
         client = httpx.Client(timeout=settings.http_timeout_seconds)
     try:
-        response = client.post(
-            url, json=build_ingest_payload(dev_eui, payload)
+        response = _post_with_retry(
+            client, url, build_ingest_payload(dev_eui, payload), dev_eui
         )
-        response.raise_for_status()
-    except (httpx.HTTPError, httpx.InvalidURL) as exc:
-        logger.error(
-            "Falha ao encaminhar uplink do dev_eui %s para %s: %s",
-            dev_eui,
-            url,
-            exc,
-        )
-        return False
+        if response is None:
+            return False
     finally:
         if http_client is None:
             client.close()
@@ -127,7 +214,7 @@ def route_uplink(
     logger.info(
         "Uplink do dev_eui %s roteado para %s (status=%s)",
         dev_eui,
-        url,
+        redact_url(url),
         response.status_code,
     )
     return True
@@ -148,7 +235,13 @@ class UplinkRouter:
         self.num_workers = num_workers
         self._stop_event = threading.Event()
         self._workers: list[threading.Thread] = []
-        self._q: queue.Queue[tuple[str, bytes]] = queue.Queue(maxsize=1000)
+        self._q: queue.Queue[tuple[str, bytes] | None] = queue.Queue(
+            maxsize=1000
+        )
+        self._join_timeout = (
+            settings.http_timeout_seconds * POST_MAX_ATTEMPTS
+            + WORKER_JOIN_BUFFER_SECONDS
+        )
         self.http_client = httpx.Client(timeout=settings.http_timeout_seconds)
         self.client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2
@@ -175,6 +268,16 @@ class UplinkRouter:
             )
 
     def on_message(self, client, userdata, message) -> None:
+        size = len(message.payload or b"")
+        if size > settings.max_payload_bytes:
+            logger.error(
+                "payload de %d bytes excede o limite de %d; descartado do "
+                "tópico %s",
+                size,
+                settings.max_payload_bytes,
+                message.topic,
+            )
+            return
         try:
             self._q.put_nowait((message.topic, message.payload))
         except queue.Full:
@@ -213,11 +316,17 @@ class UplinkRouter:
         )
 
     def _worker(self) -> None:
-        while not self._stop_event.is_set():
+        while True:
             try:
-                topic, payload = self._q.get(timeout=1.0)
+                item = self._q.get(timeout=1.0)
             except queue.Empty:
+                if self._stop_event.is_set():
+                    return
                 continue
+            if item is None:
+                self._q.task_done()
+                return
+            topic, payload = item
             try:
                 self._handle_uplink(topic, payload)
             except Exception:
@@ -232,21 +341,67 @@ class UplinkRouter:
     ) -> None:
         logger.info("Desconectado do broker MQTT: reason_code=%s", reason_code)
 
-    def start(self) -> None:
+    def _start_workers(self) -> None:
         for i in range(self.num_workers):
             worker = threading.Thread(
                 target=self._worker, name=f"uplink-worker-{i}", daemon=True
             )
             worker.start()
             self._workers.append(worker)
-        self.client.connect(self.broker_host, self.broker_port)
+
+    def _connect(self) -> bool:
+        for attempt in range(1, CONNECT_MAX_ATTEMPTS + 1):
+            if self._stop_event.is_set():
+                return False
+            try:
+                self.client.connect(self.broker_host, self.broker_port)
+                return True
+            except (
+                OSError,
+                ValueError,
+                mqtt.WebsocketConnectionError,
+            ) as exc:
+                logger.error(
+                    "Falha ao conectar ao broker MQTT %s:%s "
+                    "(tentativa %d/%d): %s",
+                    self.broker_host,
+                    self.broker_port,
+                    attempt,
+                    CONNECT_MAX_ATTEMPTS,
+                    exc,
+                )
+                if attempt == CONNECT_MAX_ATTEMPTS:
+                    logger.error(
+                        "Não foi possível conectar ao broker após %d "
+                        "tentativas; encerrando",
+                        CONNECT_MAX_ATTEMPTS,
+                    )
+                    return False
+                time.sleep(CONNECT_BACKOFF_SECONDS)
+        return False
+
+    def _drain_queue(self) -> None:
+        for _ in self._workers:
+            self._q.put(None)
+
+    def start(self) -> None:
+        self._start_workers()
+        if not self._connect():
+            return
         self.client.loop_forever()
 
     def stop(self) -> None:
         self._stop_event.set()
-        self.client.disconnect()
+        try:
+            self.client.disconnect()
+            self.client.loop_stop()
+        except Exception:
+            logger.exception("Falha ao desconectar do broker MQTT")
+        self._drain_queue()
         for worker in self._workers:
-            worker.join(timeout=5.0)
+            worker.join(timeout=self._join_timeout)
+            if worker.is_alive():
+                logger.error("Worker %s não terminou a tempo", worker.name)
         self.http_client.close()
 
 

@@ -6,11 +6,14 @@ import paho.mqtt.client as mqtt
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import SQLAlchemyError
 
+from routing.config import settings
 from routing.routing import (
-    DEFAULT_TOPIC,
+    CONNECT_MAX_ATTEMPTS,
+    POST_MAX_ATTEMPTS,
     UplinkRouter,
     build_ingest_payload,
     extract_dev_eui,
+    redact_url,
     route_uplink,
 )
 
@@ -34,6 +37,11 @@ def _ok_http():
     http = MagicMock()
     http.post.return_value = MagicMock(status_code=201)
     return http
+
+
+def _response(status_code):
+    request = httpx.Request("POST", "http://agent:8001/ingest")
+    return httpx.Response(status_code, request=request)
 
 
 def test_extract_dev_eui_valid_topic():
@@ -156,6 +164,78 @@ def test_route_uplink_post_failure_logs_and_returns_false(caplog):
     assert "Falha ao encaminhar" in caplog.text
 
 
+def test_route_uplink_retries_transient_5xx_then_succeeds(monkeypatch):
+    monkeypatch.setattr("routing.routing.time.sleep", lambda *_: None)
+    route = SimpleNamespace(agent_endpoint="http://agent:8001")
+    factory = _session_factory_returning(route)
+    http = MagicMock()
+    http.post.side_effect = [_response(503), _response(201)]
+
+    assert (
+        route_uplink("dev1", {}, session_factory=factory, http_client=http)
+        is True
+    )
+    assert http.post.call_count == 2
+
+
+def test_route_uplink_gives_up_after_transient_retries(monkeypatch, caplog):
+    monkeypatch.setattr("routing.routing.time.sleep", lambda *_: None)
+    route = SimpleNamespace(agent_endpoint="http://agent:8001")
+    factory = _session_factory_returning(route)
+    http = MagicMock()
+    http.post.side_effect = [_response(503) for _ in range(POST_MAX_ATTEMPTS)]
+
+    with caplog.at_level("ERROR"):
+        assert (
+            route_uplink("dev1", {}, session_factory=factory, http_client=http)
+            is False
+        )
+
+    assert http.post.call_count == POST_MAX_ATTEMPTS
+    assert "Falha ao encaminhar" in caplog.text
+
+
+def test_route_uplink_does_not_retry_client_error(monkeypatch):
+    monkeypatch.setattr("routing.routing.time.sleep", lambda *_: None)
+    route = SimpleNamespace(agent_endpoint="http://agent:8001")
+    factory = _session_factory_returning(route)
+    http = MagicMock()
+    http.post.side_effect = [_response(400), _response(201)]
+
+    assert (
+        route_uplink("dev1", {}, session_factory=factory, http_client=http)
+        is False
+    )
+    assert http.post.call_count == 1
+
+
+def test_redact_url_masks_userinfo():
+    assert (
+        redact_url("http://user:pass@agent:8001/ingest")
+        == "http://***@agent:8001/ingest"
+    )
+
+
+def test_redact_url_leaves_url_without_userinfo():
+    assert redact_url("http://agent:8001/ingest") == "http://agent:8001/ingest"
+
+
+def test_route_uplink_error_log_redacts_userinfo(caplog):
+    route = SimpleNamespace(agent_endpoint="http://user:pass@agent:8001")
+    factory = _session_factory_returning(route)
+    http = MagicMock()
+    http.post.side_effect = httpx.ConnectError("boom")
+
+    with caplog.at_level("ERROR"):
+        assert (
+            route_uplink("dev1", {}, session_factory=factory, http_client=http)
+            is False
+        )
+
+    assert "pass" not in caplog.text
+    assert "***@agent:8001" in caplog.text
+
+
 def test_route_uplink_rejects_non_http_scheme(caplog):
     route = SimpleNamespace(agent_endpoint="ftp://agent:21")
     factory = _session_factory_returning(route)
@@ -169,6 +249,66 @@ def test_route_uplink_rejects_non_http_scheme(caplog):
 
     http.post.assert_not_called()
     assert "esquema inválido" in caplog.text
+
+
+def test_route_uplink_allows_host_in_allowlist(monkeypatch):
+    monkeypatch.setattr(settings, "agent_endpoint_allowlist", ["agent"])
+    route = SimpleNamespace(agent_endpoint="http://agent:8001")
+    factory = _session_factory_returning(route)
+    http = _ok_http()
+
+    assert (
+        route_uplink("dev1", {}, session_factory=factory, http_client=http)
+        is True
+    )
+    http.post.assert_called_once()
+
+
+def test_route_uplink_blocks_host_not_in_allowlist(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "agent_endpoint_allowlist", ["allowed"])
+    route = SimpleNamespace(agent_endpoint="http://evil:8001")
+    factory = _session_factory_returning(route)
+    http = _ok_http()
+
+    with caplog.at_level("ERROR"):
+        assert (
+            route_uplink("dev1", {}, session_factory=factory, http_client=http)
+            is False
+        )
+
+    http.post.assert_not_called()
+    assert "allowlist" in caplog.text
+
+
+def test_route_uplink_empty_allowlist_allows_public_host(monkeypatch):
+    monkeypatch.setattr(settings, "agent_endpoint_allowlist", [])
+    route = SimpleNamespace(agent_endpoint="http://agent:8001")
+    factory = _session_factory_returning(route)
+    http = _ok_http()
+
+    assert (
+        route_uplink("dev1", {}, session_factory=factory, http_client=http)
+        is True
+    )
+    http.post.assert_called_once()
+
+
+def test_route_uplink_blocks_link_local_metadata(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "agent_endpoint_allowlist", [])
+    route = SimpleNamespace(
+        agent_endpoint="http://169.254.169.254/latest/meta-data"
+    )
+    factory = _session_factory_returning(route)
+    http = _ok_http()
+
+    with caplog.at_level("ERROR"):
+        assert (
+            route_uplink("dev1", {}, session_factory=factory, http_client=http)
+            is False
+        )
+
+    http.post.assert_not_called()
+    assert "169.254.169.254" in caplog.text
 
 
 class _CapturingSession:
@@ -278,7 +418,8 @@ def _router_with_mock_client():
 def test_router_default_topic():
     router = _router_with_mock_client()
 
-    assert router.topic == DEFAULT_TOPIC
+    assert router.topic == settings.mqtt_topic
+    assert settings.mqtt_topic == "application/+/device/+/event/up"
 
 
 def test_on_connect_success_subscribes_to_topic():
@@ -311,6 +452,32 @@ def test_on_message_enqueues_without_routing(monkeypatch):
 
     assert router._q.qsize() == 1
     fake_route_uplink.assert_not_called()
+
+
+def test_on_message_drops_payload_over_max_bytes(monkeypatch, caplog):
+    monkeypatch.setattr(settings, "max_payload_bytes", 10)
+    router = _router_with_mock_client()
+    message = MagicMock()
+    message.topic = "application/1/device/dev1/event/up"
+    message.payload = b"x" * 11
+
+    with caplog.at_level("ERROR"):
+        router.on_message(router.client, None, message)
+
+    assert router._q.qsize() == 0
+    assert "payload" in caplog.text
+
+
+def test_on_message_enqueues_payload_exactly_at_limit(monkeypatch):
+    monkeypatch.setattr(settings, "max_payload_bytes", 11)
+    router = _router_with_mock_client()
+    message = MagicMock()
+    message.topic = "application/1/device/dev1/event/up"
+    message.payload = b"x" * 11
+
+    router.on_message(router.client, None, message)
+
+    assert router._q.qsize() == 1
 
 
 def test_handle_uplink_routes(monkeypatch):
@@ -395,3 +562,85 @@ def test_stop_disconnects_and_joins():
     assert router._stop_event.is_set()
     router.client.disconnect.assert_called_once()
     router.http_client.close.assert_called_once()
+
+
+def test_stop_drains_queued_uplinks(monkeypatch):
+    monkeypatch.setattr("routing.routing.time.sleep", lambda *_: None)
+    router = _router_with_mock_client()
+    router.num_workers = 2
+    seen = []
+    monkeypatch.setattr(
+        "routing.routing.route_uplink",
+        lambda dev_eui, payload, **kwargs: seen.append(dev_eui) or True,
+    )
+    for i in range(10):
+        router._q.put((f"application/1/device/dev{i}/event/up", b'{"a": 1}'))
+
+    router._start_workers()
+    router.stop()
+
+    assert sorted(seen) == sorted(f"dev{i}" for i in range(10))
+
+
+def test_stop_joins_workers_before_closing_http_client():
+    router = _router_with_mock_client()
+    order = []
+    worker = MagicMock()
+    worker.join.side_effect = lambda timeout: order.append("join")
+    router._workers = [worker]
+    router.http_client.close.side_effect = lambda: order.append("close")
+
+    router.stop()
+
+    assert order[0] == "join"
+    assert order[-1] == "close"
+
+
+def test_worker_join_timeout_exceeds_http_timeout():
+    router = _router_with_mock_client()
+
+    assert router._join_timeout > settings.http_timeout_seconds
+
+
+def test_stop_logs_when_worker_does_not_finish(caplog):
+    router = _router_with_mock_client()
+    worker = MagicMock()
+    worker.is_alive.return_value = True
+    router._workers = [worker]
+
+    with caplog.at_level("ERROR"):
+        router.stop()
+
+    assert "não terminou" in caplog.text
+
+
+def test_start_retries_connect_until_success(monkeypatch):
+    monkeypatch.setattr("routing.routing.time.sleep", lambda *_: None)
+    router = _router_with_mock_client()
+    router._start_workers = MagicMock()
+    attempts = {"n": 0}
+
+    def connect(host, port):
+        attempts["n"] += 1
+        if attempts["n"] < 2:
+            raise OSError("broker indisponível")
+
+    router.client.connect.side_effect = connect
+
+    router.start()
+
+    assert attempts["n"] == 2
+    router.client.loop_forever.assert_called_once()
+
+
+def test_start_gives_up_after_max_connect_attempts(monkeypatch, caplog):
+    monkeypatch.setattr("routing.routing.time.sleep", lambda *_: None)
+    router = _router_with_mock_client()
+    router._start_workers = MagicMock()
+    router.client.connect.side_effect = OSError("broker indisponível")
+
+    with caplog.at_level("ERROR"):
+        router.start()
+
+    assert router.client.connect.call_count == CONNECT_MAX_ATTEMPTS
+    router.client.loop_forever.assert_not_called()

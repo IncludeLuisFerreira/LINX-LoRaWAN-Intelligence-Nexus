@@ -148,6 +148,16 @@ services:
       - "1883:1883"
     volumes:
       - ../infra/configuration/mosquitto/config:/mosquitto/config:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -W 3 -C 1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   routing:
     build:
@@ -165,7 +175,7 @@ services:
       db:
         condition: service_healthy
       mosquitto:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   pgdata:
