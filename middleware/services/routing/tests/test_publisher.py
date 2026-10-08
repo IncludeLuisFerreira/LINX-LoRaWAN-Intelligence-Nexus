@@ -96,6 +96,29 @@ def test_connect_gives_up_and_returns_false(monkeypatch, fake_rabbit, caplog):
     assert fake_rabbit.Connection.call_count == 2
 
 
+def test_connect_closes_partial_connection_on_failure(
+    monkeypatch, fake_rabbit, caplog
+):
+    monkeypatch.setattr("routing.publisher.time.sleep", lambda *_: None)
+    conns = []
+
+    def opening_but_flaky(url):
+        conn = MagicMock()
+        conn.channel.side_effect = OSError("channel boom")
+        conns.append(conn)
+        return conn
+
+    fake_rabbit.Connection = opening_but_flaky
+    pub = RabbitPublisher("amqp://h", "linx.telemetry", connect_max_attempts=2)
+
+    with caplog.at_level("ERROR"):
+        assert pub.connect() is False
+
+    assert len(conns) == 2
+    for conn in conns:
+        conn.close.assert_called()
+
+
 def test_publish_sends_persistent_json(fake_rabbit):
     pub = RabbitPublisher("amqp://h", "linx.telemetry")
     pub.connect()

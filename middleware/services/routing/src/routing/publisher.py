@@ -45,6 +45,7 @@ class RabbitPublisher:
                     self._connect_max_attempts,
                     exc,
                 )
+                self.close()
                 if attempt < self._connect_max_attempts:
                     time.sleep(self._backoff_seconds)
 
