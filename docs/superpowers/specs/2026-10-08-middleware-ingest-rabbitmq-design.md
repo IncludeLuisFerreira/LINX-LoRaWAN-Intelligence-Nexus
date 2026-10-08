@@ -156,13 +156,16 @@ para fora do callback) quando:
 `src/routing/config.py` (remove `http_timeout_seconds` e
 `agent_endpoint_allowlist`):
 
+Os defaults de código apontam para `localhost` (desenvolvimento local); o
+compose sobrescreve com os nomes de serviço (`mosquitto`, `rabbitmq`).
+
 | Variável | Default | Uso |
 | --- | --- | --- |
-| `MQTT_BROKER_HOST` | `mosquitto` | broker MQTT (já existe) |
+| `MQTT_BROKER_HOST` | `localhost` | broker MQTT (já existe) |
 | `MQTT_BROKER_PORT` | `1883` | porta MQTT (já existe) |
 | `MQTT_TOPIC` | `application/+/device/+/event/up` | tópico (já existe) |
 | `MQTT_QOS` | `1` | QoS do subscribe (novo) |
-| `RABBIT_URL` | `amqp://guest:guest@rabbitmq:5672/%2f` | conexão rabbitpy (novo) |
+| `RABBIT_URL` | `amqp://guest:guest@localhost:5672/%2f` | conexão rabbitpy (novo) |
 | `RABBIT_EXCHANGE` | `linx.telemetry` | exchange `topic` durável (novo) |
 | `MAX_PAYLOAD_BYTES` | `65536` | cap de payload (já existe) |
 | `RABBIT_CONNECT_MAX_ATTEMPTS` | `5` | tentativas de conexão (novo) |
