@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from linx_shared.core.config import settings
 from linx_shared.db.base import get_db
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -64,6 +65,9 @@ def test_health_reports_real_database_as_up():
 def test_lifespan_closes_cached_chirpstack_client(monkeypatch):
     devices_module._build_chirpstack_client.cache_clear()
     closed: list[bool] = []
+    monkeypatch.setattr(
+        settings, "service_token", "test-service-token-0123456789abcdef"
+    )
 
     class _FakeClient:
         def __init__(self, *args, **kwargs) -> None:

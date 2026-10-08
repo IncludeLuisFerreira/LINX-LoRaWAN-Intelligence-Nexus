@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Response, status
@@ -13,10 +13,13 @@ from identity_api.routes.devices import (
 )
 from identity_api.routes.devices import router as devices_router
 from identity_api.routes.tenant import router
+from identity_api.routes.user import router as user_router
+from identity_api.security import ensure_service_token_configured
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    ensure_service_token_configured()
     yield
     close_chirpstack_client()
 
@@ -45,3 +48,4 @@ def health(response: Response, db: Session = Depends(get_db)) -> dict:
 app.include_router(router)
 app.include_router(application_router)
 app.include_router(devices_router)
+app.include_router(user_router)
