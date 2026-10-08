@@ -1,0 +1,24 @@
+# Contexto de build na raiz do repo (usado pelo serviço `routing`).
+# Ignora tudo que não é necessário para os Dockerfiles.
+.git
+.github
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.mypy_cache
+**/.pytest_cache
+**/.coverage
+**/htmlcov
+site
+node_modules
+**/node_modules
+frontend
+website
+infra
+deploy
+docs
+.superpowers
+**/.env
+**/.env.*
+!**/.env.example

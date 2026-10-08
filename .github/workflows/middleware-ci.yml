@@ -1,0 +1,102 @@
+name: middleware-ci
+
+on:
+  pull_request:
+    paths:
+      - "middleware/**"
+      - "linx_core/shared/**"
+      - ".github/workflows/middleware-ci.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "middleware/**"
+      - "linx_core/shared/**"
+      - ".github/workflows/middleware-ci.yml"
+
+env:
+  PYTHON_VERSION: "3.12"
+  POETRY_VERSION: "2.4.1"
+
+jobs:
+  lint:
+    name: Lint & Type Check (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [services/client_agent, services/routing]
+    defaults:
+      run:
+        working-directory: middleware
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry -C ${{ matrix.package }} install
+
+      - name: Black (format check)
+        run: poetry -C ${{ matrix.package }} run black --check src tests
+
+      - name: isort (import order check)
+        run: poetry -C ${{ matrix.package }} run isort --check-only src tests
+
+      - name: Flake8 (lint)
+        run: poetry -C ${{ matrix.package }} run flake8 src tests
+
+      - name: Mypy (type check)
+        run: poetry -C ${{ matrix.package }} run mypy src tests
+
+  test:
+    name: Tests & Coverage (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [services/client_agent, services/routing]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: linx
+          POSTGRES_PASSWORD: linx
+          POSTGRES_DB: linx
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U linx -d linx"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: middleware
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry -C ${{ matrix.package }} install
+
+      - name: Pytest (cobertura >= 70%)
+        run: poetry -C ${{ matrix.package }} run pytest --cov=src --cov-report=term-missing --cov-fail-under=70

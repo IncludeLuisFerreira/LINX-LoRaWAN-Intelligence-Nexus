@@ -23,7 +23,7 @@ O MVP é considerado completo quando:
 | Sprint | Período | Duração | Entrega ao final |
 |:---|:---|:---|:---|
 | S1 | 27/08 → 09/09 | 14 dias | Fundação: contratos, CI/CD, infra local rodando |
-| S2 | 10/09 → 23/09 | 14 dias | SaaS Backend + Client Agent na AWS, gRPC funcionando |
+| S2 | 10/09 → 23/09 | 14 dias | Linx Core + Client Agent na AWS, gRPC funcionando |
 | S3 | 24/09 → 07/10 | 14 dias | ChirpStack integrado, uplink ponta-a-ponta, WebSocket |
 | S4 | 08/10 → 21/10 | 14 dias | Multi-tenant real: provisionamento automático de Docker por app |
 | S5 | 22/10 → 04/11 | 14 dias | Autenticação JWT/OAuth2, RBAC, TLS em todas as camadas |
@@ -46,8 +46,8 @@ O MVP é considerado completo quando:
 - [ ] Configurar Axios instance com `baseURL` e interceptors prontos para JWT.
 - [ ] Criar `openapi-stub.yaml` com os contratos REST que o frontend espera (acordar com Aluno 2).
 
-### Aluno 2 — SaaS Backend
-- [ ] Scaffold `saas_backend/` com FastAPI + Poetry.
+### Aluno 2 — Linx Core
+- [ ] Scaffold `linx_core/` com FastAPI + Poetry.
 - [ ] `infra/docker-compose.base.yml`: PostgreSQL 15, Redis 7, Mosquitto MQTT.
 - [ ] Models SQLAlchemy 2.0: `tenant`, `application`, `user`, `tenant_user` (todos com `id UUID PK`).
 - [ ] Alembic migration inicial criando as 4 tabelas.
@@ -57,36 +57,36 @@ O MVP é considerado completo quando:
 - [ ] Entregar stub OpenAPI até **03/09** para o Aluno 1 desenvolver contra mock.
 
 ### Aluno 3 — Client Agent + Tenant Template
-- [ ] Scaffold `client_agent_api/` e `tenant_app_template/` com FastAPI.
-- [ ] Schema TimescaleDB em `tenant_app_template/db/schema.sql`: hypertable `telemetry` (`time TIMESTAMPTZ`, `dev_eui TEXT`, `payload JSONB`, `rssi INT`, `snr FLOAT`).
+- [ ] Scaffold `middleware/services/client_agent/` e `client/` com FastAPI.
+- [ ] Schema TimescaleDB em `client/db/schema.sql`: hypertable `telemetry` (`time TIMESTAMPTZ`, `dev_eui TEXT`, `payload JSONB`, `rssi INT`, `snr FLOAT`).
 - [ ] Consumidor MQTT básico (`paho-mqtt`): subscribe em `application/+/device/+/event/up`, logar payload.
-- [ ] Definir `proto/saas_agent.proto`: `service AgentBridge { rpc GetAppConfig(AppId) returns (AppConfig); rpc IngestTelemetry(TelemetryEvent) returns (Ack); }`.
+- [ ] Definir `proto/linx_agent.proto`: `service AgentBridge { rpc GetAppConfig(AppId) returns (AppConfig); rpc IngestTelemetry(TelemetryEvent) returns (Ack); }`.
 - [ ] Gerar stubs gRPC Python.
-- [ ] Dockerfile multi-stage para `client_agent_api`.
-- [ ] `docker-compose.yml` do tenant: `tenant_app` (motor de regras) + `timescaledb`. O `client_agent_api` é middleware **compartilhado**, não faz parte do container por-tenant.
+- [ ] Dockerfile multi-stage para `middleware/services/client_agent`.
+- [ ] `docker-compose.yml` do tenant: `tenant_app` (motor de regras) + `timescaledb`. O `middleware/services/client_agent` é middleware **compartilhado**, não faz parte do container por-tenant.
 
 **Critérios de Aceitação S1:**
 - `docker-compose -f infra/docker-compose.base.yml up` sobe sem erros.
-- `pytest saas_backend/` passa com ≥ 70% coverage.
+- `pytest linx_core/` passa com ≥ 70% coverage.
 - `npm run build` no frontend compila sem erros.
-- `docker build` do client_agent_api conclui com sucesso.
+- `docker build` do middleware/services/client_agent conclui com sucesso.
 - CI verde nos 3 módulos.
 
 ---
 
 ## Sprint 2 — Dois Serviços na AWS com gRPC (10/09 → 23/09)
 
-**Meta:** SaaS Backend e Client Agent deployados na AWS, comunicando via gRPC. Prova de comunicação documentada.
+**Meta:** Linx Core e Client Agent deployados na AWS, comunicando via gRPC. Prova de comunicação documentada.
 
 ### Aluno 1 — Frontend
 - [ ] Tela de Cadastro de Tenant consumindo `POST /api/v1/tenant` (backend AWS).
 - [ ] Tela de Cadastro de Aplicação com select de Tenant.
 - [ ] Dockerfile do frontend (nginx alpine servindo build estático).
 - [ ] Script `deploy-frontend.sh`: build → push → deploy em EC2 ou S3+CloudFront.
-- [ ] Nginx local roteando `/api/*` → SaaS Backend AWS.
+- [ ] Nginx local roteando `/api/*` → Linx Core AWS.
 
-### Aluno 2 — SaaS Backend
-- [ ] gRPC Server em `saas_backend/grpc_server.py`: método `GetAppConfig` retornando `db_host`, `db_port`, `mqtt_topic` da aplicação.
+### Aluno 2 — Linx Core
+- [ ] gRPC Server em `linx_core/grpc_server.py`: método `GetAppConfig` retornando `db_host`, `db_port`, `mqtt_topic` da aplicação.
 - [ ] Endpoint `GET /health` retornando status do DB e do gRPC server.
 - [ ] Deploy em EC2 `t3.small` com Docker Compose (app + PostgreSQL local para MVP).
 - [ ] Security Group AWS: inbound 8000 (REST), 50051 (gRPC), 22 (SSH).
@@ -94,7 +94,7 @@ O MVP é considerado completo quando:
 - [x] Tabela `device_routes` (`dev_eui`, `app_id`, `agent_endpoint`) para roteamento futuro.
 
 ### Aluno 3 — Client Agent
-- [ ] gRPC Client em `client_agent_api/grpc_client.py`: conecta ao SaaS Backend porta 50051 e resolve `GetAppConfig` sob demanda (com cache TTL).
+- [ ] gRPC Client em `middleware/services/client_agent/grpc_client.py`: conecta ao Linx Core porta 50051 e resolve `GetAppConfig` sob demanda (com cache TTL).
 - [ ] Endpoint `POST /ingest`: recebe payload JSON, valida schema, persiste no TimescaleDB.
 - [ ] Pipeline: Mosquitto → `mqtt_consumer.py` → parse → `POST /ingest` → TimescaleDB.
 - [ ] Deploy em segunda instância EC2 (ou porta 8001 na mesma EC2).
@@ -121,8 +121,8 @@ O MVP é considerado completo quando:
 - [ ] Conectar Dashboard ao WebSocket do Client Agent: atualizar gráfico em tempo real.
 - [ ] Fallback: se WebSocket cair, polling REST `GET /telemetry` a cada 5s.
 
-### Aluno 2 — SaaS Backend
-- [ ] Cliente ChirpStack gRPC em `saas_backend/chirpstack_client.py` usando `chirpstack-api` Python.
+### Aluno 2 — Linx Core
+- [ ] Cliente ChirpStack gRPC em `linx_core/chirpstack_client.py` usando `chirpstack-api` Python.
 - [ ] Endpoint `POST /api/v1/devices`: valida payload → salva em `devices` (`id UUID`, `dev_eui UNIQUE`, `app_id FK`, `join_eui`, `app_key` criptografado) → provisiona no ChirpStack via gRPC.
 - [ ] Serviço de roteamento: ao receber uplink MQTT, consulta `device_routes` e encaminha para o endpoint correto do Client Agent.
 - [ ] ChirpStack Application configurado para publicar em `application/{app_id}/device/{dev_eui}/event/up`.
@@ -153,8 +153,8 @@ O MVP é considerado completo quando:
 - [ ] Tela de Dispositivos da Aplicação: listar devices, status online/offline, última telemetria.
 - [ ] Exibir UUID de cada recurso na UI com botão "copiar".
 
-### Aluno 2 — SaaS Backend
-- [ ] Endpoint `POST /api/v1/applications/{app_id}/provision`: usar `docker-py` para `docker run` a partir da imagem `tenant_app_template`, porta dinâmica (range 8100-9100), variáveis de ambiente injetadas (`APP_ID`, `DB_PASSWORD`, `MQTT_TOPIC`).
+### Aluno 2 — Linx Core
+- [ ] Endpoint `POST /api/v1/applications/{app_id}/provision`: usar `docker-py` para `docker run` a partir da imagem `client`, porta dinâmica (range 8100-9100), variáveis de ambiente injetadas (`APP_ID`, `DB_PASSWORD`, `MQTT_TOPIC`).
 - [ ] Tabela `application_instances` (`app_id FK`, `container_id`, `host`, `port`, `status`, `provisioned_at`).
 - [ ] Trigger automático: ao criar Aplicação via `POST /api/v1/applications`, chamar provision em background (FastAPI `BackgroundTasks`).
 - [ ] Endpoint `GET /api/v1/applications/{app_id}/status` retornando status do container (`docker inspect`).
@@ -162,8 +162,8 @@ O MVP é considerado completo quando:
 - [ ] Atualizar `device_routes` com endpoint real do container provisionado.
 
 ### Aluno 3 — Client Agent + Tenant Template
-- [ ] Imagem Docker do `tenant_app_template` publicada no ECR (ou Docker Hub para MVP).
-- [ ] `tenant_app` recebe `APP_ID` e `MQTT_TOPIC` via variável de ambiente no startup. (O middleware `client_agent_api` é compartilhado e não recebe `APP_ID`.)
+- [ ] Imagem Docker do `client` publicada no ECR (ou Docker Hub para MVP).
+- [ ] `tenant_app` recebe `APP_ID` e `MQTT_TOPIC` via variável de ambiente no startup. (O middleware `middleware/services/client_agent` é compartilhado e não recebe `APP_ID`.)
 - [ ] Isolamento de rede: cada container tenant em Docker network isolada (`bridge` dedicada por app).
 - [ ] Endpoint `/health` no tenant retornando status do TimescaleDB e do consumidor MQTT.
 - [ ] Teste de isolamento: script Python que cria 2 apps, publica telemetria em cada uma e verifica que os dados não se cruzam.
@@ -188,7 +188,7 @@ O MVP é considerado completo quando:
 - [ ] Tela "Gestão de Usuários": listar, convidar (gerar link), alterar papel, desativar.
 - [ ] HTTPS no deploy do frontend (CloudFront ou Nginx + certificado).
 
-### Aluno 2 — SaaS Backend
+### Aluno 2 — Linx Core
 - [ ] OAuth2 Password Flow: endpoint `POST /auth/login` retornando JWT (access: 15min, refresh: 7d).
 - [ ] Senhas com bcrypt (`passlib[bcrypt]`, rounds=12).
 - [ ] Endpoint `POST /auth/refresh`: valida refresh token, emite novo access token.
@@ -199,8 +199,8 @@ O MVP é considerado completo quando:
 
 ### Aluno 3 — Client Agent
 - [ ] TLS no Mosquitto: porta 8883 para MQTT over TLS. Rejeitar conexões não-TLS na porta 1883.
-- [ ] mTLS entre Client Agent e SaaS Backend: gRPC com `ssl_channel_credentials` (`ca.crt`, `client.crt`, `client.key`).
-- [ ] Validação de JWT no Client Agent: middleware FastAPI verifica `Authorization: Bearer <token>` contra chave pública do SaaS Backend.
+- [ ] mTLS entre Client Agent e Linx Core: gRPC com `ssl_channel_credentials` (`ca.crt`, `client.crt`, `client.key`).
+- [ ] Validação de JWT no Client Agent: middleware FastAPI verifica `Authorization: Bearer <token>` contra chave pública do Linx Core.
 - [ ] Endpoint `/health` protegido por `X-Service-Token` (token de serviço, não JWT de usuário).
 - [ ] Criptografar `app_key` em repouso no TimescaleDB com AES-256-GCM.
 
@@ -224,18 +224,18 @@ O MVP é considerado completo quando:
 - [ ] Botão "Enviar Comando" (Downlink manual) na tela de dispositivo: modal com campo payload JSON.
 - [ ] Tela "Histórico" com filtros: date range picker, select de dispositivo, tipo de métrica.
 
-### Aluno 2 — SaaS Backend
+### Aluno 2 — Linx Core
 - [ ] Endpoint `POST /api/v1/rules`: persiste regra no PostgreSQL global e replica para o Docker Cliente via gRPC (`SyncRule`).
 - [ ] Endpoint `POST /api/v1/downlinks`: valida permissão → aciona ChirpStack via gRPC (`DeviceQueueService.Enqueue`).
-- [ ] Serviço de notificação em `saas_backend/notifications.py`: integração com Telegram Bot API e SMTP (email). Configurável por aplicação.
+- [ ] Serviço de notificação em `linx_core/notifications.py`: integração com Telegram Bot API e SMTP (email). Configurável por aplicação.
 - [ ] Tabela `alerts` (`id UUID`, `rule_id FK`, `dev_eui`, `triggered_at`, `message`, `notified`).
 
 ### Aluno 3 — Client Agent + Motor de Regras
-- [ ] Motor de Regras em `tenant_app_template/rules_engine.py`: avalia regras a cada telemetria inserida usando `asteval` (sem `eval` nativo).
-- [ ] Ao violar regra: publicar evento `rule_violated` para o SaaS Backend via gRPC (`ReportViolation`).
+- [ ] Motor de Regras em `client/rules_engine.py`: avalia regras a cada telemetria inserida usando `asteval` (sem `eval` nativo).
+- [ ] Ao violar regra: publicar evento `rule_violated` para o Linx Core via gRPC (`ReportViolation`).
 - [ ] Tabela `downlink_queue` (`id UUID`, `dev_eui`, `payload JSONB`, `scheduled_at`, `sent_at`, `status ENUM(pending, sent, failed)`).
-- [ ] Worker async: processa `downlink_queue` a cada 30s, chama SaaS Backend para enfileirar no ChirpStack.
-- [ ] Endpoint `POST /rules/sync` (gRPC): recebe regra do SaaS Backend e persiste localmente no tenant.
+- [ ] Worker async: processa `downlink_queue` a cada 30s, chama Linx Core para enfileirar no ChirpStack.
+- [ ] Endpoint `POST /rules/sync` (gRPC): recebe regra do Linx Core e persiste localmente no tenant.
 
 **Critérios de Aceitação S6:**
 - Criar regra "temperatura > 40" → publicar telemetria com temp=45 → alerta aparece na tela em ≤ 5s.
@@ -256,7 +256,7 @@ O MVP é considerado completo quando:
 - [ ] Indicador "Modo Offline" no header quando backend retorna 5xx ou timeout.
 - [ ] Tela "Status do Sistema": consumir `GET /health` de todos os serviços, exibir verde/vermelho.
 
-### Aluno 2 — SaaS Backend
+### Aluno 2 — Linx Core
 - [ ] Retry com backoff exponencial para chamadas gRPC ao ChirpStack: `tenacity` com `wait_exponential(min=4, max=60)`, max 5 tentativas (RF-042).
 - [ ] Circuit Breaker (`pybreaker`) para chamadas ao Client Agent: abre após 5 falhas, meio-aberto após 30s, fallback retorna `503`.
 - [ ] Dead Letter Queue com Redis Streams (`failed_events`): mensagens MQTT que falharam após 3 retries.
@@ -267,7 +267,7 @@ O MVP é considerado completo quando:
 - [ ] Retry com backoff para publicações MQTT (downlinks): se `publish()` falhar, enfileirar em `downlink_queue`.
 - [ ] `HEALTHCHECK` no Dockerfile: `curl -f http://localhost:8000/health || exit 1`.
 - [ ] Graceful shutdown: handler `SIGTERM` fecha conexão MQTT, flush de queries pendentes, encerra.
-- [ ] Se container tenant não responder ao health check por 60s: publicar evento `container_down` para o SaaS Backend.
+- [ ] Se container tenant não responder ao health check por 60s: publicar evento `container_down` para o Linx Core.
 - [ ] Reconexão automática do consumidor MQTT: se conexão cair, tentar reconectar com backoff.
 
 **Critérios de Aceitação S7:**
@@ -290,7 +290,7 @@ O MVP é considerado completo quando:
 - [ ] Gravar vídeo de demonstração (5-10 min): QR Code scan → telemetria em tempo real → alerta → downlink.
 - [ ] `docs/DEMO_SCRIPT.md`: roteiro passo-a-passo da demo.
 
-### Aluno 2 — SaaS Backend
+### Aluno 2 — Linx Core
 - [ ] Prometheus via `prometheus-fastapi-instrumentator`: latência (histogram), taxa de erro (counter), throughput (gauge) em `/metrics`.
 - [ ] Logs estruturados JSON com `structlog`: `timestamp`, `level`, `correlation_id`, `service`, `message`.
 - [ ] Middleware propagando `X-Correlation-ID` para gRPC, REST e logs.

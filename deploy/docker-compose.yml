@@ -19,8 +19,8 @@ services:
 
   identity_api:
     build:
-      context: ../saas_backend/.
-      dockerfile: identity_api/Dockerfile
+      context: ../linx_core/.
+      dockerfile: services/identity_api/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
@@ -66,8 +66,8 @@ services:
 
   agent_bridge:
     build:
-      context: ../saas_backend/.
-      dockerfile: agent_bridge/Dockerfile
+      context: ../linx_core/.
+      dockerfile: services/agent_bridge/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
@@ -84,7 +84,7 @@ services:
 
   client_agent:
     build:
-      context: ../client_agent_api/.
+      context: ../middleware/services/client_agent/.
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
@@ -118,9 +118,9 @@ services:
       timeout: 5s
       retries: 10
   tenant_app:
-    build: ../tenant_app_template/.
+    build: ../client/.
     restart: unless-stopped
-    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do SaaS Backend
+    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do Linx Core
     # a partir do container (não use "localhost" aqui).
     environment:
       - CLIENT_AGENT_URL=${CLIENT_AGENT_URL:-http://client_agent:8001}
@@ -161,8 +161,8 @@ services:
 
   routing:
     build:
-      context: ../saas_backend/.
-      dockerfile: routing/Dockerfile
+      context: ../
+      dockerfile: middleware/services/routing/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Gera os stubs Python gRPC (saas_agent_pb2.py / saas_agent_pb2_grpc.py) a
-# partir de proto/saas_agent.proto, para a biblioteca compartilhada do SaaS
+# Gera os stubs Python gRPC (linx_agent_pb2.py / linx_agent_pb2_grpc.py) a
+# partir de proto/linx_agent.proto, para a biblioteca compartilhada do Linx Core
 # (package linx_shared), o Client Agent (package agent) e o tenant app
 # template (package tenant).
 #
@@ -20,21 +20,21 @@ gen() {
     -I "$ROOT/proto" \
     --python_out="$ROOT/$out" \
     --grpc_python_out="$ROOT/$out" \
-    "$ROOT/proto/saas_agent.proto"
+    "$ROOT/proto/linx_agent.proto"
 }
 
-gen saas_backend/shared saas_backend/shared/src/linx_shared/grpc
-gen client_agent_api client_agent_api/src/agent/grpc
-gen tenant_app_template tenant_app_template/src/tenant/grpc
+gen linx_core/shared linx_core/shared/src/linx_shared/grpc
+gen middleware/services/client_agent middleware/services/client_agent/src/agent/grpc
+gen client client/src/tenant/grpc
 
-# grpc_tools.protoc gera `import saas_agent_pb2` (absoluto), o que quebra
+# grpc_tools.protoc gera `import linx_agent_pb2` (absoluto), o que quebra
 # quando o arquivo vive dentro de um pacote (linx_shared.grpc / agent.grpc /
 # tenant.grpc). Corrige para import relativo.
 for grpc_file in \
-  saas_backend/shared/src/linx_shared/grpc/saas_agent_pb2_grpc.py \
-  client_agent_api/src/agent/grpc/saas_agent_pb2_grpc.py \
-  tenant_app_template/src/tenant/grpc/saas_agent_pb2_grpc.py; do
-  sed -i 's/^import saas_agent_pb2 as saas__agent__pb2$/from . import saas_agent_pb2 as saas__agent__pb2/' "$grpc_file"
+  linx_core/shared/src/linx_shared/grpc/linx_agent_pb2_grpc.py \
+  middleware/services/client_agent/src/agent/grpc/linx_agent_pb2_grpc.py \
+  client/src/tenant/grpc/linx_agent_pb2_grpc.py; do
+  sed -i 's/^import linx_agent_pb2 as linx__agent__pb2$/from . import linx_agent_pb2 as linx__agent__pb2/' "$grpc_file"
 done
 
-echo "Stubs gRPC gerados em saas_backend/shared/src/linx_shared/grpc, client_agent_api/src/agent/grpc e tenant_app_template/src/tenant/grpc"
+echo "Stubs gRPC gerados em linx_core/shared/src/linx_shared/grpc, middleware/services/client_agent/src/agent/grpc e client/src/tenant/grpc"

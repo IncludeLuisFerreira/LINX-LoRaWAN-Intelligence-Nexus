@@ -1,0 +1,17 @@
+[project]
+name = "linx-middleware"
+version = "0.1.0"
+description = "Task runner do middleware (client_agent + routing)."
+requires-python = ">=3.12,<4.0"
+
+[tool.poetry]
+package-mode = false
+
+[dependency-groups]
+dev = [
+    "taskipy (>=1.14.1,<2.0.0)"
+]
+
+[tool.taskipy.tasks]
+lint = "poetry -C services/client_agent run task lint && poetry -C services/routing run task lint"
+test = "poetry -C services/client_agent run pytest && poetry -C services/routing run pytest"
