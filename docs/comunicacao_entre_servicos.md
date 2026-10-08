@@ -61,6 +61,7 @@ flowchart LR
     RMQ -- "entrega" --> CO
     CA -- "gRPC GetAppConfig" --> AB
     TA -- "gRPC GetAppConfig" --> AB
+    CA -. "ingest REST (avulso)" .-> TA
     TA --> TS
 ```
 
@@ -76,7 +77,7 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 | `client_agent`                  | `agent_bridge`                   | gRPC                  | `50051` | `GetAppConfig` sob demanda (com cache) e health check  | startup / on-demand |
 | Broker MQTT                     | `routing`                        | MQTT                  | `1883`  | Receber uplinks LoRaWAN do ChirpStack                  | contínuo      |
 | `routing`                       | `rabbitmq` (exchange `linx.telemetry`) | AMQP            | `5672`  | Publicar envelope normalizado (routing key por tópico) | por uplink    |
-| `client_agent` (`/ingest`)      | `tenant_app` (`/ingest`)         | HTTP/REST             | `8002`  | Encaminhar telemetria validada (endpoint REST avulso)  | sob demanda   |
+| `client_agent` (`/ingest`)      | `tenant_app` (`/ingest`)         | HTTP/REST             | `8002`  | Encaminhar telemetria validada (endpoint REST avulso/legado; o caminho principal agora é o RabbitMQ) | sob demanda   |
 | `tenant_app`                    | `timescaledb`                    | PostgreSQL (`asyncpg`)| `5432`  | `INSERT` na hypertable `telemetry`                     | por ingest    |
 | `agent_bridge` / `identity_api` | `db`                             | PostgreSQL            | `5432`  | Ler/escrever o plano de controle                       | contínuo      |
 | Frontend / clientes externos    | `identity_api`                   | HTTP/REST             | `8000`  | CRUD de tenants e aplicações                           | sob demanda   |
@@ -244,6 +245,12 @@ publica no exchange `topic` durável `linx.telemetry` do RabbitMQ. O middleware 
 resolve tenant nem endpoint: a distribuição para os consumidores finais é feita por
 filas e bindings no RabbitMQ.
 
+Na partida, o `routing` declara também uma fila durável de auditoria
+(`RABBIT_AUDIT_QUEUE`, default `linx.telemetry.audit`) com binding `#`, de modo que
+nenhuma mensagem é descartada em silêncio enquanto não há consumidor ligado ao
+exchange. Consumidores reais ligam suas próprias filas e podem usar essa fila apenas
+para auditoria/reprocessamento.
+
 ### 5.1 Sequência
 
 ```mermaid
@@ -259,6 +266,7 @@ sequenceDiagram
     RT->>RT: build_envelope
     RT->>RMQ: publish routing_key=application.{app_id}.device.{dev_eui}.{event_type}
     Note over RT: publisher confirm
+    RT-->>MQ: ack MQTT (manual_ack) só após o confirm
     RMQ-->>CO: entrega pela fila ligada ao binding
 ```
 
@@ -272,6 +280,11 @@ do tópico MQTT consumido.
 | `app_id`     | 2º segmento do tópico (`application/{app_id}/...`). |
 | `dev_eui`    | 4º segmento (`.../device/{dev_eui}/...`).           |
 | `event_type` | 6º segmento (`.../event/{event_type}`).             |
+
+Cada segmento é validado por uma regex restritiva (`^[A-Za-z0-9_-]+$`) para que um
+`app_id`/`dev_eui` com `.` não altere a estrutura da routing key nem falsifique
+bindings. Quando o corpo traz `deviceInfo.devEui`/`deviceInfo.applicationId`, eles
+precisam bater com o tópico; divergência descarta a mensagem.
 
 ### 5.3 Envelope normalizado
 
@@ -291,10 +304,16 @@ A mensagem é publicada com `content_type: application/json` e `delivery_mode: 2
 ### 5.4 Tratamento de erros
 
 O `routing` **nunca** lança exceção para fora do callback MQTT: tópico fora do formato,
-JSON inválido, payload não-objeto, `object`/`time` ausentes ou payload acima de
-`MAX_PAYLOAD_BYTES` geram `warning` e a mensagem é descartada. A conexão com o RabbitMQ
-é reprocessada com backoff até `RABBIT_CONNECT_MAX_ATTEMPTS`; falha de publicação é
-logada sem derrubar o consumidor.
+JSON inválido, payload não-objeto, `object`/`time` ausentes, identidade divergente ou
+payload acima de `MAX_PAYLOAD_BYTES` geram `warning` e a mensagem é descartada. JSON com
+`NaN`/`Infinity` é rejeitado (`parse_constant`). A conexão com o RabbitMQ é reprocessada
+com backoff até `RABBIT_CONNECT_MAX_ATTEMPTS`; falha de publicação é logada sem derrubar
+o consumidor.
+
+A entrega é **at-least-once**: o ack MQTT (QoS 1, `manual_ack`) só é dado depois que o
+RabbitMQ confirma a publicação. Se o broker estiver indisponível, a mensagem fica sem
+ack e é reentregue; uma republicação após timeout/nack pode duplicar. Consumidores
+devem ser idempotentes.
 
 > **Status de execução:** o pipeline está implementado em `middleware/services/routing`
 > e é exercitado com `mosquitto_pub` + um binding de teste no RabbitMQ. No
@@ -343,8 +362,9 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 | `MQTT_BROKER_HOST`       | `routing`                  | `mosquitto`                                | Host do broker MQTT (ChirpStack).                                |
 | `MQTT_BROKER_PORT`       | `routing`                  | `1883`                                     | Porta do broker MQTT.                                            |
 | `MQTT_QOS`               | `routing`                  | `1`                                        | QoS da inscrição no tópico de uplink.                            |
-| `RABBIT_URL`             | `routing`                  | `amqp://guest:guest@rabbitmq:5672/%2f`     | Conexão AMQP com o RabbitMQ.                                     |
+| `RABBIT_URL`             | `routing`                  | `amqp://linx:linx@rabbitmq:5672/%2f`       | Conexão AMQP com o RabbitMQ.                                     |
 | `RABBIT_EXCHANGE`        | `routing`                  | `linx.telemetry`                           | Exchange `topic` durável de destino dos envelopes.               |
+| `RABBIT_AUDIT_QUEUE`     | `routing`                  | `linx.telemetry.audit`                     | Fila durável com binding `#`; evita descarte silencioso.         |
 | `RABBIT_CONNECT_MAX_ATTEMPTS` | `routing`             | `5`                                        | Tentativas de conexão ao RabbitMQ.                               |
 | `RABBIT_CONNECT_BACKOFF_SECONDS` | `routing`           | `1.0`                                      | Backoff (s) entre tentativas de conexão.                         |
 | `MAX_PAYLOAD_BYTES`      | `routing`                  | `65536`                                    | Tamanho máximo do payload MQTT aceito.                           |

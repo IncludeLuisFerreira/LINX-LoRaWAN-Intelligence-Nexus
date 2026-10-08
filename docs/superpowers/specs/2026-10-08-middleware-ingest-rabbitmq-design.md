@@ -100,7 +100,7 @@ ChirpStack → Mosquitto (topic up)
 
 Formato: `application.{app_id}.device.{dev_eui}.{event_type}`
 
-Exemplo: `application.206b6a58-.../device.ac1f09.../event.up`.
+Exemplo: `application.206b6a58-....device.ac1f09....up`.
 
 Derivada diretamente das partes do tópico MQTT. Os separadores de path do
 tópico (`application/<app_id>/device/<dev_eui>/event/<event_type>`) são

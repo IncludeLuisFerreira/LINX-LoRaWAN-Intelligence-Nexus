@@ -46,9 +46,16 @@ tópico MQTT consumido.
 ### Validação e erros
 
 São descartadas com `warning`, sem derrubar o consumidor: tópico fora do formato,
-JSON inválido, payload não-objeto, `object`/`time` ausentes e payload acima de
-`MAX_PAYLOAD_BYTES`. A conexão com o RabbitMQ é reprocessada com backoff até
-`RABBIT_CONNECT_MAX_ATTEMPTS`.
+JSON inválido (inclui `NaN`/`Infinity`), payload não-objeto, `object`/`time` ausentes,
+identidade do corpo divergente do tópico e payload acima de `MAX_PAYLOAD_BYTES`. A
+conexão com o RabbitMQ é reprocessada com backoff até `RABBIT_CONNECT_MAX_ATTEMPTS`.
+
+Na partida o serviço declara a fila durável `RABBIT_AUDIT_QUEUE` (default
+`linx.telemetry.audit`) com binding `#`, garantindo que mensagens não são descartadas
+em silêncio enquanto não há consumidor ligado ao exchange. A entrega é
+**at-least-once**: o ack MQTT (QoS 1, `manual_ack`) só ocorre após o confirm do
+RabbitMQ, então mensagens sem ack são reentregues e consumidores devem ser
+idempotentes.
 
 ### Configuração
 
@@ -60,9 +67,13 @@ JSON inválido, payload não-objeto, `object`/`time` ausentes e payload acima de
 | `MQTT_QOS`                       | `1`                                     | QoS da inscrição.                         |
 | `RABBIT_URL`                     | `amqp://guest:guest@localhost:5672/%2f` | Conexão AMQP com o RabbitMQ.              |
 | `RABBIT_EXCHANGE`                | `linx.telemetry`                        | Exchange `topic` durável de destino.      |
+| `RABBIT_AUDIT_QUEUE`             | `linx.telemetry.audit`                  | Fila durável com binding `#`; evita descarte silencioso. |
 | `RABBIT_CONNECT_MAX_ATTEMPTS`    | `5`                                     | Tentativas de conexão ao RabbitMQ.        |
 | `RABBIT_CONNECT_BACKOFF_SECONDS` | `1.0`                                   | Backoff (s) entre tentativas.             |
 | `MAX_PAYLOAD_BYTES`              | `65536`                                 | Cap de tamanho do payload MQTT.           |
+
+> A senha na `RABBIT_URL` precisa de URL-encode quando tiver caracteres especiais
+> (`@`, `:`, `/`, `?`...). Ex.: `p@ss` vira `p%40ss`.
 
 ### Estrutura
 
