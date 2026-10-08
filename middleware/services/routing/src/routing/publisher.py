@@ -15,11 +15,13 @@ class RabbitPublisher:
         exchange: str,
         connect_max_attempts: int = 5,
         backoff_seconds: float = 1.0,
+        audit_queue: str | None = None,
     ) -> None:
         self._url = url
         self._exchange_name = exchange
         self._connect_max_attempts = connect_max_attempts
         self._backoff_seconds = backoff_seconds
+        self._audit_queue_name = audit_queue
         self._connection: Any = None
         self._channel: Any = None
         self._exchange: Any = None
@@ -35,6 +37,15 @@ class RabbitPublisher:
             durable=True,
         )
         self._exchange.declare()
+        if self._audit_queue_name:
+            queue = rabbitpy.Queue(
+                self._channel,
+                self._audit_queue_name,
+                durable=True,
+                auto_delete=False,
+            )
+            queue.declare()
+            queue.bind(self._exchange, routing_key="#")
 
     def _is_connected(self) -> bool:
         if self._connection is None or self._channel is None:

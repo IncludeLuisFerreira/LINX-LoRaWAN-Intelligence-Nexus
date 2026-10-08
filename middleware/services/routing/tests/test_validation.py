@@ -91,3 +91,95 @@ def test_validate_message_drops_missing_timestamp(caplog):
             validate_message(_TOPIC, _raw({"object": {}}), max_bytes=65536)
             is None
         )
+
+
+def test_validate_message_drops_null_timestamp(caplog):
+    with caplog.at_level("WARNING"):
+        assert (
+            validate_message(
+                _TOPIC,
+                _raw({"object": {}, "time": None}),
+                max_bytes=65536,
+            )
+            is None
+        )
+
+
+def test_validate_message_drops_non_string_timestamp(caplog):
+    with caplog.at_level("WARNING"):
+        assert (
+            validate_message(
+                _TOPIC, _raw({"object": {}, "time": 123}), max_bytes=65536
+            )
+            is None
+        )
+
+
+def test_parse_topic_rejects_segment_with_dot():
+    assert parse_topic("application/a.pp/device/devA/event/up") is None
+    assert parse_topic("application/app1/device/de.v/event/up") is None
+    assert parse_topic("application/app1/device/devA/event/up!") is None
+
+
+def test_parse_topic_accepts_allowed_segment_chars():
+    assert parse_topic("application/app-1_x/device/devA/event/up") == (
+        TopicParts("app-1_x", "devA", "up")
+    )
+
+
+def test_validate_message_drops_identity_mismatch_dev_eui(caplog):
+    event = {
+        "object": {"t": 20},
+        "time": "t",
+        "deviceInfo": {"devEui": "other"},
+    }
+
+    with caplog.at_level("WARNING"):
+        assert validate_message(_TOPIC, _raw(event), max_bytes=65536) is None
+
+    assert "diverge" in caplog.text
+
+
+def test_validate_message_drops_identity_mismatch_app_id(caplog):
+    event = {
+        "object": {"t": 20},
+        "time": "t",
+        "deviceInfo": {"applicationId": "other-app"},
+    }
+
+    with caplog.at_level("WARNING"):
+        assert validate_message(_TOPIC, _raw(event), max_bytes=65536) is None
+
+
+def test_validate_message_accepts_matching_identity_case_insensitive():
+    event = {
+        "object": {"t": 20},
+        "time": "t",
+        "deviceInfo": {"devEui": "DEVA", "applicationId": "APP1"},
+    }
+
+    assert validate_message(_TOPIC, _raw(event), max_bytes=65536) is not None
+
+
+def test_validate_message_rejects_nan(caplog):
+    with caplog.at_level("WARNING"):
+        assert (
+            validate_message(
+                _TOPIC,
+                b'{"object": {"v": NaN}, "time": "t"}',
+                max_bytes=65536,
+            )
+            is None
+        )
+
+
+def test_validate_message_rejects_infinity(caplog):
+    with caplog.at_level("WARNING"):
+        assert (
+            validate_message(
+                _TOPIC,
+                b'{"object": {"v": Infinity}, "time": "t"}',
+                max_bytes=65536,
+            )
+            is None
+        )

@@ -14,6 +14,7 @@ class _FakeRabbit:
         self.last_message = None
         self.published = []
         self.exchange = None
+        self.queues = []
 
     def Connection(self, url):
         self.connection_calls.append(url)
@@ -41,6 +42,30 @@ class _FakeRabbit:
         self.exchange.declare = MagicMock()
         return self.exchange
 
+    def Queue(
+        self,
+        channel,
+        name,
+        durable=False,
+        auto_delete=False,
+        exclusive=False,
+        arguments=None,
+    ):
+        queue = SimpleNamespace(
+            name=name,
+            durable=durable,
+            auto_delete=auto_delete,
+            binds=[],
+        )
+        queue.declare = MagicMock()
+        queue.bind = MagicMock(
+            side_effect=lambda source, routing_key=None, arguments=None: (
+                queue.binds.append((source, routing_key)) or True
+            )
+        )
+        self.queues.append(queue)
+        return queue
+
     def Message(self, channel, body, properties=None):
         self.last_message = SimpleNamespace(
             body=body,
@@ -66,6 +91,30 @@ def test_connect_declares_durable_topic_exchange(fake_rabbit):
     assert fake_rabbit.exchange.exchange_type == "topic"
     assert fake_rabbit.exchange.durable is True
     assert fake_rabbit.channel.enable_publisher_confirms.called
+
+
+def test_connect_declares_durable_audit_queue_bound(fake_rabbit):
+    pub = RabbitPublisher(
+        "amqp://h", "linx.telemetry", audit_queue="linx.telemetry.audit"
+    )
+
+    assert pub.connect() is True
+    assert len(fake_rabbit.queues) == 1
+    queue = fake_rabbit.queues[0]
+    assert queue.name == "linx.telemetry.audit"
+    assert queue.durable is True
+    assert queue.auto_delete is False
+    queue.declare.assert_called_once()
+    call = queue.bind.call_args
+    assert call.args[0] is fake_rabbit.exchange
+    assert call.kwargs["routing_key"] == "#"
+
+
+def test_connect_without_audit_queue_declares_no_queue(fake_rabbit):
+    pub = RabbitPublisher("amqp://h", "linx.telemetry")
+
+    assert pub.connect() is True
+    assert fake_rabbit.queues == []
 
 
 def test_connect_retries_then_succeeds(monkeypatch, fake_rabbit):

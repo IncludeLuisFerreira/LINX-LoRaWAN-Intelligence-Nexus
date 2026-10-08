@@ -1,9 +1,16 @@
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_SEGMENT_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _reject_constant(value: str) -> Any:
+    raise ValueError(f"constante JSON não permitida: {value}")
 
 
 @dataclass(frozen=True)
@@ -32,9 +39,26 @@ def parse_topic(topic: str) -> TopicParts | None:
     if segments[4] != "event":
         return None
     app_id, dev_eui, event_type = segments[1], segments[3], segments[5]
-    if not app_id or not dev_eui or not event_type:
+    if not all(
+        _SEGMENT_PATTERN.match(part) for part in (app_id, dev_eui, event_type)
+    ):
         return None
     return TopicParts(app_id, dev_eui, event_type)
+
+
+def _identity_mismatch(event: dict[str, Any], parts: TopicParts) -> bool:
+    device_info = event.get("deviceInfo")
+    if not isinstance(device_info, dict):
+        return False
+    body_dev_eui = device_info.get("devEui")
+    if isinstance(body_dev_eui, str) and body_dev_eui:
+        if body_dev_eui.lower() != parts.dev_eui.lower():
+            return True
+    body_app_id = device_info.get("applicationId")
+    if isinstance(body_app_id, str) and body_app_id:
+        if body_app_id.lower() != parts.app_id.lower():
+            return True
+    return False
 
 
 def validate_message(
@@ -54,8 +78,8 @@ def validate_message(
         return None
 
     try:
-        event = json.loads(raw.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError):
+        event = json.loads(raw.decode(), parse_constant=_reject_constant)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         logger.warning("payload JSON inválido no tópico %r", topic)
         return None
 
@@ -70,8 +94,15 @@ def validate_message(
         )
         return None
 
-    if "time" not in event:
-        logger.warning("campo 'time' ausente no tópico %r", topic)
+    timestamp = event.get("time")
+    if not isinstance(timestamp, str) or not timestamp:
+        logger.warning("campo 'time' ausente ou inválido no tópico %r", topic)
+        return None
+
+    if _identity_mismatch(event, parts):
+        logger.warning(
+            "identidade do corpo diverge do tópico %r; descartado", topic
+        )
         return None
 
     return ValidUplink(

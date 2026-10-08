@@ -3,6 +3,7 @@
 import logging
 import queue
 import signal
+import sys
 import threading
 
 from routing.config import settings
@@ -20,6 +21,11 @@ class IngestService:
         self._q: queue.Queue = queue.Queue(maxsize=1000)
         self._stop_event = threading.Event()
         self._publisher_thread: threading.Thread | None = None
+        self._join_timeout = (
+            settings.rabbit_connect_max_attempts
+            * settings.rabbit_connect_backoff_seconds
+            + 5.0
+        )
         self.consumer = MqttConsumer(
             broker_host=settings.mqtt_broker_host,
             broker_port=settings.mqtt_broker_port,
@@ -27,32 +33,44 @@ class IngestService:
             qos=settings.mqtt_qos,
             max_payload_bytes=settings.max_payload_bytes,
             out_queue=self._q,
+            client_id=settings.mqtt_client_id,
+            connect_max_attempts=settings.mqtt_connect_max_attempts,
+            connect_backoff_seconds=settings.mqtt_connect_backoff_seconds,
+            stop_event=self._stop_event,
         )
         self.publisher = RabbitPublisher(
             settings.rabbit_url,
             settings.rabbit_exchange,
             settings.rabbit_connect_max_attempts,
             settings.rabbit_connect_backoff_seconds,
+            audit_queue=settings.rabbit_audit_queue,
         )
+
+    @property
+    def stopped(self) -> bool:
+        return self._stop_event.is_set()
 
     def _publisher_worker(self) -> None:
         while True:
-            try:
-                uplink = self._q.get(timeout=1.0)
-            except queue.Empty:
-                if self._stop_event.is_set():
-                    return
-                continue
-            if uplink is None:
+            if self._stop_event.is_set():
                 return
+            try:
+                pending = self._q.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            if pending is None:
+                return
+            uplink = pending.uplink
             try:
                 key = routing_key(
                     uplink.app_id, uplink.dev_eui, uplink.event_type
                 )
-                if not self.publisher.publish(key, build_envelope(uplink)):
+                if self.publisher.publish(key, build_envelope(uplink)):
+                    self.consumer.ack(pending.mid, pending.qos)
+                else:
                     logger.error(
                         "Publicação descartada após esgotar tentativas "
-                        "para o dev_eui %s",
+                        "para o dev_eui %s; mensagem MQTT não confirmada",
                         uplink.dev_eui,
                     )
             except Exception:
@@ -67,18 +85,38 @@ class IngestService:
         )
         self._publisher_thread.start()
 
-    def start(self) -> None:
+    def start(self) -> bool:
+        if self._stop_event.is_set():
+            return False
         if not self.publisher.connect():
-            return
+            return False
+        if self._stop_event.is_set():
+            self.publisher.close()
+            return False
         self._start_publisher_thread()
-        self.consumer.start()
+        if not self.consumer.start():
+            self._stop_event.set()
+            return False
+        return True
 
     def stop(self) -> None:
         self._stop_event.set()
         self.consumer.stop()
-        self._q.put(None)
+        try:
+            self._q.put_nowait(None)
+        except queue.Full:
+            logger.warning(
+                "Fila cheia no shutdown; worker drenará sem sentinela"
+            )
         if self._publisher_thread is not None:
-            self._publisher_thread.join(timeout=5.0)
+            self._publisher_thread.join(timeout=self._join_timeout)
+            if self._publisher_thread.is_alive():
+                logger.error(
+                    "Thread publisher não terminou em %ss; conexão RabbitMQ "
+                    "não será fechada para não ser usada em corrida",
+                    self._join_timeout,
+                )
+                return
         self.publisher.close()
 
 
@@ -95,7 +133,9 @@ def main() -> None:  # pragma: no cover
 
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
-    service.start()
+    if not service.start() and not service.stopped:
+        logger.error("Serviço não iniciou; saindo com código 1")
+        sys.exit(1)
 
 
 if __name__ == "__main__":  # pragma: no cover
