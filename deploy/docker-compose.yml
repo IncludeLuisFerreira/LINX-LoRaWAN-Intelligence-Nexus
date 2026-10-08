@@ -164,10 +164,12 @@ services:
     restart: unless-stopped
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-linx}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-linx}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      # Publicados apenas no loopback do host. O management UI (15672) e o
+      # AMQP (5672) nunca devem ir para 0.0.0.0/0.
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -187,8 +189,9 @@ services:
       - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mosquitto}
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
       - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
-      - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS:-linx}@rabbitmq:5672/%2f}
+      - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f}
       - RABBIT_EXCHANGE=${RABBIT_EXCHANGE:-linx.telemetry}
+      - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}
     depends_on:
       mosquitto:
         condition: service_healthy
