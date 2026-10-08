@@ -1,6 +1,6 @@
-# Contrato gRPC — `proto/saas_agent.proto`
+# Contrato gRPC — `proto/linx_agent.proto`
 
-Contrato compartilhado entre o **SaaS Backend** (servidor) e o **Client Agent
+Contrato compartilhado entre o **Linx Core** (servidor) e o **Client Agent
 API** (middleware compartilhado). Define o serviço `AgentBridge`, que sustenta
 toda a comunicação gRPC entre os serviços da plataforma.
 
@@ -17,7 +17,7 @@ A geração dos stubs Python é feita na issue #20.
 | `ReportViolation`| `Violation`    | `Ack`        | Client Agent → SaaS             | Notificar violação de regra (S6) |
 
 > **Nota sobre direção (bidirecional):** o contrato é único, mas cada lado
-> expõe um servidor gRPC conforme o RPC. O **SaaS Backend** hospeda
+> expõe um servidor gRPC conforme o RPC. O **Linx Core** hospeda
 > `GetAppConfig` e `ReportViolation`; o **Client Agent API** (middleware
 > compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A persistência de
 > telemetria é exposta pelo middleware no `POST /ingest` (issue
@@ -87,18 +87,19 @@ A geração dos stubs Python é feita na issue #20.
 ## Como compilar / verificar
 
 ```bash
-protoc --descriptor_set_out=/dev/null --proto_path=proto proto/saas_agent.proto
+protoc --descriptor_set_out=/dev/null --proto_path=proto proto/linx_agent.proto
 ```
 
 ## Gerar stubs Python (issue #20)
 
-Os stubs são versionados em `saas_backend/src/linx/grpc/` (pacote `linx`) e em
-`client_agent_api/src/agent/grpc/` (pacote `agent`). Para regenerar:
+Os stubs são versionados em `linx_core/shared/src/linx_shared/grpc/` (pacote
+`linx_shared`) e em `middleware/services/client_agent/src/agent/grpc/` (pacote
+`agent`). Para regenerar:
 
 ```bash
 bash scripts/gen_proto.sh
 ```
 
 O script usa `grpc_tools.protoc` e corrige o import absoluto gerado para
-import relativo (`from . import saas_agent_pb2`), necessário dentro de pacote.
+import relativo (`from . import linx_agent_pb2`), necessário dentro de pacote.
 Requer `grpcio-tools` instalado em cada módulo (dev dependency).

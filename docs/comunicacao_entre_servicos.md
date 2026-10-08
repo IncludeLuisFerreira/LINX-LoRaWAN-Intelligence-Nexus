@@ -37,7 +37,7 @@ Três protocolos sustentam a comunicação:
 
 ```mermaid
 flowchart LR
-    subgraph SaaS["SaaS Backend (plano de controle)"]
+    subgraph SaaS["Linx Core (plano de controle)"]
         ID["identity_api<br/>REST :8000"]
         AB["agent_bridge<br/>gRPC :50051"]
         DB[("db<br/>PostgreSQL 15")]
@@ -81,8 +81,8 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 
 ## 3. Contrato gRPC — `AgentBridge`
 
-O contrato é versionado na raiz do repositório em [`proto/saas_agent.proto`](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/blob/main/proto/saas_agent.proto)
-e é **compartilhado** entre o SaaS Backend e o Client Agent. Os stubs Python são gerados
+O contrato é versionado na raiz do repositório em [`proto/linx_agent.proto`](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/blob/main/proto/linx_agent.proto)
+e é **compartilhado** entre o Linx Core e o Client Agent. Os stubs Python são gerados
 por `scripts/gen_proto.sh` para os pacotes `linx.grpc`, `agent.grpc` e `tenant.grpc`.
 
 - **Pacote:** `linx`

@@ -13,12 +13,12 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 
 **Subsistemas:**
 
-- `saas_backend/` — Microserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`), `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
-- `client_agent_api/` — Middleware de segurança e roteamento: valida JWT e direciona requisições ao contêiner isolado correto.
-- `tenant_app_template/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
-- `frontend/` — Dashboard React consumindo dados via `client_agent_api` e WebSocket.
+- `linx_core/` — Microsserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`) e `services/` com `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
+- `middleware/` — Middleware de roteamento e segurança: `services/client_agent/` (roteia requisições ao contêiner isolado correto) e `services/routing/` (uplink MQTT → device_routes → client agent).
+- `client/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
+- `frontend/` — Dashboard React consumindo dados via `middleware` (REST + polling).
 - `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
-- `proto/` — Contrato gRPC compartilhado (`saas_agent.proto`) entre SaaS Backend e Client Agent.
+- `proto/` — Contrato gRPC compartilhado (`linx_agent.proto`) entre Linx Core e Client Agent.
 
 > Documentação completa do produto: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md)
 
@@ -28,19 +28,23 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 
 ```
 LINX/
-├── saas_backend/           # Microserviços do SaaS (plano de controle)
-│   ├── shared/             #   biblioteca comum (linx_shared)
-│   ├── identity_api/       #   REST (FastAPI)      :8000
-│   └── agent_bridge/       #   gRPC (AgentBridge)  :50051
-├── client_agent_api/       # Middleware: autenticação JWT + roteamento multi-tenant
-├── tenant_app_template/    # Template do Docker Cliente (motor de regras + TimescaleDB)
+├── linx_core/              # Microsserviços do plano de controle
+│   ├── services/
+│   │   ├── identity_api/   #   REST (FastAPI)      :8000
+│   │   └── agent_bridge/   #   gRPC (AgentBridge)  :50051
+│   └── shared/             #   biblioteca comum (linx_shared)
+├── middleware/             # Middleware: autenticação JWT + roteamento multi-tenant
+│   └── services/
+│       ├── client_agent/   #   Client Agent (REST + gRPC client)
+│       └── routing/        #   Roteamento de uplinks MQTT
+├── client/                 # Template do Docker Cliente (motor de regras + TimescaleDB)
 ├── frontend/               # Dashboard web (React + Vite + TailwindCSS)
 ├── infra/                  # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
 │   ├── docker-compose.yml         # Stack completa ChirpStack v4
 │   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
 │   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
 ├── proto/                  # Contrato gRPC compartilhado (AgentBridge)
-│   └── saas_agent.proto    # service AgentBridge (proto3)
+│   └── linx_agent.proto    # service AgentBridge (proto3)
 ├── docs/
 │   ├── estrutura_de_pastas/
 │   ├── analise_seguranca_chirpstack/

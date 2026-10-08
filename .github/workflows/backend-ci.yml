@@ -3,14 +3,14 @@ name: backend-ci
 on:
   pull_request:
     paths:
-      - "saas_backend/**"
+      - "linx_core/**"
       - ".github/workflows/backend-ci.yml"
   push:
     branches:
       - main
       - develop
     paths:
-      - "saas_backend/**"
+      - "linx_core/**"
       - ".github/workflows/backend-ci.yml"
 
 env:
@@ -24,10 +24,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, identity_api, agent_bridge, routing]
+        package: [shared, services/identity_api, services/agent_bridge]
     defaults:
       run:
-        working-directory: saas_backend
+        working-directory: linx_core
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, identity_api, agent_bridge, routing]
+        package: [shared, services/identity_api, services/agent_bridge]
     services:
       postgres:
         image: postgres:15-alpine
@@ -78,7 +78,7 @@ jobs:
           --health-retries 5
     defaults:
       run:
-        working-directory: saas_backend
+        working-directory: linx_core
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,12 +94,11 @@ jobs:
       - name: Install dependencies
         run: |
           poetry -C shared install
-          poetry -C identity_api install
-          poetry -C agent_bridge install
-          poetry -C routing install
+          poetry -C services/identity_api install
+          poetry -C services/agent_bridge install
 
       - name: Apply migrations
-        run: poetry -C identity_api run alembic -c ../alembic.ini upgrade head
+        run: poetry -C services/identity_api run alembic -c ../../alembic.ini upgrade head
 
       - name: Pytest (cobertura >= 70%)
         run: poetry -C ${{ matrix.package }} run pytest --cov=src --cov-report=term-missing --cov-fail-under=70

@@ -19,8 +19,8 @@ services:
 
   identity_api:
     build:
-      context: ../saas_backend/.
-      dockerfile: identity_api/Dockerfile
+      context: ../linx_core/.
+      dockerfile: services/identity_api/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
@@ -66,8 +66,8 @@ services:
 
   agent_bridge:
     build:
-      context: ../saas_backend/.
-      dockerfile: agent_bridge/Dockerfile
+      context: ../linx_core/.
+      dockerfile: services/agent_bridge/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
@@ -84,7 +84,7 @@ services:
 
   client_agent:
     build:
-      context: ../client_agent_api/.
+      context: ../middleware/services/client_agent/.
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file: .env
@@ -118,9 +118,9 @@ services:
       timeout: 5s
       retries: 10
   tenant_app:
-    build: ../tenant_app_template/.
+    build: ../client/.
     restart: unless-stopped
-    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do SaaS Backend
+    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do Linx Core
     # a partir do container (não use "localhost" aqui).
     environment:
       - CLIENT_AGENT_URL=${CLIENT_AGENT_URL:-http://client_agent:8001}
@@ -148,11 +148,21 @@ services:
       - "1883:1883"
     volumes:
       - ../infra/configuration/mosquitto/config:/mosquitto/config:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -W 3 -C 1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   routing:
     build:
-      context: ../saas_backend/.
-      dockerfile: routing/Dockerfile
+      context: ../
+      dockerfile: middleware/services/routing/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
@@ -165,7 +175,7 @@ services:
       db:
         condition: service_healthy
       mosquitto:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   pgdata:

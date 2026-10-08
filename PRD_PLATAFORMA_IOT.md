@@ -18,7 +18,7 @@ A Plataforma IoT Distribuída LINX é uma solução para aquisição, processame
 
 A conectividade LoRaWAN é fornecida por uma **rede externa de Gateways** operada pela própria startup. Assim, o cliente não precisa adquirir, instalar, configurar ou manter Gateways no seu ambiente: o hardware no local se limita aos sensores/dispositivos finais (e, quando aplicável, suas fontes de energia e fixação). O SaaS realiza o onboarding dos sensores e faz o roteamento/armazenamento/acionamento na nuvem, enquanto a camada de rádio é provida como serviço pela rede de cobertura.
 
-A plataforma adota um modelo arquitetural de **isolamento por aplicação**. A infraestrutura central em nuvem (SaaS Backend) atua como orquestradora geral e roteadora de comunicação. Para cada Aplicação criada por uma Organização, o sistema provisiona um ambiente isolado (contêineres Docker) também na nuvem, contendo o motor de regras, armazenamento de telemetria (PostgreSQL/TimescaleDB) e serviços específicos daquela aplicação. O ambiente físico (Edge) é restrito exclusivamente aos sensores e Gateways de comunicação de rádio (RF).
+A plataforma adota um modelo arquitetural de **isolamento por aplicação**. A infraestrutura central em nuvem (Linx Core) atua como orquestradora geral e roteadora de comunicação. Para cada Aplicação criada por uma Organização, o sistema provisiona um ambiente isolado (contêineres Docker) também na nuvem, contendo o motor de regras, armazenamento de telemetria (PostgreSQL/TimescaleDB) e serviços específicos daquela aplicação. O ambiente físico (Edge) é restrito exclusivamente aos sensores e Gateways de comunicação de rádio (RF).
 
 ### 1.2. Problema
 
@@ -80,43 +80,43 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 
 **UC01 — Cadastro de Organização e Criação de Aplicação**
 
-- **Atores:** Administrador da Plataforma, SaaS Backend.
-- **Fluxo Principal:** O administrador cadastra uma organização no SaaS e cria uma nova "Aplicação" no painel SaaS. Uma “aplicação” precisa estar relacionada à uma organização. O SaaS Backend orquestra na nuvem um novo *Docker Cliente* isolado para este projeto (contendo exclusivamente os bancos de dados PostgreSQL/TimescaleDB e o motor de regras da aplicação). O SaaS Backend atualiza as rotas da **Client Agent API** (middleware) para que ela saiba direcionar requisições futuras para esta nova instância isolada.
+- **Atores:** Administrador da Plataforma, Linx Core.
+- **Fluxo Principal:** O administrador cadastra uma organização no SaaS e cria uma nova "Aplicação" no painel SaaS. Uma “aplicação” precisa estar relacionada à uma organização. O Linx Core orquestra na nuvem um novo *Docker Cliente* isolado para este projeto (contendo exclusivamente os bancos de dados PostgreSQL/TimescaleDB e o motor de regras da aplicação). O Linx Core atualiza as rotas da **Client Agent API** (middleware) para que ela saiba direcionar requisições futuras para esta nova instância isolada.
 
 **UC02 — Gestão de Usuários e Controle de Acesso (RBAC)**
 
-- **Atores:** Administrador da Organização, Aplicação, SaaS Backend, Client Agent API.
-- **Fluxo Principal:** O administrador convida um usuário e o vincula a uma Aplicação. O SaaS Backend registra as permissões. Ao fazer login, o usuário recebe um token JWT. Todas as requisições desse usuário passarão pela **Client Agent API**, que atuará como middleware de segurança, validando o token e garantindo que ele só acesse os recursos do *Docker Cliente* da sua aplicação autorizada.
+- **Atores:** Administrador da Organização, Aplicação, Linx Core, Client Agent API.
+- **Fluxo Principal:** O administrador convida um usuário e o vincula a uma Aplicação. O Linx Core registra as permissões. Ao fazer login, o usuário recebe um token JWT. Todas as requisições desse usuário passarão pela **Client Agent API**, que atuará como middleware de segurança, validando o token e garantindo que ele só acesse os recursos do *Docker Cliente* da sua aplicação autorizada.
 
 ### Categoria B: Infraestrutura IoT e Conectividade
 
 **UC03 — Cadastro de Gateway LoRaWAN**
 
-- **Atores:** Administrador SaaS, Equipe de Operação de Rede (Startup), SaaS Backend, ChirpStack.
-- **Fluxo Principal:** A startup opera uma rede externa de Gateways LoRaWAN (infraestrutura própria) e é responsável por planejar cobertura, instalar, cadastrar e monitorar os Gateways na região atendida. Os Gateways são previamente provisionados pela startup e vinculados ao ambiente ChirpStack (AWS), de modo que os sensores dos clientes possam utilizar a cobertura existente sem que o cliente instale hardware de gateway no local. O SaaS Backend utiliza o ChirpStack como camada de rede LoRaWAN e mantém a lógica de roteamento (Organização → Aplicação → Dispositivo) e persistência em nuvem.
+- **Atores:** Administrador SaaS, Equipe de Operação de Rede (Startup), Linx Core, ChirpStack.
+- **Fluxo Principal:** A startup opera uma rede externa de Gateways LoRaWAN (infraestrutura própria) e é responsável por planejar cobertura, instalar, cadastrar e monitorar os Gateways na região atendida. Os Gateways são previamente provisionados pela startup e vinculados ao ambiente ChirpStack (AWS), de modo que os sensores dos clientes possam utilizar a cobertura existente sem que o cliente instale hardware de gateway no local. O Linx Core utiliza o ChirpStack como camada de rede LoRaWAN e mantém a lógica de roteamento (Organização → Aplicação → Dispositivo) e persistência em nuvem.
 - **Pós-condição:** A rede de Gateways está operacional e apta a receber uplinks dos sensores, encaminhando-os ao ChirpStack/MQTT para posterior roteamento e persistência na nuvem.
 
 **UC04 — Provisionamento de Sensor via QR Code (TR005)**
 
-- **Atores:** Técnico de Campo, SaaS Backend, ChirpStack, Client Agent API.
-- **Fluxo Principal:** O técnico escaneia o QR Code do sensor pelo celular ou do computador e o vincula a uma Aplicação. O SaaS Backend provisiona o dispositivo no ChirpStack (via gRPC). A partir desse momento, a **Client Agent API** é instruída a rotear toda a telemetria proveniente deste sensor diretamente para o banco de dados isolado da aplicação escolhida.
+- **Atores:** Técnico de Campo, Linx Core, ChirpStack, Client Agent API.
+- **Fluxo Principal:** O técnico escaneia o QR Code do sensor pelo celular ou do computador e o vincula a uma Aplicação. O Linx Core provisiona o dispositivo no ChirpStack (via gRPC). A partir desse momento, a **Client Agent API** é instruída a rotear toda a telemetria proveniente deste sensor diretamente para o banco de dados isolado da aplicação escolhida.
 
 **UC05 — Atualização Remota de Firmware (FUOTA)**
 
-- **Atores:** Administrador, Client Agent API, SaaS Backend, ChirpStack.
-- **Fluxo Principal:** O administrador agenda uma atualização de firmware pelo painel. A requisição bate na **Client Agent API** (middleware), que autentica a chamada e repassa o comando ao SaaS Backend. O SaaS Backend coordena com o ChirpStack o envio do arquivo em pacotes *multicast* (Downlink) para os sensores físicos.
+- **Atores:** Administrador, Client Agent API, Linx Core, ChirpStack.
+- **Fluxo Principal:** O administrador agenda uma atualização de firmware pelo painel. A requisição bate na **Client Agent API** (middleware), que autentica a chamada e repassa o comando ao Linx Core. O Linx Core coordena com o ChirpStack o envio do arquivo em pacotes *multicast* (Downlink) para os sensores físicos.
 
 ## Categoria C: Operação, Regras e Monitoramento (Nuvem)
 
 **UC06 — Monitoramento de Telemetria em Tempo Real**
 
-- **Atores:** Operador, SaaS Backend, Client Agent API, Frontend.
-- **Fluxo Principal:** O operador acessa o dashboard. O frontend abre uma conexão WebSocket. O sensor transmite um dado que chega ao MQTT via ChirpStack. O SaaS Backend lê a fila MQTT e repassa à **Client Agent API**. O middleware salva o dado no *TimescaleDB* isolado da aplicação e, simultaneamente, faz o *push* via WebSocket para o frontend do operador.
+- **Atores:** Operador, Linx Core, Client Agent API, Frontend.
+- **Fluxo Principal:** O operador acessa o dashboard. O frontend abre uma conexão WebSocket. O sensor transmite um dado que chega ao MQTT via ChirpStack. O Linx Core lê a fila MQTT e repassa à **Client Agent API**. O middleware salva o dado no *TimescaleDB* isolado da aplicação e, simultaneamente, faz o *push* via WebSocket para o frontend do operador.
 
 **UC07 — Configuração de Regras de Negócio e Acionamento Remoto (Downlink)**
 
-- **Atores:** Operador, Docker Cliente (Motor de Regras), Client Agent API, SaaS Backend.
-- **Fluxo Principal:** O operador cadastra uma regra ("Temperatura > 40ºC liga o exaustor"). Essa regra fica salva no *Docker Cliente* da aplicação. Quando a telemetria chega, o motor isolado confirma a violação da regra e gera um comando de acionamento. Esse comando sobe para a **Client Agent API**, que o encaminha ao SaaS Backend, que por sua vez aciona o ChirpStack via gRPC para transmitir o *Downlink* até o Gateway físico.
+- **Atores:** Operador, Docker Cliente (Motor de Regras), Client Agent API, Linx Core.
+- **Fluxo Principal:** O operador cadastra uma regra ("Temperatura > 40ºC liga o exaustor"). Essa regra fica salva no *Docker Cliente* da aplicação. Quando a telemetria chega, o motor isolado confirma a violação da regra e gera um comando de acionamento. Esse comando sobe para a **Client Agent API**, que o encaminha ao Linx Core, que por sua vez aciona o ChirpStack via gRPC para transmitir o *Downlink* até o Gateway físico.
 
 **UC08 — Disparo de Alertas (Telegram/Email)**
 
@@ -143,13 +143,13 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 - **RF-010:** Para cada Aplicação criada, a plataforma deve provisionar um ambiente "Docker Cliente" dedicado na nuvem.
 - **RF-011:** A lógica de negócio  e confirmação de regras  devem rodar exclusivamente neste contêiner isolado.
 - **RF-012:** Cada Aplicação deve possuir persistência de dados isolada (PostgreSQL + TimescaleDB próprio na nuvem).
-- **RF-013:** O SaaS Backend deve rotear os dados (via MQTT/gRPC) garantindo que a telemetria de um dispositivo chegue apenas ao contêiner da sua respectiva aplicação.
+- **RF-013:** O Linx Core deve rotear os dados (via MQTT/gRPC) garantindo que a telemetria de um dispositivo chegue apenas ao contêiner da sua respectiva aplicação.
 
 ### 5.3. Gestão e Ingestão de Dispositivos (IoT)
 
 - **RF-020:** Dispositivos devem ser obrigatoriamente vinculados a uma Aplicação.
 - **RF-021:** O sistema deve suportar o provisionamento *plug and play* lendo o QR Code (TR005) com *SchemaID, JoinEUI, DevEUI*, etc ou solicitando o usuário preencher manualmente esses dados.
-- **RF-022:** O SaaS Backend deve intermediar a criação e gerenciamento do dispositivo no motor LoRaWAN (ChirpStack v4).
+- **RF-022:** O Linx Core deve intermediar a criação e gerenciamento do dispositivo no motor LoRaWAN (ChirpStack v4).
 - **RF-023:** O sistema deve permitir atualizações remotas de firmware em lote (FUOTA).
 
 ### 5.4. Comunicação em Tempo Real
@@ -161,13 +161,13 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 
 - **RF-040 (Nomeação):** Todo recurso (Organização, Aplicação, Dispositivo, Serviço) deve possuir um identificador único (UUID/URN) para navegação no sistema distribuído.
 - **RF-041 (Consistência):** O sistema deve definir o tratamento para mensagens MQTT duplicadas ou fora de ordem utilizando *timestamps* do Gateway e *relógios lógicos*.
-- **RF-042 (Resiliência):** O SaaS Backend deve implementar políticas de *retry* com *backoff* exponencial para falhas de comunicação gRPC/REST com os contêineres das aplicações.
+- **RF-042 (Resiliência):** O Linx Core deve implementar políticas de *retry* com *backoff* exponencial para falhas de comunicação gRPC/REST com os contêineres das aplicações.
 
 ---
 
 ## 6. Requisitos Não Funcionais
 
-- **RNF-001 (Escalabilidade):** A arquitetura deve suportar aumento horizontal da infraestrutura, tanto no cluster do SaaS Backend quanto na orquestração de milhares de instâncias "Docker Cliente".
+- **RNF-001 (Escalabilidade):** A arquitetura deve suportar aumento horizontal da infraestrutura, tanto no cluster do Linx Core quanto na orquestração de milhares de instâncias "Docker Cliente".
 - **RNF-002 (Disponibilidade):** Os serviços core da plataforma devem ter meta de *uptime* ≥ 99% em produção.
 - **RNF-003 (Latência):** O tempo percorrido entre a recepção do pacote pelo ChirpStack e a visualização no WebSocket do frontend deve ser ≤ 2 segundos.
 - **RNF-004 (Segurança em Trânsito):** Toda a comunicação externa e entre microserviços em diferentes redes (HTTPS/gRPC) deve obrigatoriamente utilizar TLS.
@@ -206,14 +206,14 @@ A arquitetura move toda a inteligência para a AWS (Cloud), reduzindo o hardware
 1. **Sensor** transmite pacote RF.
 2. **Gateway** recebe e encaminha via rede IP para o **ChirpStack** na AWS.
 3. **ChirpStack** decifra o pacote e publica o evento no **MQTT Broker**.
-4. **SaaS Backend** intercepta a mensagem, verifica a qual Aplicação o *DevEUI* pertence e realiza o roteamento.
+4. **Linx Core** intercepta a mensagem, verifica a qual Aplicação o *DevEUI* pertence e realiza o roteamento.
 5. Os dados são persistidos no **TimescaleDB** isolado da Aplicação e enviados via **WebSocket** para o Frontend.
 
 ### 9.2. Fluxo de Acionamento (Downlink / Comando)
 
 1. Motor de Regras no **Docker da Aplicação** constata anomalia (ou Operador clica em "Ligar").
-2. **Client Agent API** envia requisição HTTPS/REST ao **SaaS Backend**.
-3. **SaaS Backend** valida a permissão e aciona o **ChirpStack** via chamada **gRPC** (Middleware).
+2. **Client Agent API** envia requisição HTTPS/REST ao **Linx Core**.
+3. **Linx Core** valida a permissão e aciona o **ChirpStack** via chamada **gRPC** (Middleware).
 4. **ChirpStack** enfileira a mensagem. Na próxima janela de transmissão (RX), envia o pacote de rádio ao **Gateway**, que aciona o equipamento final.
 
 ---
@@ -244,7 +244,7 @@ A arquitetura adota o princípio de privilégio mínimo (*least privilege*) e cr
 
 O MVP (Minimum Viable Product) acadêmico/inicial será considerado concluído quando provar o fluxo completo em nuvem:
 
-1. **Multilocação:** Criação de pelo menos duas "Aplicações" via SaaS Backend, gerando dois contêineres Docker independentes e isolados.
+1. **Multilocação:** Criação de pelo menos duas "Aplicações" via Linx Core, gerando dois contêineres Docker independentes e isolados.
 2. **Onboarding Ágil:** Cadastro de dispositivo funcional via extração de dados do QR Code.
 3. **Uplink:** Visualização da telemetria real do sensor fluindo do Gateway → ChirpStack → MQTT → SaaS → Docker da Aplicação → WebSocket (Frontend).
 4. **Downlink/Regras:** Criação de uma regra simples de acionamento reverso operando a partir da Aplicação até o dispositivo físico via gRPC.
@@ -254,8 +254,8 @@ O MVP (Minimum Viable Product) acadêmico/inicial será considerado concluído q
 
 ## 13. Roadmap de Produto
 
-- **Fase 1 — Core Cloud:** Deploy na AWS do SaaS Backend, ChirpStack, MQTT e PostgreSQL Central.
-- **Fase 2 — Orquestração de Aplicações:** Desenvolvimento da rotina automatizada de criação do *Docker Cliente* (motor de regras + TimescaleDB) para cada nova Aplicação. O `client_agent_api` é middleware compartilhado e não faz parte do container por-tenant.
+- **Fase 1 — Core Cloud:** Deploy na AWS do Linx Core, ChirpStack, MQTT e PostgreSQL Central.
+- **Fase 2 — Orquestração de Aplicações:** Desenvolvimento da rotina automatizada de criação do *Docker Cliente* (motor de regras + TimescaleDB) para cada nova Aplicação. O `middleware/services/client_agent` é middleware compartilhado e não faz parte do container por-tenant.
 - **Fase 3 — Plug and Play e Dados:** Leitura de QR Code, fluxo ponta-a-ponta de telemetria e integração WebSocket.
 - **Fase 4 — Lógica e Downlink:** Motor de confirmação de regras e roteamento de comandos via gRPC.
 - **Fase 5 — Observabilidade e Alertas:** Serviço de notificações (Telegram/Email), monitoramento de saúde dos contêineres e detecção de quedas de Gateways.
