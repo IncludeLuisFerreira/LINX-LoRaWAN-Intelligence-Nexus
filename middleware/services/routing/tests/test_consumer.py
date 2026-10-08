@@ -84,7 +84,7 @@ def test_on_message_never_raises(monkeypatch):
     assert q.qsize() == 0
 
 
-def test_on_message_drops_when_queue_full(monkeypatch, caplog):
+def test_on_message_drops_when_queue_full(caplog):
     q = queue.Queue(maxsize=1)
     q.put("occupied")
     consumer = MqttConsumer(

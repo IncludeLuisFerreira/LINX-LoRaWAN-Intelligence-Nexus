@@ -24,19 +24,31 @@ class RabbitPublisher:
         self._channel: Any = None
         self._exchange: Any = None
 
+    def _open(self) -> None:
+        self._connection = rabbitpy.Connection(self._url)
+        self._channel = self._connection.channel()
+        self._channel.enable_publisher_confirms()
+        self._exchange = rabbitpy.Exchange(
+            self._channel,
+            self._exchange_name,
+            exchange_type="topic",
+            durable=True,
+        )
+        self._exchange.declare()
+
+    def _is_connected(self) -> bool:
+        if self._connection is None or self._channel is None:
+            return False
+        if getattr(self._connection, "closed", False) is True:
+            return False
+        if getattr(self._channel, "closed", False) is True:
+            return False
+        return True
+
     def connect(self) -> bool:
         for attempt in range(1, self._connect_max_attempts + 1):
             try:
-                self._connection = rabbitpy.Connection(self._url)
-                self._channel = self._connection.channel()
-                self._channel.enable_publisher_confirms()
-                self._exchange = rabbitpy.Exchange(
-                    self._channel,
-                    self._exchange_name,
-                    exchange_type="topic",
-                    durable=True,
-                )
-                self._exchange.declare()
+                self._open()
                 return True
             except Exception as exc:
                 logger.warning(
@@ -57,20 +69,44 @@ class RabbitPublisher:
 
     def publish(self, routing_key: str, body: dict[str, Any]) -> bool:
         payload = json.dumps(body).encode()
-        message = rabbitpy.Message(
-            self._channel,
-            payload,
-            properties={
-                "content_type": "application/json",
-                "delivery_mode": 2,
-            },
+        for attempt in range(1, self._connect_max_attempts + 1):
+            try:
+                if not self._is_connected():
+                    self.close()
+                    self._open()
+                message = rabbitpy.Message(
+                    self._channel,
+                    payload,
+                    properties={
+                        "content_type": "application/json",
+                        "delivery_mode": 2,
+                    },
+                )
+                if message.publish(self._exchange, routing_key):
+                    return True
+                logger.error(
+                    "broker não confirmou a publicação na rota %r",
+                    routing_key,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "falha ao publicar na rota %r (tentativa %d/%d): %s",
+                    routing_key,
+                    attempt,
+                    self._connect_max_attempts,
+                    exc,
+                )
+            self.close()
+            if attempt < self._connect_max_attempts:
+                time.sleep(self._backoff_seconds)
+
+        logger.error(
+            "não foi possível publicar na rota %r após %d tentativas; "
+            "mensagem descartada",
+            routing_key,
+            self._connect_max_attempts,
         )
-        if not message.publish(self._exchange, routing_key):
-            logger.error(
-                "broker não confirmou a publicação na rota %r", routing_key
-            )
-            return False
-        return True
+        return False
 
     def close(self) -> None:
         try:

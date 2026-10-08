@@ -29,6 +29,14 @@ def test_settings_defaults(monkeypatch):
 
 
 def test_settings_override(monkeypatch):
+    for var in (
+        "MQTT_TOPIC",
+        "MAX_PAYLOAD_BYTES",
+        "RABBIT_CONNECT_MAX_ATTEMPTS",
+        "RABBIT_CONNECT_BACKOFF_SECONDS",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
     monkeypatch.setenv("MQTT_BROKER_HOST", "broker.example.com")
     monkeypatch.setenv("MQTT_BROKER_PORT", "8883")
     monkeypatch.setenv("MQTT_QOS", "0")

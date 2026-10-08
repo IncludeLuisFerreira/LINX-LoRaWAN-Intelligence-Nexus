@@ -134,8 +134,11 @@ def test_publish_sends_persistent_json(fake_rabbit):
     )
 
 
-def test_publish_returns_false_when_broker_rejects(fake_rabbit, caplog):
-    pub = RabbitPublisher("amqp://h", "linx.telemetry")
+def test_publish_returns_false_when_broker_rejects(
+    monkeypatch, fake_rabbit, caplog
+):
+    monkeypatch.setattr("routing.publisher.time.sleep", lambda *_: None)
+    pub = RabbitPublisher("amqp://h", "linx.telemetry", connect_max_attempts=2)
     pub.connect()
     fake_rabbit.Message = (
         lambda channel, body, properties=None: SimpleNamespace(
@@ -145,3 +148,36 @@ def test_publish_returns_false_when_broker_rejects(fake_rabbit, caplog):
 
     with caplog.at_level("ERROR"):
         assert pub.publish("rk", {"a": 1}) is False
+
+
+def test_publish_retries_after_nack_then_discards(
+    monkeypatch, fake_rabbit, caplog
+):
+    monkeypatch.setattr("routing.publisher.time.sleep", lambda *_: None)
+    pub = RabbitPublisher("amqp://h", "linx.telemetry", connect_max_attempts=3)
+    pub.connect()
+    attempts = {"n": 0}
+
+    def nack(channel, body, properties=None):
+        attempts["n"] += 1
+        return SimpleNamespace(publish=MagicMock(return_value=False))
+
+    fake_rabbit.Message = nack
+
+    with caplog.at_level("ERROR"):
+        assert pub.publish("rk", {"a": 1}) is False
+
+    assert attempts["n"] == 3
+    assert "não foi possível publicar" in caplog.text
+
+
+def test_publish_reconnects_when_connection_dropped(monkeypatch, fake_rabbit):
+    monkeypatch.setattr("routing.publisher.time.sleep", lambda *_: None)
+    pub = RabbitPublisher("amqp://h", "linx.telemetry")
+    pub.connect()
+    pub._channel = None
+    pub._exchange = None
+    before = len(fake_rabbit.connection_calls)
+
+    assert pub.publish("rk", {"a": 1}) is True
+    assert len(fake_rabbit.connection_calls) == before + 1

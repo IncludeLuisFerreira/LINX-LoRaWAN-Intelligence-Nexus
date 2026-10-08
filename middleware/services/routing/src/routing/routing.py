@@ -49,7 +49,12 @@ class IngestService:
                 key = routing_key(
                     uplink.app_id, uplink.dev_eui, uplink.event_type
                 )
-                self.publisher.publish(key, build_envelope(uplink))
+                if not self.publisher.publish(key, build_envelope(uplink)):
+                    logger.error(
+                        "Publicação descartada após esgotar tentativas "
+                        "para o dev_eui %s",
+                        uplink.dev_eui,
+                    )
             except Exception:
                 logger.exception(
                     "Falha ao publicar uplink do dev_eui %s",
@@ -73,7 +78,7 @@ class IngestService:
         self.consumer.stop()
         self._q.put(None)
         if self._publisher_thread is not None:
-            self._publisher_thread.join()
+            self._publisher_thread.join(timeout=5.0)
         self.publisher.close()
 
 
