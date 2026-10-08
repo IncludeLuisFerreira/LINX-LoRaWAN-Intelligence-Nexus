@@ -866,6 +866,21 @@ files = [
 proxy = ["pysocks"]
 
 [[package]]
+name = "pamqp"
+version = "4.0.1"
+description = "RabbitMQ Focused AMQP low-level library"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "pamqp-4.0.1-py3-none-any.whl", hash = "sha256:a547f45128b06e42ce8d7a739b0cfcc40f2c724770622eaaff4a3f587b1cf7d0"},
+    {file = "pamqp-4.0.1.tar.gz", hash = "sha256:9dd13b828e346622793981f14a5df817fce5de998c746209d6c0154eb8403970"},
+]
+
+[package.extras]
+codegen = ["lxml", "requests", "yapf"]
+
+[[package]]
 name = "pathspec"
 version = "1.1.1"
 description = "Utility library for gitignore style pattern matching of file paths."
@@ -1392,6 +1407,21 @@ files = [
 dev = ["black", "build", "mypy", "pytest", "pytest-cov", "setuptools", "tox", "twine", "wheel"]
 
 [[package]]
+name = "rabbitpy"
+version = "3.0.2"
+description = "A pure python, thread-safe, minimalistic and pythonic RabbitMQ client library"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "rabbitpy-3.0.2-py3-none-any.whl", hash = "sha256:cb1cf8bf65881e256a4bcaf586581c53a4f1e8dfbf3a04f572b95112083ff23d"},
+    {file = "rabbitpy-3.0.2.tar.gz", hash = "sha256:9322a1e82b4d3d1afc21a617ce0b1e86b921174328735e7d54abc9525805ae5c"},
+]
+
+[package.dependencies]
+pamqp = ">=4.0,<5.0"
+
+[[package]]
 name = "sqlalchemy"
 version = "2.1.1"
 description = "Database Abstraction Library"
@@ -1622,4 +1652,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "914cc7eb7a0efbbb2a93b6e60002225521e3a6bc980132c806580249af84e1a9"
+content-hash = "18c93c1d0aa8abe65d0a77ab92c695873dcf55cc4342877da991c8a26cd62ff8"

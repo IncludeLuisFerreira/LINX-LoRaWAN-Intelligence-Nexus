@@ -22,6 +22,7 @@ httpx = ">=0.27.0,<1.0.0"
 sqlalchemy = ">=2.0.52,<3.0.0"
 psycopg = { version = ">=3.3.4,<4.0.0", extras = ["binary"] }
 pydantic-settings = ">=2.15.0,<3.0.0"
+rabbitpy = ">=3.0,<4.0"
 
 [dependency-groups]
 dev = [
