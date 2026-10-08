@@ -96,7 +96,7 @@ O MVP é considerado completo quando:
 ### Aluno 3 — Client Agent
 - [ ] gRPC Client em `middleware/services/client_agent/grpc_client.py`: conecta ao Linx Core porta 50051 e resolve `GetAppConfig` sob demanda (com cache TTL).
 - [ ] Endpoint `POST /ingest`: recebe payload JSON, valida schema, persiste no TimescaleDB.
-- [ ] Pipeline: Mosquitto → `mqtt_consumer.py` → parse → `POST /ingest` → TimescaleDB.
+- [x] Pipeline: Mosquitto → `routing` (ingest) → valida + envelope → exchange RabbitMQ `linx.telemetry` (destino passou do `mqtt_consumer`/`POST /ingest` para o exchange).
 - [ ] Deploy em segunda instância EC2 (ou porta 8001 na mesma EC2).
 - [ ] Log do `AppConfig` recebido via gRPC (prova de comunicação).
 - [ ] README com `curl` documentando: (1) criar tenant via SaaS REST, (2) ingestar telemetria via Client Agent.
@@ -124,7 +124,7 @@ O MVP é considerado completo quando:
 ### Aluno 2 — Linx Core
 - [ ] Cliente ChirpStack gRPC em `linx_core/chirpstack_client.py` usando `chirpstack-api` Python.
 - [ ] Endpoint `POST /api/v1/devices`: valida payload → salva em `devices` (`id UUID`, `dev_eui UNIQUE`, `app_id FK`, `join_eui`, `app_key` criptografado) → provisiona no ChirpStack via gRPC.
-- [ ] Serviço de roteamento: ao receber uplink MQTT, consulta `device_routes` e encaminha para o endpoint correto do Client Agent.
+- [x] Serviço de roteamento (`middleware/services/routing`): ao receber uplink MQTT, valida e publica no exchange RabbitMQ `linx.telemetry` (destino passou do encaminhamento HTTP por `device_routes` para o broker).
 - [ ] ChirpStack Application configurado para publicar em `application/{app_id}/device/{dev_eui}/event/up`.
 
 ### Aluno 3 — Client Agent
