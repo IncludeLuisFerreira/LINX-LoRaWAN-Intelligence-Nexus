@@ -162,6 +162,9 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-linx}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-linx}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -184,12 +187,9 @@ services:
       - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mosquitto}
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
       - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
-      - HTTP_TIMEOUT_SECONDS=${HTTP_TIMEOUT_SECONDS:-5}
-      - RABBIT_URL=${RABBIT_URL:-amqp://guest:guest@rabbitmq:5672/%2f}
+      - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS:-linx}@rabbitmq:5672/%2f}
       - RABBIT_EXCHANGE=${RABBIT_EXCHANGE:-linx.telemetry}
     depends_on:
-      db:
-        condition: service_healthy
       mosquitto:
         condition: service_healthy
       rabbitmq:
