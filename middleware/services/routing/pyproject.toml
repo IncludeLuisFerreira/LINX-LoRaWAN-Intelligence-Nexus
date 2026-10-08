@@ -1,7 +1,7 @@
 [project]
 name = "routing"
 version = "0.1.0"
-description = "Serviço de roteamento de uplinks MQTT para o Client Agent (device_routes)."
+description = "Serviço de ingest de uplinks MQTT publicados em uma exchange RabbitMQ."
 authors = [
     {name = "includeLuisFerreira",email = "prgluisfelipe@gmail.com"}
 ]
