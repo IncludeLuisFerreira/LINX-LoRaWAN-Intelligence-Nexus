@@ -1,14 +1,100 @@
-# Client Agent API
+# Middleware
+
+Serviços de middleware do LINX, em `middleware/services/`:
+
+- **`routing`** — ingestão de telemetria: consome uplinks do ChirpStack via MQTT,
+  valida e publica envelopes normalizados no RabbitMQ.
+- **`client_agent`** (Model A) — middleware compartilhado: fica entre o
+  frontend/integrações e os contêineres isolados por aplicação, validando acesso
+  e roteando por `app_id`. No startup valida a conectividade gRPC com o SaaS
+  Backend e resolve a configuração de cada tenant sob demanda via
+  `GetAppConfig(app_id)`, com cache TTL.
+
+## 🛰️ `services/routing` — ingestão MQTT → RabbitMQ
+
+O `routing` consome o tópico de uplink do ChirpStack no broker MQTT (QoS 1),
+valida a integridade da mensagem e publica um envelope normalizado em um exchange
+`topic` durável do RabbitMQ. O serviço **não** resolve tenant nem endpoint: a
+distribuição para os consumidores finais é feita por filas e bindings no
+RabbitMQ.
+
+Fluxo: `Mosquitto → routing (ingest) → exchange topic "linx.telemetry" → consumidores`.
+
+### Routing key
+
+`application.{app_id}.device.{dev_eui}.{event_type}`, derivado dos segmentos do
+tópico MQTT consumido.
+
+### Envelope normalizado
+
+```json
+{
+  "app_id": "app1",
+  "dev_eui": "devA",
+  "event_type": "up",
+  "payload": {"temperature": 25.5},
+  "rssi": -70,
+  "snr": 7.5,
+  "timestamp": "2026-10-08T12:00:00Z"
+}
+```
+
+`payload` vem de `object`, `timestamp` vem de `time` e `rssi`/`snr` vêm de
+`rxInfo[0]` (opcionais) do uplink ChirpStack. A publicação usa
+`content_type: application/json` e `delivery_mode: 2` (persistente).
+
+### Validação e erros
+
+São descartadas com `warning`, sem derrubar o consumidor: tópico fora do formato,
+JSON inválido (inclui `NaN`/`Infinity`), payload não-objeto, `object`/`time` ausentes,
+identidade do corpo divergente do tópico e payload acima de `MAX_PAYLOAD_BYTES`. A
+conexão com o RabbitMQ é reprocessada com backoff até `RABBIT_CONNECT_MAX_ATTEMPTS`.
+
+Na partida o serviço declara a fila durável `RABBIT_AUDIT_QUEUE` (default
+`linx.telemetry.audit`) com binding `#`, garantindo que mensagens não são descartadas
+em silêncio enquanto não há consumidor ligado ao exchange. A entrega é
+**at-least-once**: o ack MQTT (QoS 1, `manual_ack`) só ocorre após o confirm do
+RabbitMQ, então mensagens sem ack são reentregues e consumidores devem ser
+idempotentes.
+
+### Configuração
+
+| Variável                         | Default                                 | Descrição                                 |
+| :------------------------------- | :-------------------------------------- | :---------------------------------------- |
+| `MQTT_BROKER_HOST`               | `localhost`                             | Host do broker MQTT (ChirpStack).         |
+| `MQTT_BROKER_PORT`               | `1883`                                  | Porta do broker MQTT.                     |
+| `MQTT_TOPIC`                     | `application/+/device/+/event/up`       | Tópico de uplink assinado.                |
+| `MQTT_QOS`                       | `1`                                     | QoS da inscrição.                         |
+| `RABBIT_URL`                     | `amqp://guest:guest@localhost:5672/%2f` | Conexão AMQP com o RabbitMQ.              |
+| `RABBIT_EXCHANGE`                | `linx.telemetry`                        | Exchange `topic` durável de destino.      |
+| `RABBIT_AUDIT_QUEUE`             | `linx.telemetry.audit`                  | Fila durável com binding `#`; evita descarte silencioso. |
+| `RABBIT_CONNECT_MAX_ATTEMPTS`    | `5`                                     | Tentativas de conexão ao RabbitMQ.        |
+| `RABBIT_CONNECT_BACKOFF_SECONDS` | `1.0`                                   | Backoff (s) entre tentativas.             |
+| `MAX_PAYLOAD_BYTES`              | `65536`                                 | Cap de tamanho do payload MQTT.           |
+
+> A senha na `RABBIT_URL` precisa de URL-encode quando tiver caracteres especiais
+> (`@`, `:`, `/`, `?`...). Ex.: `p@ss` vira `p%40ss`.
+
+### Estrutura
+
+| Arquivo                     | Responsabilidade                                 |
+| :-------------------------- | :----------------------------------------------- |
+| `src/routing/config.py`     | `RoutingSettings` (MQTT, RabbitMQ, cap) via env. |
+| `src/routing/consumer.py`   | `MqttConsumer` (paho-mqtt, valida e enfileira).  |
+| `src/routing/validation.py` | Parse do tópico e validação do uplink.           |
+| `src/routing/envelope.py`   | `build_envelope` e `routing_key`.                |
+| `src/routing/publisher.py`  | `RabbitPublisher` (exchange topic, confirms).    |
+| `src/routing/routing.py`    | `IngestService` — orquestra consumer e publisher. |
+
+---
+
+## Client Agent API
 
 Middleware compartilhado do LINX (Modelo A) — fica entre o
 frontend/integrações e os contêineres isolados por aplicação, validando acesso
 e roteando por `app_id`. No startup valida a conectividade gRPC com o SaaS
 Backend e resolve a configuração de cada tenant sob demanda via
 `GetAppConfig(app_id)`, com cache TTL.
-
-> Nesta sprint a ingestão de telemetria é feita pelo serviço **routing** (MQTT →
-> device_routes → Client Agent) e a persistência da telemetria vive no
-> `client` (Model A). Mover o consumer ao Linx Core é a #47.
 
 ## 📋 O que foi feito
 

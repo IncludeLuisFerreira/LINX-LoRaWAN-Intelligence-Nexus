@@ -160,6 +160,26 @@ services:
       retries: 5
       start_period: 5s
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-linx}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set}
+    ports:
+      # Publicados apenas no loopback do host. O management UI (15672) e o
+      # AMQP (5672) nunca devem ir para 0.0.0.0/0.
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   routing:
     build:
       context: ../
@@ -167,17 +187,19 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
       - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mosquitto}
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
       - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
-      - HTTP_TIMEOUT_SECONDS=${HTTP_TIMEOUT_SECONDS:-5}
+      - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f}
+      - RABBIT_EXCHANGE=${RABBIT_EXCHANGE:-linx.telemetry}
+      - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}
     depends_on:
-      db:
-        condition: service_healthy
       mosquitto:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
 volumes:
   pgdata:
   timescaledb_data:
+  rabbitmq_data:

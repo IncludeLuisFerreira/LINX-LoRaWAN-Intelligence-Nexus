@@ -38,8 +38,8 @@ tenant. Corpo esperado:
 {"dev_eui": "dev1", "payload": {"t": 20}, "rssi": -70, "snr": 7.5}
 ```
 
-Pipeline: `Mosquitto → mqtt_consumer (middleware/services/client_agent) → POST /ingest
-(middleware/services/client_agent) → POST /ingest (tenant_app) → TimescaleDB`.
+Pipeline: `Mosquitto → routing (ingest) → exchange RabbitMQ linx.telemetry → consumidores`.
+O endpoint `POST /ingest` deste serviço continua disponível para ingestão direta via REST.
 
 ## 🔗 Conexão gRPC com o Linx Core
 

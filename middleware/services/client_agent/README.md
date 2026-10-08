@@ -6,9 +6,10 @@ e roteando por `app_id`. No startup valida a conectividade gRPC com o Linx Core
 e resolve a configuração de cada tenant sob demanda via
 `GetAppConfig(app_id)`, com cache TTL.
 
-> Nesta sprint a ingestão de telemetria é feita pelo serviço **routing** (MQTT →
-> device_routes → Client Agent) e a persistência da telemetria vive no
-> `client` (Model A). Mover o consumer ao Linx Core é a #47.
+> Nesta sprint a ingestão de telemetria é feita pelo serviço **routing**
+> (`middleware/services/routing`): ele consome os uplinks do ChirpStack via MQTT e
+> publica envelopes normalizados no exchange RabbitMQ `linx.telemetry`. Este serviço
+> (`client_agent`) segue expondo o endpoint REST `POST /ingest` para ingestão avulsa.
 
 ## 📋 O que foi feito
 

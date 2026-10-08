@@ -42,7 +42,7 @@
 - [x] [#33 feat(backend): device_routes table (dev_eui, app_id, agent_endpoint)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/33)
 - [x] [#34 feat(backend): gRPC client do middleware + resolução de config por tenant (GetAppConfig)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/34)
 - [x] [#35 feat(backend): POST /ingest (validate schema, persist TimescaleDB)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)
-- [ ] [#36 feat(backend): pipeline Mosquitto → mqtt_consumer → POST /ingest → TimescaleDB](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/36)
+- [x] [#36 feat(backend): pipeline Mosquitto → routing (MQTT consumer) → exchange RabbitMQ](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/36) (consumidores do exchange pendentes)
 - [ ] [#37 feat(devops): deploy Client Agent on second EC2 (or port 8001)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/37)
 - [ ] [#38 feat(backend): log AppConfig received via gRPC (proof of communication)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/38)
 - [x] [#39 docs(backend): README with curl for create tenant + ingest telemetry](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/39)
