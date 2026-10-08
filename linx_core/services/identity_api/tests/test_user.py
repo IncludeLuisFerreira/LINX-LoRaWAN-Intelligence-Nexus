@@ -11,12 +11,13 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from identity_api.main import app
-from identity_api.routes.user import password_hasher
+from identity_api.security import password_hasher
 
 client = TestClient(app)
 
-TOKEN = "test-service-token"
+TOKEN = "test-service-token-0123456789abcdef"
 AUTH = {"X-Service-Token": TOKEN}
+BASE = "/api/v1/user"
 
 
 @pytest.fixture(autouse=True)
@@ -53,7 +54,7 @@ def _create_user(
     note: str | None = "nota",
 ) -> dict:
     response = client.post(
-        "/api/v1/user/",
+        BASE,
         json={"email": email, "password": password, "note": note},
         headers=AUTH,
     )
@@ -74,14 +75,14 @@ def _stored_hash(connection: Connection, email: str) -> str:
 
 
 def test_missing_token_returns_401():
-    response = client.get("/api/v1/user")
+    response = client.get(BASE)
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Invalid service token"}
 
 
 def test_wrong_token_returns_401():
-    response = client.get("/api/v1/user", headers={"X-Service-Token": "nope"})
+    response = client.get(BASE, headers={"X-Service-Token": "nope"})
 
     assert response.status_code == 401
 
@@ -89,10 +90,52 @@ def test_wrong_token_returns_401():
 def test_unconfigured_token_returns_503(monkeypatch):
     monkeypatch.setattr(shared_settings, "service_token", "")
 
-    response = client.get("/api/v1/user", headers=AUTH)
+    response = client.get(BASE, headers=AUTH)
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Service token is not configured"}
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "json_body"),
+    [
+        ("post", BASE, {"email": "x@example.com", "password": "secret12345"}),
+        ("get", BASE, None),
+        ("get", f"{BASE}/{{user_id}}", None),
+        ("patch", f"{BASE}/{{user_id}}", {"note": "x"}),
+        ("delete", f"{BASE}/{{user_id}}", None),
+    ],
+)
+def test_all_endpoints_require_token(method, path, json_body):
+    url = path.format(user_id=uuid4())
+    kwargs = {"json": json_body} if json_body is not None else {}
+
+    response = getattr(client, method)(url, **kwargs)
+
+    assert response.status_code == 401
+
+
+def test_startup_rejects_placeholder_token(monkeypatch):
+    monkeypatch.setattr(shared_settings, "service_token", "changeme")
+
+    with pytest.raises(RuntimeError):
+        with TestClient(app):
+            pass
+
+
+def test_startup_rejects_short_token(monkeypatch):
+    monkeypatch.setattr(shared_settings, "service_token", "too-short")
+
+    with pytest.raises(RuntimeError):
+        with TestClient(app):
+            pass
+
+
+def test_startup_accepts_valid_token(monkeypatch):
+    monkeypatch.setattr(shared_settings, "service_token", TOKEN)
+
+    with TestClient(app):
+        pass
 
 
 def test_create_user_returns_201_without_password_hash():
@@ -102,7 +145,7 @@ def test_create_user_returns_201_without_password_hash():
         "note": "primeiro",
     }
 
-    response = client.post("/api/v1/user/", json=payload, headers=AUTH)
+    response = client.post(BASE, json=payload, headers=AUTH)
 
     assert response.status_code == 201
     data = response.json()
@@ -113,15 +156,12 @@ def test_create_user_returns_201_without_password_hash():
     assert data["email_verified"] is False
     assert "password" not in data
     assert "password_hash" not in data
-    assert (
-        response.headers["Location"]
-        == f"http://testserver/api/v1/user/{data['id']}"
-    )
+    assert response.headers["Location"] == f"{BASE}/{data['id']}"
 
 
 def test_create_user_normalizes_email_to_lowercase():
     response = client.post(
-        "/api/v1/user/",
+        BASE,
         json={"email": "  MixedCase@Example.COM ", "password": "secret12345"},
         headers=AUTH,
     )
@@ -144,7 +184,7 @@ def test_create_duplicate_email_is_case_insensitive_returns_409():
     _create_user(email="Dup@Example.com")
 
     response = client.post(
-        "/api/v1/user/",
+        BASE,
         json={"email": "dup@example.com", "password": "secret12345"},
         headers=AUTH,
     )
@@ -155,7 +195,7 @@ def test_create_duplicate_email_is_case_insensitive_returns_409():
 
 def test_create_user_with_short_password_returns_422():
     response = client.post(
-        "/api/v1/user/",
+        BASE,
         json={"email": "short@example.com", "password": "123"},
         headers=AUTH,
     )
@@ -163,32 +203,56 @@ def test_create_user_with_short_password_returns_422():
     assert response.status_code == 422
 
 
-def test_list_users_respects_pagination():
-    first = _create_user(email="a@example.com")
-    second = _create_user(email="b@example.com")
+def test_list_users_limit_and_skip():
+    created = [_create_user(email=f"page{i}@example.com") for i in range(3)]
 
-    response = client.get(
-        "/api/v1/user", params={"skip": 0, "limit": 100}, headers=AUTH
+    first_page = client.get(BASE, params={"skip": 0, "limit": 1}, headers=AUTH)
+    second_page = client.get(
+        BASE, params={"skip": 1, "limit": 1}, headers=AUTH
     )
 
-    assert response.status_code == 200
-    data = response.json()
-    ids = {user["id"] for user in data}
-    assert first["id"] in ids
-    assert second["id"] in ids
+    assert first_page.status_code == 200
+    assert len(first_page.json()) == 1
+    assert second_page.status_code == 200
+    assert len(second_page.json()) == 1
+    assert first_page.json()[0]["id"] != second_page.json()[0]["id"]
+
+    all_ids = {
+        user["id"]
+        for user in client.get(
+            BASE, params={"limit": 100}, headers=AUTH
+        ).json()
+    }
+    assert {user["id"] for user in created} <= all_ids
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{"limit": 101}, {"limit": 0}, {"skip": -1}],
+)
+def test_list_users_rejects_invalid_pagination(params):
+    response = client.get(BASE, params=params, headers=AUTH)
+
+    assert response.status_code == 422
+
+
+def test_get_user_with_invalid_uuid_returns_422():
+    response = client.get(f"{BASE}/not-a-uuid", headers=AUTH)
+
+    assert response.status_code == 422
 
 
 def test_get_user_returns_200():
     created = _create_user(email="get@example.com")
 
-    response = client.get(f"/api/v1/user/{created['id']}", headers=AUTH)
+    response = client.get(f"{BASE}/{created['id']}", headers=AUTH)
 
     assert response.status_code == 200
     assert response.json()["email"] == "get@example.com"
 
 
 def test_get_non_existent_user_returns_404():
-    response = client.get(f"/api/v1/user/{uuid4()}", headers=AUTH)
+    response = client.get(f"{BASE}/{uuid4()}", headers=AUTH)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "User not found!"}
@@ -198,7 +262,7 @@ def test_patch_user_updates_fields_rehashes_password(db_connection):
     created = _create_user(email="patch@example.com")
 
     response = client.patch(
-        f"/api/v1/user/{created['id']}",
+        f"{BASE}/{created['id']}",
         json={
             "password": "newsecret123",
             "note": "atualizado",
@@ -216,9 +280,48 @@ def test_patch_user_updates_fields_rehashes_password(db_connection):
     assert password_hasher.verify(stored, "newsecret123")
 
 
+def test_patch_user_normalizes_email():
+    created = _create_user(email="patch-norm@example.com")
+
+    response = client.patch(
+        f"{BASE}/{created['id']}",
+        json={"email": "  Upper@Example.COM "},
+        headers=AUTH,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "upper@example.com"
+
+
+def test_patch_user_email_conflict_returns_409():
+    first = _create_user(email="conflict-a@example.com")
+    second = _create_user(email="conflict-b@example.com")
+
+    response = client.patch(
+        f"{BASE}/{second['id']}",
+        json={"email": first["email"]},
+        headers=AUTH,
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Email already registered!"}
+
+
+def test_patch_user_rejects_unknown_fields():
+    created = _create_user(email="patch-extra@example.com")
+
+    response = client.patch(
+        f"{BASE}/{created['id']}",
+        json={"is_admin": True},
+        headers=AUTH,
+    )
+
+    assert response.status_code == 422
+
+
 def test_patch_non_existent_user_returns_404():
     response = client.patch(
-        f"/api/v1/user/{uuid4()}",
+        f"{BASE}/{uuid4()}",
         json={"note": "x"},
         headers=AUTH,
     )
@@ -226,18 +329,19 @@ def test_patch_non_existent_user_returns_404():
     assert response.status_code == 404
 
 
-def test_delete_user_removes_it():
+def test_delete_user_deactivates_it():
     created = _create_user(email="del@example.com")
 
-    response = client.delete(f"/api/v1/user/{created['id']}", headers=AUTH)
+    response = client.delete(f"{BASE}/{created['id']}", headers=AUTH)
 
     assert response.status_code == 204
 
-    follow_up = client.get(f"/api/v1/user/{created['id']}", headers=AUTH)
-    assert follow_up.status_code == 404
+    follow_up = client.get(f"{BASE}/{created['id']}", headers=AUTH)
+    assert follow_up.status_code == 200
+    assert follow_up.json()["is_active"] is False
 
 
 def test_delete_non_existent_user_returns_404():
-    response = client.delete(f"/api/v1/user/{uuid4()}", headers=AUTH)
+    response = client.delete(f"{BASE}/{uuid4()}", headers=AUTH)
 
     assert response.status_code == 404

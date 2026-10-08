@@ -20,6 +20,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    # Aborta com mensagem clara se já houver emails que só diferem na caixa.
+    duplicate = (
+        op.get_bind()
+        .execute(
+            sa.text(
+                'SELECT lower(email) FROM "user" '
+                "GROUP BY lower(email) HAVING count(*) > 1 LIMIT 1"
+            )
+        )
+        .first()
+    )
+    if duplicate is not None:
+        raise RuntimeError(
+            "Cannot create unique lower(email) index: existing emails "
+            f"differ only by case (e.g. {duplicate[0]!r}). "
+            "Resolve the duplicates before running this migration."
+        )
+
     # Remove a unicidade case-sensitive antiga antes de normalizar os dados.
     op.drop_constraint("user_email_key", "user", type_="unique")
     op.execute('UPDATE "user" SET email = lower(email)')

@@ -14,10 +14,12 @@ from identity_api.routes.devices import (
 from identity_api.routes.devices import router as devices_router
 from identity_api.routes.tenant import router
 from identity_api.routes.user import router as user_router
+from identity_api.security import ensure_service_token_configured
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    ensure_service_token_configured()
     yield
     close_chirpstack_client()
 

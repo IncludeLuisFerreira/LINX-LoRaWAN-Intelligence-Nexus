@@ -20,6 +20,8 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr | None = None
     password: str | None = Field(default=None, min_length=8, max_length=128)
     note: str | None = Field(default=None, max_length=500)

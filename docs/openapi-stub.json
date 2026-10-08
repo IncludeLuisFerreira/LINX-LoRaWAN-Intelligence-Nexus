@@ -629,13 +629,13 @@
         }
       }
     },
-    "/api/v1/user/": {
+    "/api/v1/user": {
       "post": {
         "tags": [
           "Users"
         ],
         "summary": "Create User",
-        "operationId": "create_user_api_v1_user__post",
+        "operationId": "create_user_api_v1_user_post",
         "parameters": [
           {
             "name": "X-Service-Token",
@@ -675,6 +675,15 @@
               }
             }
           },
+          "401": {
+            "description": "Missing or invalid service token"
+          },
+          "503": {
+            "description": "Service token not configured"
+          },
+          "409": {
+            "description": "Email already registered"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -686,9 +695,7 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/user": {
+      },
       "get": {
         "tags": [
           "Users"
@@ -751,6 +758,12 @@
               }
             }
           },
+          "401": {
+            "description": "Missing or invalid service token"
+          },
+          "503": {
+            "description": "Service token not configured"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -809,6 +822,15 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid service token"
+          },
+          "503": {
+            "description": "Service token not configured"
+          },
+          "404": {
+            "description": "User not found"
           },
           "422": {
             "description": "Validation Error",
@@ -877,6 +899,18 @@
               }
             }
           },
+          "401": {
+            "description": "Missing or invalid service token"
+          },
+          "503": {
+            "description": "Service token not configured"
+          },
+          "404": {
+            "description": "User not found"
+          },
+          "409": {
+            "description": "Email already registered"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -926,6 +960,15 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing or invalid service token"
+          },
+          "503": {
+            "description": "Service token not configured"
+          },
+          "404": {
+            "description": "User not found"
           },
           "422": {
             "description": "Validation Error",
@@ -1350,6 +1393,7 @@
             "title": "Is Active"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "UserUpdate"
       },

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -74,3 +74,6 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+
+Index("uq_user_email_lower", func.lower(User.email), unique=True)
