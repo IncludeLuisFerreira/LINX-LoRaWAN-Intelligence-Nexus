@@ -20,8 +20,8 @@ A geração dos stubs Python é feita na issue #20.
 > expõe um servidor gRPC conforme o RPC. O **Linx Core** hospeda
 > `GetAppConfig` e `ReportViolation`; o **Client Agent API** (middleware
 > compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A persistência de
-> telemetria é exposta pelo middleware no `POST /ingest` (issue
-> [#35](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)).
+> telemetria é feita pelo serviço `telemetry_consumer`, que consome o
+> exchange RabbitMQ `linx.telemetry` e grava no TimescaleDB do tenant.
 > O RPC `IngestTelemetry` cobre o caminho de roteamento do SaaS (Sprint 3), a
 > confirmar na implementação.
 

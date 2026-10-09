@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Gera os stubs Python gRPC (linx_agent_pb2.py / linx_agent_pb2_grpc.py) a
 # partir de proto/linx_agent.proto, para a biblioteca compartilhada do Linx Core
-# (package linx_shared), o Client Agent (package agent) e o tenant app
-# template (package tenant).
+# (package linx_shared) e o Client Agent (package agent).
 #
 # Uso:
 #     bash scripts/gen_proto.sh
@@ -25,16 +24,14 @@ gen() {
 
 gen linx_core/shared linx_core/shared/src/linx_shared/grpc
 gen middleware/services/client_agent middleware/services/client_agent/src/agent/grpc
-gen client client/src/tenant/grpc
 
 # grpc_tools.protoc gera `import linx_agent_pb2` (absoluto), o que quebra
-# quando o arquivo vive dentro de um pacote (linx_shared.grpc / agent.grpc /
-# tenant.grpc). Corrige para import relativo.
+# quando o arquivo vive dentro de um pacote (linx_shared.grpc / agent.grpc).
+# Corrige para import relativo.
 for grpc_file in \
   linx_core/shared/src/linx_shared/grpc/linx_agent_pb2_grpc.py \
-  middleware/services/client_agent/src/agent/grpc/linx_agent_pb2_grpc.py \
-  client/src/tenant/grpc/linx_agent_pb2_grpc.py; do
+  middleware/services/client_agent/src/agent/grpc/linx_agent_pb2_grpc.py; do
   sed -i 's/^import linx_agent_pb2 as linx__agent__pb2$/from . import linx_agent_pb2 as linx__agent__pb2/' "$grpc_file"
 done
 
-echo "Stubs gRPC gerados em linx_core/shared/src/linx_shared/grpc, middleware/services/client_agent/src/agent/grpc e client/src/tenant/grpc"
+echo "Stubs gRPC gerados em linx_core/shared/src/linx_shared/grpc e middleware/services/client_agent/src/agent/grpc"
