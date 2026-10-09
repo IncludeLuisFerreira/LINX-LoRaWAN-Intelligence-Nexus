@@ -1,5 +1,8 @@
+import time
+
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from telemetry_consumer.app import create_app
 from telemetry_consumer.broadcaster import Broadcaster
@@ -71,14 +74,42 @@ def test_get_telemetry_next_cursor_from_last_item():
     app = _make_app()
     app.state.db_pool = FakePool(
         [
-            {"dev_eui": "dev1", "time": "2026-10-08T12:00:00Z"},
-            {"dev_eui": "dev1", "time": "2026-10-08T11:00:00Z"},
+            {
+                "dev_eui": "dev1",
+                "event_type": "up",
+                "time": "2026-10-08T12:00:00Z",
+            },
+            {
+                "dev_eui": "dev1",
+                "event_type": "up",
+                "time": "2026-10-08T11:00:00Z",
+            },
         ]
     )
     client = TestClient(app)
     response = client.get("/telemetry")
     assert response.status_code == 200
-    assert response.json()["next_cursor"] == "2026-10-08T11:00:00Z"
+    assert response.json()["next_cursor"] == "2026-10-08T11:00:00Z|dev1|up"
+
+
+def test_get_telemetry_invalid_before_returns_422():
+    app = _make_app()
+    app.state.db_pool = FakePool([])
+    client = TestClient(app)
+    response = client.get("/telemetry?before=not-a-date")
+    assert response.status_code == 422
+
+
+def test_get_telemetry_accepts_composite_before():
+    app = _make_app()
+    pool = FakePool([])
+    app.state.db_pool = pool
+    client = TestClient(app)
+    response = client.get("/telemetry?before=2026-10-08T12:00:00Z|dev1|up")
+    assert response.status_code == 200
+    assert pool.calls[0][3] == "2026-10-08T12:00:00Z"
+    assert pool.calls[0][4] == "dev1"
+    assert pool.calls[0][5] == "up"
 
 
 def test_get_telemetry_clamps_limit():
@@ -105,8 +136,9 @@ def test_ws_rejects_wrong_app_id():
     client = TestClient(app)
     # app_id diferente de settings.app_id (default app-abc123)
     with client.websocket_connect("/ws/telemetry/outro-app") as ws:
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect) as exc:
             ws.receive_json()
+        assert exc.value.code == 1008
 
 
 def test_ws_accepts_valid_app_id_and_unregisters():
@@ -115,5 +147,10 @@ def test_ws_accepts_valid_app_id_and_unregisters():
     app.state.broadcaster = broadcaster
     client = TestClient(app)
     with client.websocket_connect("/ws/telemetry/app-abc123") as ws:
+        for _ in range(100):
+            if broadcaster.count == 1:
+                break
+            time.sleep(0.01)
+        assert broadcaster.count == 1
         ws.send_text("ping")
     assert broadcaster.count == 0

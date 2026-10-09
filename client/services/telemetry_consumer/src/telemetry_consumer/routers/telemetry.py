@@ -30,11 +30,16 @@ async def get_telemetry(
     pool = getattr(request.app.state, "db_pool", None)
     if pool is None:
         raise HTTPException(status_code=503, detail="database unavailable")
+    if before is not None:
+        try:
+            db.parse_cursor(before)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     clamped = max(MIN_LIMIT, min(MAX_LIMIT, limit))
     items = await db.fetch_telemetry(
         pool, dev_eui=dev_eui, limit=clamped, before=before
     )
-    next_cursor = items[-1].get("time") if items else None
+    next_cursor = db.encode_cursor(items[-1]) if items else None
     return {"items": items, "next_cursor": next_cursor}
 
 

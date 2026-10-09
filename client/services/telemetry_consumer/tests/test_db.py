@@ -1,3 +1,5 @@
+import inspect
+
 import pytest
 
 from telemetry_consumer import db
@@ -77,3 +79,53 @@ async def test_fetch_telemetry_filters_and_limits():
     query = conn.calls[0][0]
     assert "LIMIT" in query
     assert "time <" in query
+    assert "ORDER BY time DESC, dev_eui, event_type" in query
+
+
+@pytest.mark.asyncio
+async def test_fetch_telemetry_with_composite_cursor():
+    conn = FakeConnection()
+    await db.fetch_telemetry(
+        FakePool(conn),
+        dev_eui=None,
+        limit=10,
+        before="2026-10-08T12:00:00Z|dev1|up",
+    )
+    query, args = conn.calls[0]
+    assert "(dev_eui, event_type) < ($4::text, $5::text)" in query
+    assert args == (
+        10,
+        None,
+        "2026-10-08T12:00:00Z",
+        "dev1",
+        "up",
+    )
+
+
+def test_parse_cursor_accepts_plain_iso():
+    cursor = db.parse_cursor("2026-10-08T12:00:00Z")
+    assert cursor.time == "2026-10-08T12:00:00Z"
+    assert cursor.dev_eui is None
+    assert cursor.event_type is None
+
+
+def test_parse_cursor_accepts_composite():
+    cursor = db.parse_cursor("2026-10-08T12:00:00Z|dev1|up")
+    assert cursor.time == "2026-10-08T12:00:00Z"
+    assert cursor.dev_eui == "dev1"
+    assert cursor.event_type == "up"
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["not-a-date", "2026-13-01T00:00:00Z", "a|b", "a|b|c|d", ""],
+)
+def test_parse_cursor_rejects_malformed(value):
+    with pytest.raises(ValueError):
+        db.parse_cursor(value)
+
+
+def test_create_db_pool_defaults_match_config():
+    params = inspect.signature(db.create_db_pool).parameters
+    assert params["user"].default == "tenant"
+    assert params["database"].default == "tenantdb"
