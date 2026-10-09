@@ -28,8 +28,8 @@ class RabbitConsumer:
     """Consome telemetria de uma fila por tenant.
 
     Mensagens validas sao entregues ao handler assincrono com retry; em
-    falha definitiva ou payload invalido, o corpo bruto vai para a DLQ.
-    Toda mensagem recebe ``ack``.
+    falha definitiva ou payload invalido, o corpo bruto vai para a DLQ. A
+    mensagem original so recebe ``ack`` apos sucesso ou confirmacao da DLQ.
     """
 
     def __init__(
@@ -190,23 +190,23 @@ class RabbitConsumer:
 
     def _handle_message(self, message: Any) -> None:
         raw_body = message.body
-        try:
-            envelope = self._parse(raw_body)
-            if envelope is None:
-                logger.warning("payload inválido; enviando para a DLQ")
-                self._dead_letter(raw_body, "payload inválido")
+        envelope = self._parse(raw_body)
+        if envelope is None:
+            logger.warning("payload inválido; enviando para a DLQ")
+            if self._dead_letter(raw_body, "payload inválido"):
                 self._record_failure("payload inválido")
-                return
-            try:
-                self._process_with_retry(envelope)
-            except Exception as exc:  # noqa: BLE001
-                logger.error("processamento esgotou retries: %s", exc)
-                self._dead_letter(raw_body, str(exc))
+                message.ack()
+            return
+        try:
+            self._process_with_retry(envelope)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("processamento esgotou retries: %s", exc)
+            if self._dead_letter(raw_body, str(exc)):
                 self._record_failure(str(exc))
-                return
-            self._record_processed()
-        finally:
-            message.ack()
+                message.ack()
+            return
+        self._record_processed()
+        message.ack()
 
     def _parse(self, raw_body: Any) -> dict[str, Any] | None:
         try:
@@ -253,17 +253,24 @@ class RabbitConsumer:
         except Exception:
             coroutine.close()
             raise
-        return future.result()
+        return future.result(
+            timeout=self._settings.consumer_handler_timeout_seconds
+        )
 
-    def _dead_letter(self, raw_body: Any, reason: str) -> None:
+    def _dead_letter(self, raw_body: Any, reason: str) -> bool:
+        """Publica o corpo na DLQ. Retorna True so apos confirmacao.
+
+        Sem canal ou com publicacao nao confirmada, retorna False para que a
+        mensagem original permaneca sem ack e seja reentregue.
+        """
         channel = self._channel
         if channel is None:
             self._set_error(f"DLQ indisponível: {reason}")
-            return
+            return False
         routing_key = self._settings.dead_letter_queue_name
         try:
             if hasattr(channel, "basic_publish"):
-                channel.basic_publish(raw_body, "", routing_key)
+                result = channel.basic_publish(raw_body, "", routing_key)
             else:
                 message = rabbitpy.Message(
                     channel,
@@ -273,10 +280,16 @@ class RabbitConsumer:
                         "delivery_mode": 2,
                     },
                 )
-                message.publish("", routing_key)
+                result = message.publish("", routing_key)
         except Exception as exc:  # noqa: BLE001
             logger.error("falha ao publicar na DLQ: %s", exc)
             self._set_error(str(exc))
+            return False
+        if result is False:
+            self._set_error(f"publicação na DLQ nao confirmada: {reason}")
+            logger.error("publicação na DLQ nao confirmada: %s", reason)
+            return False
+        return True
 
     def _record_processed(self) -> None:
         with self._state_lock:

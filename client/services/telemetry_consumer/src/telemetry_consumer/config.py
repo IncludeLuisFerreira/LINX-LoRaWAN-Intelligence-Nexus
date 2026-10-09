@@ -10,6 +10,7 @@ class ConsumerSettings(BaseSettings):
     rabbit_connect_backoff_seconds: float = 1.0
     consumer_max_retries: int = 3
     consumer_retry_backoff_seconds: float = 1.0
+    consumer_handler_timeout_seconds: float = 30.0
     db_host: str = "timescaledb"
     db_port: int = 5432
     db_user: str = "tenant"

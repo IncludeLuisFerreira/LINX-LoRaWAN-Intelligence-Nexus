@@ -25,6 +25,18 @@ class FakeChannel:
         self.published.append((body, exchange, routing_key))
 
 
+class NackChannel(FakeChannel):
+    def basic_publish(self, body, exchange, routing_key):
+        self.published.append((body, exchange, routing_key))
+        return False
+
+
+class RaisingChannel(FakeChannel):
+    def basic_publish(self, body, exchange, routing_key):
+        self.published.append((body, exchange, routing_key))
+        raise RuntimeError("dlq down")
+
+
 async def _ok(envelope):
     return True
 
@@ -282,12 +294,34 @@ def test_close_swallows_errors():
     assert consumer._connection is None
 
 
-def test_dead_letter_without_channel():
+def test_dead_letter_without_channel_leaves_unacked():
     consumer = RabbitConsumer(ConsumerSettings(app_id="app-1"), None, _ok)
     message = FakeMessage(b"not-json")
     consumer._handle_message(message)
-    assert message.acked is True
+    assert message.acked is False
     assert consumer.health()["last_error"] is not None
+
+
+def test_dead_letter_nack_leaves_unacked():
+    channel = NackChannel()
+    consumer = RabbitConsumer(
+        ConsumerSettings(app_id="app-1"), None, _ok, channel=channel
+    )
+    message = FakeMessage(b"not-json")
+    consumer._handle_message(message)
+    assert message.acked is False
+    assert len(channel.published) == 1
+
+
+def test_dead_letter_publish_error_leaves_unacked():
+    channel = RaisingChannel()
+    consumer = RabbitConsumer(
+        ConsumerSettings(app_id="app-1"), None, _always_fail, channel=channel
+    )
+    message = FakeMessage(json.dumps(VALID_ENVELOPE).encode())
+    consumer._handle_message(message)
+    assert message.acked is False
+    assert len(channel.published) == 1
 
 
 def test_parse_rejects_invalid_payloads():
@@ -316,6 +350,33 @@ def test_handler_runs_on_provided_loop():
         consumer._handle_message(message)
         assert message.acked is True
         assert consumer.health()["processed"] == 1
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=5)
+        loop.close()
+
+
+def test_handler_timeout_triggers_retry_and_dlq():
+    loop = asyncio.new_event_loop()
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
+
+    async def _slow(envelope):
+        await asyncio.sleep(0.5)
+        return True
+
+    try:
+        channel = FakeChannel()
+        settings = ConsumerSettings(
+            app_id="app-1",
+            consumer_max_retries=0,
+            consumer_handler_timeout_seconds=0.01,
+        )
+        consumer = RabbitConsumer(settings, loop, _slow, channel=channel)
+        message = FakeMessage(json.dumps(VALID_ENVELOPE).encode())
+        consumer._handle_message(message)
+        assert channel.published[0][2] == "linx.telemetry.app-1.dlq"
+        assert consumer.health()["failed"] == 1
     finally:
         loop.call_soon_threadsafe(loop.stop)
         thread.join(timeout=5)
