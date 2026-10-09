@@ -1,0 +1,56 @@
+name: telemetry-consumer-ci
+
+on:
+  pull_request:
+    paths:
+      - "client/services/telemetry_consumer/**"
+      - ".github/workflows/telemetry-consumer-ci.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "client/services/telemetry_consumer/**"
+      - ".github/workflows/telemetry-consumer-ci.yml"
+
+env:
+  PYTHON_VERSION: "3.12"
+  POETRY_VERSION: "2.4.1"
+
+jobs:
+  lint-and-test:
+    name: Lint, Type Check & Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/services/telemetry_consumer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Black (format check)
+        run: poetry run black --check src tests
+
+      - name: isort (import order check)
+        run: poetry run isort --check-only src tests
+
+      - name: Flake8 (lint)
+        run: poetry run flake8 src tests
+
+      - name: Mypy (type check)
+        run: poetry run mypy src tests
+
+      - name: Pytest (cobertura >= 70%)
+        run: poetry run pytest --cov=src --cov-report=term-missing --cov-fail-under=70

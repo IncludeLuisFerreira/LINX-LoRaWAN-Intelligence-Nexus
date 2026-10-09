@@ -26,6 +26,7 @@ nav:
       - Linx Core: linx_core/README.md
       - Middleware: middleware/README.md
       - Client (Tenant App): client/README.md
+      - Migração do Telemetry Consumer: telemetry-consumer/migration.md
   - Manuais e Documentação:
       - Análise de Segurança ChirpStack: analise_seguranca_chirpstack/chirpstack_security_analysis.md
       - Estrutura de Pastas: estrutura_de_pastas/estrutura.md

@@ -14,16 +14,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-  tenant_app:
-    build: .
+  telemetry_consumer:
+    build:
+      context: ./services/telemetry_consumer
+      dockerfile: Dockerfile
     restart: unless-stopped
-    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do Linx Core
-    # a partir do container (não use "localhost" aqui).
+    env_file: .env
     environment:
-      - CLIENT_AGENT_URL=${CLIENT_AGENT_URL}
       - APP_ID=${APP_ID}
-      - MQTT_TOPIC=${MQTT_TOPIC}
-      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST}
+      - RABBIT_URL=${RABBIT_URL}
       - DB_HOST=timescaledb
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
@@ -31,7 +30,5 @@ services:
     depends_on:
       timescaledb:
         condition: service_healthy
-    ports:
-      - "${TENANT_PORT}:8000"
 volumes:
   timescaledb_data:

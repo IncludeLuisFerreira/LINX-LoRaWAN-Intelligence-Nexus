@@ -63,7 +63,7 @@ O MVP é considerado completo quando:
 - [ ] Definir `proto/linx_agent.proto`: `service AgentBridge { rpc GetAppConfig(AppId) returns (AppConfig); rpc IngestTelemetry(TelemetryEvent) returns (Ack); }`.
 - [ ] Gerar stubs gRPC Python.
 - [ ] Dockerfile multi-stage para `middleware/services/client_agent`.
-- [ ] `docker-compose.yml` do tenant: `tenant_app` (motor de regras) + `timescaledb`. O `middleware/services/client_agent` é middleware **compartilhado**, não faz parte do container por-tenant.
+- [ ] `docker-compose.yml` do tenant: `telemetry_consumer` (ingestão AMQP + leitura REST/WS) + `timescaledb`. O `middleware/services/client_agent` é middleware **compartilhado**, não faz parte do container por-tenant.
 
 **Critérios de Aceitação S1:**
 - `docker-compose -f infra/docker-compose.base.yml up` sobe sem erros.
@@ -95,7 +95,7 @@ O MVP é considerado completo quando:
 
 ### Aluno 3 — Client Agent
 - [ ] gRPC Client em `middleware/services/client_agent/grpc_client.py`: conecta ao Linx Core porta 50051 e resolve `GetAppConfig` sob demanda (com cache TTL).
-- [ ] Endpoint `POST /ingest`: recebe payload JSON, valida schema, persiste no TimescaleDB.
+- [x] Endpoint `POST /ingest`: recebe payload JSON, valida schema, persiste no TimescaleDB. (superado: ingestão passa a ser AMQP pelo `telemetry_consumer`; ver #192)
 - [x] Pipeline: Mosquitto → `routing` (ingest) → valida + envelope → exchange RabbitMQ `linx.telemetry` (destino passou do encaminhamento HTTP do Client Agent para o broker).
 - [ ] Deploy em segunda instância EC2 (ou porta 8001 na mesma EC2).
 - [ ] Log do `AppConfig` recebido via gRPC (prova de comunicação).
@@ -105,7 +105,7 @@ O MVP é considerado completo quando:
 - Dois serviços distintos rodando na AWS com URLs/portas acessíveis.
 - Log do Client Agent mostrando `AppConfig` recebido do SaaS via gRPC.
 - `curl POST /api/v1/tenant` cria tenant no banco AWS.
-- `curl POST /ingest` persiste telemetria no TimescaleDB.
+- Uplink MQTT publicado no exchange `linx.telemetry` é persistido no TimescaleDB pelo `telemetry_consumer` (#192).
 - Frontend acessível via navegador cadastrando Tenant/App no backend AWS.
 
 ---
@@ -163,7 +163,7 @@ O MVP é considerado completo quando:
 
 ### Aluno 3 — Client Agent + Tenant Template
 - [ ] Imagem Docker do `client` publicada no ECR (ou Docker Hub para MVP).
-- [ ] `tenant_app` recebe `APP_ID` e `MQTT_TOPIC` via variável de ambiente no startup. (O middleware `middleware/services/client_agent` é compartilhado e não recebe `APP_ID`.)
+- [ ] `telemetry_consumer` recebe `APP_ID` (fila/binding), `RABBIT_URL` e `DB_*` via variável de ambiente no startup. (O middleware `middleware/services/client_agent` é compartilhado e não recebe `APP_ID`.)
 - [ ] Isolamento de rede: cada container tenant em Docker network isolada (`bridge` dedicada por app).
 - [ ] Endpoint `/health` no tenant retornando status do TimescaleDB e do consumidor MQTT.
 - [ ] Teste de isolamento: script Python que cria 2 apps, publica telemetria em cada uma e verifica que os dados não se cruzam.
@@ -323,7 +323,7 @@ O MVP é considerado completo quando:
 |:---|:---|:---|:---|
 | Stub OpenAPI | Aluno 2 | Aluno 1 | 03/09 (S1) |
 | Schema gRPC (`proto/`) | Aluno 2 + Aluno 3 | Ambos | 05/09 (S1) |
-| Endpoint `POST /ingest` | Aluno 3 | Aluno 2 (roteamento) | 23/09 (S2) |
+| Consumer AMQP `linx.telemetry` (`telemetry_consumer`) | Aluno 3 | Aluno 2 (roteamento) | 23/09 (S2) |
 | WebSocket `/ws/telemetry/{app_id}` | Aluno 3 | Aluno 1 | 07/10 (S3) |
 | Imagem Docker do tenant no ECR | Aluno 3 | Aluno 2 (provisionamento) | 21/10 (S4) |
 | Endpoint `POST /auth/login` + JWT | Aluno 2 | Aluno 1 + Aluno 3 | 04/11 (S5) |

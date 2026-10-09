@@ -19,22 +19,29 @@ Quatro protocolos sustentam a comunicação:
 | Protocolo     | Uso                                                                               |
 | :------------ | :-------------------------------------------------------------------------------- |
 | **gRPC**      | Contrato binário `AgentBridge` — descoberta da configuração do tenant (`GetAppConfig`). |
-| **HTTP/REST** | API do plano de controle (`identity_api`) e endpoint de ingestão (`POST /ingest`). |
+| **HTTP/REST** | API do plano de controle (`identity_api`) e leitura de telemetria (`GET /telemetry`). |
 | **MQTT**      | Ingestão de uplinks LoRaWAN publicados pelo ChirpStack (ChirpStack → `routing`).  |
-| **AMQP**      | Distribuição da telemetria normalizada no exchange `topic` `linx.telemetry` do RabbitMQ. |
+| **AMQP**      | Ingestão de telemetria normalizada: exchange `topic` `linx.telemetry` do RabbitMQ → `telemetry_consumer`. |
+| **WebSocket** | Leitura em tempo real de telemetria (`WS /ws/telemetry/{app_id}`).                |
 
 ### 1.1 Serviços
 
 | Serviço (Compose) | Tecnologia            | Porta           | Papel                                                                              |
 | :---------------- | :-------------------- | :-------------- | :--------------------------------------------------------------------------------- |
-| `identity_api`    | FastAPI (REST)        | `8000`          | API do plano de controle: CRUD de tenants e aplicações.                            |
+| `identity_api`    | FastAPI (REST)        | `8000` (host)   | API do plano de controle: CRUD de tenants e aplicações. Único serviço que publica a porta `8000` no host. |
 | `agent_bridge`    | gRPC (`grpcio`)       | `50051`         | **Servidor** do contrato `AgentBridge` — responde `GetAppConfig`.                   |
-| `client_agent`    | FastAPI               | `8001`          | Middleware compartilhado: API REST (`/ingest`, `/health`) e resolução de configuração de tenant. |
+| `client_agent`    | FastAPI               | `8001`          | Middleware compartilhado: cliente gRPC (`GetAppConfig`) e `GET /health`.            |
 | `routing`         | Python (paho-mqtt + rabbitpy) | —        | Ingestão: consome uplinks MQTT, valida e publica envelopes no RabbitMQ.            |
 | `rabbitmq`        | RabbitMQ 3 (AMQP)     | `5672`/`15672`  | Exchange `topic` durável `linx.telemetry`; distribui telemetria aos consumidores.  |
-| `tenant_app`      | FastAPI               | `8002`          | Ambiente isolado por aplicação: busca a configuração via gRPC e persiste telemetria. |
+| `telemetry_consumer` | FastAPI            | `8000` (interna, não publicada) | Ambiente isolado por aplicação: consome a fila AMQP, persiste no TimescaleDB e serve `GET /telemetry`/WebSocket. Acessível apenas pela rede do Compose. |
 | `db`              | PostgreSQL 15         | `5432` (interna) | Banco do plano de controle (tenants/applications).                                 |
 | `timescaledb`     | TimescaleDB (pg14)    | `5432` (interna) | Série temporal isolada do tenant (hypertable `telemetry`).                          |
+
+> O `identity_api` e o `telemetry_consumer` usam a porta `8000`, mas em escopos
+> diferentes: `identity_api` é a única com mapeamento no host
+> (`ports: "8000:8000"`), enquanto `telemetry_consumer` escuta em `8000` **apenas
+> dentro da rede do Compose** (sem `ports:`). Portanto, de fora do host,
+> `localhost:8000` é o `identity_api`.
 
 ### 1.2 Topologia
 
@@ -52,17 +59,15 @@ flowchart LR
     RT["routing<br/>(ingest)"]
     RMQ{{"RabbitMQ<br/>exchange linx.telemetry"}}
     CA["client_agent<br/>:8001"]
-    TA["tenant_app<br/>:8002"]
+    TC["telemetry_consumer<br/>:8000"]
     TS[("timescaledb")]
-    CO["Consumidores<br/>queues/bindings"]
 
     MQTT -- "uplink" --> RT
     RT -- "publish (topic)" --> RMQ
-    RMQ -- "entrega" --> CO
+    RMQ -- "entrega (fila do tenant)" --> TC
     CA -- "gRPC GetAppConfig" --> AB
-    TA -- "gRPC GetAppConfig" --> AB
-    CA -. "ingest REST (avulso)" .-> TA
-    TA --> TS
+    TC --> TS
+    TC -. "GET /telemetry, WS" .-> FE["frontend"]
 ```
 
 ---
@@ -73,18 +78,18 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 
 | Origem                          | Destino                          | Protocolo             | Porta   | Propósito                                              | Momento       |
 | :------------------------------ | :------------------------------- | :-------------------- | :------ | :----------------------------------------------------- | :------------ |
-| `tenant_app`                    | `agent_bridge`                   | gRPC                  | `50051` | `GetAppConfig(app_id)` — configuração do tenant        | startup       |
 | `client_agent`                  | `agent_bridge`                   | gRPC                  | `50051` | `GetAppConfig` sob demanda (com cache) e health check  | startup / on-demand |
 | Broker MQTT                     | `routing`                        | MQTT                  | `1883`  | Receber uplinks LoRaWAN do ChirpStack                  | contínuo      |
 | `routing`                       | `rabbitmq` (exchange `linx.telemetry`) | AMQP            | `5672`  | Publicar envelope normalizado (routing key por tópico) | por uplink    |
-| `client_agent` (`/ingest`)      | `tenant_app` (`/ingest`)         | HTTP/REST             | `8002`  | Encaminhar telemetria validada (endpoint REST avulso/legado; o caminho principal agora é o RabbitMQ) | sob demanda   |
-| `tenant_app`                    | `timescaledb`                    | PostgreSQL (`asyncpg`)| `5432`  | `INSERT` na hypertable `telemetry`                     | por ingest    |
+| `rabbitmq` (fila do tenant)     | `telemetry_consumer`             | AMQP                  | `5672`  | Entregar envelope na fila `linx.telemetry.{app_id}`    | por evento    |
+| `telemetry_consumer`            | `timescaledb`                    | PostgreSQL (`asyncpg`)| `5432`  | `INSERT` idempotente e `SELECT` na hypertable `telemetry` | por evento / leitura |
 | `agent_bridge` / `identity_api` | `db`                             | PostgreSQL            | `5432`  | Ler/escrever o plano de controle                       | contínuo      |
-| Frontend / clientes externos    | `identity_api`                   | HTTP/REST             | `8000`  | CRUD de tenants e aplicações                           | sob demanda   |
+| Clientes na rede do Compose     | `telemetry_consumer`             | HTTP/REST + WebSocket | `8000` (interna) | Histórico (`GET /telemetry`) e stream (`WS /ws/telemetry/{app_id}`) | sob demanda / contínuo |
+| Frontend / clientes externos    | `identity_api`                   | HTTP/REST             | `8000` (host) | CRUD de tenants e aplicações                           | sob demanda   |
 
 > **Direção do gRPC:** o contrato é único (`AgentBridge`), mas cada lado hospeda o RPC
-> que lhe cabe. O **SaaS** hospeda `GetAppConfig` (em `agent_bridge`) e o **tenant** é o
-> cliente que o consome. Os demais RPCs do contrato ainda não estão implementados.
+> que lhe cabe. O **SaaS** hospeda `GetAppConfig` (em `agent_bridge`) e o `client_agent`
+> é o cliente que o consome. Os demais RPCs do contrato ainda não estão implementados.
 
 ---
 
@@ -92,7 +97,7 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 
 O contrato é versionado na raiz do repositório em [`proto/linx_agent.proto`](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/blob/main/proto/linx_agent.proto)
 e é **compartilhado** entre o Linx Core e o Client Agent. Os stubs Python são gerados
-por `scripts/gen_proto.sh` para os pacotes `linx.grpc`, `agent.grpc` e `tenant.grpc`.
+por `scripts/gen_proto.sh` para os pacotes `linx.grpc` e `agent.grpc`.
 
 - **Pacote:** `linx`
 - **Proto:** `proto3`
@@ -138,38 +143,37 @@ por `scripts/gen_proto.sh` para os pacotes `linx.grpc`, `agent.grpc` e `tenant.g
 
 ## 4. Fluxo gRPC: `GetAppConfig`
 
-Este é o fluxo de comunicação gRPC entre o tenant e o SaaS.
+Este é o fluxo de comunicação gRPC entre o `client_agent` e o SaaS.
 
 ### 4.1 Sequência
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant TA as tenant_app (cliente gRPC)
+    participant CA as client_agent (cliente gRPC)
     participant AB as agent_bridge (SaaS, servidor gRPC)
     participant DB as db (PostgreSQL)
 
-    Note over TA: startup (lifespan do FastAPI)
-    TA->>AB: GetAppConfig(AppId{app_id})
+    Note over CA: startup (lifespan do FastAPI)
+    CA->>AB: check_connectivity (channel_ready)
+    Note over CA: estado exposto em GET /health
+    CA->>AB: GetAppConfig(AppId{app_id}) sob demanda
     AB->>AB: valida UUID do app_id
     AB->>DB: SELECT application WHERE id = app_id
     DB-->>AB: Application
-    AB-->>TA: AppConfig{app_id, db_host, db_port, db_name, db_user, db_password, mqtt_topic}
-    Note over TA: logger.info("AppConfig received ...")
+    AB-->>CA: AppConfig{app_id, db_host, db_port, db_name, db_user, db_password, mqtt_topic}
+    Note over CA: cache TTL de 60 s por app_id
 ```
 
 ### 4.2 Quem chama
 
-**`tenant_app` (no startup).** Ao subir, o `tenant_app` abre um canal gRPC com
-o SaaS (`SAAS_GRPC_HOST`) e chama `GetAppConfig(APP_ID)`. A resposta é registrada em log
-como prova de comunicação. A chamada é **bloqueante** e executada fora do event loop
-(`asyncio.to_thread`). Se falhar, o serviço **não cai**: apenas registra um `warning` e
-segue operando com as variáveis de ambiente (`DB_*`).
-
-**`client_agent` (conectividade e cache).** O middleware também possui um cliente gRPC.
-No startup ele apenas valida a conectividade com o SaaS (`check_connectivity`) e expõe o
-resultado em `GET /health`. Quando precisa da configuração de um tenant, resolve
+**`client_agent` (conectividade e cache).** É o único cliente gRPC restante. No startup
+ele apenas valida a conectividade com o SaaS (`check_connectivity`) e expõe o resultado
+em `GET /health`. Quando precisa da configuração de um tenant, resolve
 `GetAppConfig(app_id)` **sob demanda**, com **cache de 60 s** (`CONFIG_CACHE_TTL_SECONDS`).
+
+> O `telemetry_consumer` **não** usa gRPC: é um serviço por tenant, configurado por env
+> (`APP_ID`, `RABBIT_URL`, `DB_*`), dono da própria fila e do pool do TimescaleDB.
 
 ### 4.3 Resolução no servidor (`agent_bridge`)
 
@@ -201,24 +205,24 @@ db_password: "<segredo>"
 mqtt_topic: "application/206b6a58-532c-47af-a4c9-258ddb171e73/device/+/event/up"
 ```
 
-Log esperado no `tenant_app` (`docker compose logs tenant_app`):
+Log esperado no `client_agent` (`docker compose logs client_agent`):
 
 ```text
-INFO tenant.grpc_client AppConfig received app_id=206b6a58-... db_host=db db_port=5432 mqtt_topic=application/206b6a58-.../device/+/event/up
+INFO agent.main Linx Core acessível em agent_bridge:50051
 ```
 
-> Por segurança, `db_user`, `db_password` e `db_name` **não** são logados.
+> Por segurança, `db_user`, `db_password` e `db_name` **não** são logados nem expostos.
 >
 > No estado atual, os campos `db_*` refletem a `DATABASE_URL` do plano de controle
-> configurada no `agent_bridge`. O `tenant_app` registra a resposta como prova de
-> comunicação e continua montando seu pool do TimescaleDB a partir das variáveis
-> `DB_*`; usar o `AppConfig` para isso ainda não está implementado.
+> configurada no `agent_bridge`. O `client_agent` usa o `AppConfig` sob demanda com cache;
+> o `telemetry_consumer` monta seu pool do TimescaleDB a partir das variáveis `DB_*`
+> (não consome o `AppConfig`).
 
 ### 4.5 Tratamento de erros
 
 | Situação                                  | Status gRPC         | Comportamento                                                  |
 | :---------------------------------------- | :------------------ | :------------------------------------------------------------- |
-| `app_id` não é UUID válido                | `INVALID_ARGUMENT`  | `tenant_app`/`client_agent` loga erro e segue (degradação graciosa). |
+| `app_id` não é UUID válido                | `INVALID_ARGUMENT`  | `client_agent` loga erro e segue (degradação graciosa).        |
 | Aplicação não encontrada                  | `NOT_FOUND`         | Idem.                                                          |
 | `db` indisponível                         | `UNAVAILABLE`       | Idem.                                                          |
 | SaaS inacessível / timeout                | `UNAVAILABLE`       | `client_agent` marca `saas_grpc: false` em `/health`.          |
@@ -230,14 +234,14 @@ mantida como fallback.
 
 O canal gRPC é **inseguro** (`grpc.insecure_channel`) e o `AppConfig` trafega
 `db_password` em texto plano. O endpoint `50051` do `agent_bridge` deve ser restrito no
-Security Group ao IP do `client_agent`/`tenant_app` — **nunca** `0.0.0.0/0`. TLS/mTLS
+Security Group ao IP do `client_agent` — **nunca** `0.0.0.0/0`. TLS/mTLS
 entre os serviços ainda não está implementado.
 
 ---
 
 ## 5. Fluxo de ingestão de telemetria
 
-Fecha o caminho do dado: `Mosquitto → routing (ingest) → exchange topic "linx.telemetry" → consumidores`.
+Fecha o caminho do dado: `Mosquitto → routing (ingest) → exchange topic "linx.telemetry" → telemetry_consumer → TimescaleDB/WebSocket`.
 
 O serviço `middleware/services/routing` consome os uplinks LoRaWAN publicados pelo
 ChirpStack no broker MQTT, valida a integridade da mensagem, normaliza um envelope e
@@ -251,6 +255,10 @@ nenhuma mensagem é descartada em silêncio enquanto não há consumidor ligado 
 exchange. Consumidores reais ligam suas próprias filas e podem usar essa fila apenas
 para auditoria/reprocessamento.
 
+O consumidor final é o `telemetry_consumer`, um serviço por tenant que declara a fila
+durável `linx.telemetry.{app_id}` com binding `application.{app_id}.#`, persiste na
+hypertable `telemetry` de forma idempotente e retransmite os eventos via WebSocket.
+
 ### 5.1 Sequência
 
 ```mermaid
@@ -259,7 +267,8 @@ sequenceDiagram
     participant MQ as Mosquitto
     participant RT as routing (ingest)
     participant RMQ as RabbitMQ (exchange linx.telemetry)
-    participant CO as Consumidor (queue/binding)
+    participant CO as telemetry_consumer
+    participant DB as TimescaleDB
 
     MQ-->>RT: application/{app_id}/device/{dev_eui}/{event_type}
     Note over RT: parse do tópico + valida JSON/object/time + cap de payload
@@ -267,7 +276,10 @@ sequenceDiagram
     RT->>RMQ: publish routing_key=application.{app_id}.device.{dev_eui}.{event_type}
     Note over RT: publisher confirm
     RT-->>MQ: ack MQTT (manual_ack) só após o confirm
-    RMQ-->>CO: entrega pela fila ligada ao binding
+    RMQ-->>CO: entrega na fila linx.telemetry.{app_id}
+    CO->>DB: INSERT ... ON CONFLICT (dev_eui, time, event_type) DO NOTHING
+    CO-->>RMQ: ack (sucesso ou duplicata; DLQ + ack em falha definitiva)
+    CO-->>CO: broadcast WebSocket do evento persistido
 ```
 
 ### 5.2 Routing key
@@ -315,11 +327,17 @@ RabbitMQ confirma a publicação. Se o broker estiver indisponível, a mensagem 
 ack e é reentregue; uma republicação após timeout/nack pode duplicar. Consumidores
 devem ser idempotentes.
 
+O `telemetry_consumer` garante idempotência pelo índice único `(dev_eui, time,
+event_type)`. O ack AMQP só ocorre após o `INSERT`; erro transitório de banco gera
+retry (`CONSUMER_MAX_RETRIES` com backoff) e, esgotado ou payload inválido, a mensagem
+vai para a DLQ `linx.telemetry.{app_id}.dlq` e recebe ack.
+
 > **Status de execução:** o pipeline está implementado em `middleware/services/routing`
-> e é exercitado com `mosquitto_pub` + um binding de teste no RabbitMQ. No
-> `deploy/docker-compose.yml` o serviço `routing` sobe junto de `mosquitto` e `rabbitmq`
-> e publica no exchange `linx.telemetry`. O endpoint REST `POST /ingest` do
-> `client_agent` continua disponível para ingestão avulsa.
+> e no `client/services/telemetry_consumer`. No `deploy/docker-compose.yml` o `routing`
+> sobe junto de `mosquitto` e `rabbitmq` e publica no exchange `linx.telemetry`; o
+> `telemetry_consumer` sobe junto de `timescaledb` e `rabbitmq` e consome a fila do
+> tenant. A ingestão REST via `POST /ingest` foi **removida**: o RabbitMQ é o único
+> caminho de ingestão.
 
 ---
 
@@ -343,7 +361,8 @@ primeiro ponto de comunicação de um cliente com a plataforma.
 | `DELETE` | `/api/v1/tenant/{id}/applications/{app_id}`           | Remove application (`204`).          |
 
 O `id` e o `app_id` são `UUID` v4 gerados pelo banco. O `app_id` criado aqui é o mesmo
-`APP_ID` usado pelo `tenant_app` para buscar a configuração via gRPC.
+`APP_ID` usado pelo `telemetry_consumer` (fila/binding) e pelo `client_agent` para
+resolver a configuração via gRPC.
 
 ---
 
@@ -354,29 +373,31 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 
 | Variável                 | Serviço                    | Exemplo                                    | Descrição                                                        |
 | :----------------------- | :------------------------- | :----------------------------------------- | :--------------------------------------------------------------- |
-| `SAAS_GRPC_HOST`         | `tenant_app`, `client_agent` | `agent_bridge:50051`                     | Endereço do servidor gRPC do SaaS.                               |
+| `SAAS_GRPC_HOST`         | `client_agent`             | `agent_bridge:50051`                       | Endereço do servidor gRPC do SaaS.                               |
 | `GRPC_PORT`              | `agent_bridge`             | `50051`                                    | Porta de bind do servidor gRPC.                                  |
-| `GRPC_TIMEOUT_SECONDS`   | `client_agent`, `tenant_app` | `5`                                      | Timeout das chamadas gRPC.                                       |
+| `GRPC_TIMEOUT_SECONDS`   | `client_agent`             | `5`                                        | Timeout das chamadas gRPC.                                       |
 | `CONFIG_CACHE_TTL_SECONDS` | `client_agent`           | `60`                                       | TTL do cache de `GetAppConfig`.                                  |
-| `TENANT_APP_URL`         | `client_agent`             | `http://tenant_app:8002`                   | Destino do encaminhamento REST de telemetria.                    |
 | `MQTT_BROKER_HOST`       | `routing`                  | `mosquitto`                                | Host do broker MQTT (ChirpStack).                                |
 | `MQTT_BROKER_PORT`       | `routing`                  | `1883`                                     | Porta do broker MQTT.                                            |
 | `MQTT_QOS`               | `routing`                  | `1`                                        | QoS da inscrição no tópico de uplink.                            |
-| `RABBIT_URL`             | `routing`                  | `amqp://linx:linx@rabbitmq:5672/%2f`       | Conexão AMQP com o RabbitMQ.                                     |
-| `RABBIT_EXCHANGE`        | `routing`                  | `linx.telemetry`                           | Exchange `topic` durável de destino dos envelopes.               |
+| `MQTT_TOPIC`             | `routing`                  | `application/+/device/+/event/up`          | Tópico MQTT de uplink.                                           |
+| `RABBIT_URL`             | `routing`, `telemetry_consumer` | `amqp://linx:linx@rabbitmq:5672/%2f`  | Conexão AMQP com o RabbitMQ.                                     |
+| `RABBIT_EXCHANGE`        | `routing`, `telemetry_consumer` | `linx.telemetry`                     | Exchange `topic` durável de telemetria.                          |
 | `RABBIT_AUDIT_QUEUE`     | `routing`                  | `linx.telemetry.audit`                     | Fila durável com binding `#`; evita descarte silencioso.         |
-| `RABBIT_CONNECT_MAX_ATTEMPTS` | `routing`             | `5`                                        | Tentativas de conexão ao RabbitMQ.                               |
-| `RABBIT_CONNECT_BACKOFF_SECONDS` | `routing`           | `1.0`                                      | Backoff (s) entre tentativas de conexão.                         |
+| `RABBIT_CONNECT_MAX_ATTEMPTS` | `routing`, `telemetry_consumer` | `5`                                | Tentativas de conexão ao RabbitMQ.                               |
+| `RABBIT_CONNECT_BACKOFF_SECONDS` | `routing`, `telemetry_consumer` | `1.0`                          | Backoff (s) entre tentativas de conexão.                         |
+| `RABBIT_PREFETCH_COUNT`  | `telemetry_consumer`       | `10`                                       | Mensagens em voo no consumidor.                                  |
+| `CONSUMER_MAX_RETRIES`   | `telemetry_consumer`       | `3`                                        | Retries por mensagem antes da DLQ.                               |
+| `CONSUMER_RETRY_BACKOFF_SECONDS` | `telemetry_consumer` | `1.0`                                   | Backoff (s) entre retries de processamento.                      |
 | `MAX_PAYLOAD_BYTES`      | `routing`                  | `65536`                                    | Tamanho máximo do payload MQTT aceito.                           |
-| `CLIENT_AGENT_URL`       | `tenant_app`               | `http://client_agent:8001`                 | Endereço do middleware compartilhado.                            |
-| `APP_ID`                 | `tenant_app`               | `206b6a58-...`                             | Identidade da aplicação usada no `GetAppConfig`.                 |
-| `MQTT_TOPIC`             | `routing`, `tenant_app`    | `application/+/device/+/event/up`          | Tópico MQTT de uplink.                                           |
-| `DB_HOST` / `DB_PORT`    | `tenant_app`               | `timescaledb` / `5432`                     | Conexão com o TimescaleDB.                                       |
-| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tenant_app`, `timescaledb` | `tenant` / `...` / `tenantdb` | Credenciais do banco do tenant.                                  |
+| `APP_ID`                 | `telemetry_consumer`       | `206b6a58-...`                             | Identidade da aplicação; define fila `linx.telemetry.{app_id}` e binding `application.{app_id}.#`. |
+| `DB_HOST` / `DB_PORT`    | `telemetry_consumer`       | `timescaledb` / `5432`                     | Conexão com o TimescaleDB.                                       |
+| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `telemetry_consumer`, `timescaledb` | `tenant` / `...` / `tenantdb` | Credenciais do banco do tenant.                        |
+| `HTTP_HOST` / `HTTP_PORT` | `telemetry_consumer`      | `0.0.0.0` / `8000`                         | Bind do FastAPI de leitura.                                      |
 | `DATABASE_URL`           | `agent_bridge`, `identity_api` | `postgresql+psycopg://...@db:5432/linx` | Banco do plano de controle.                                      |
 
 > Em containers, os hosts são **nomes de serviço do Compose** (`db`, `agent_bridge`,
-> `tenant_app`, `mosquitto`, `rabbitmq`), não `localhost`.
+> `telemetry_consumer`, `mosquitto`, `rabbitmq`), não `localhost`.
 
 ---
 
@@ -388,30 +409,31 @@ cd deploy
 docker compose up -d --build
 docker compose ps                       # todos os serviços "Up"
 
-# 2. Prova do gRPC: AppConfig recebido do SaaS no startup do tenant_app
-docker compose logs tenant_app | grep "AppConfig received"
+# 2. Prova do gRPC: conectividade do client_agent com o SaaS
+docker compose logs client_agent | grep "Linx Core acessível"
 
 # 3. Prova do REST: criar um tenant no banco do plano de controle
 curl -i -X POST localhost:8000/api/v1/tenant/ \
   -H 'Content-Type: application/json' \
   -d '{"name": "ACME"}'
-
-# 4. Prova da ingestão: persistir telemetria no TimescaleDB do tenant
-curl -i -X POST localhost:8001/ingest \
-  -H 'Content-Type: application/json' \
-  -d '{"dev_eui": "dev1", "payload": {"temperature": 25.5}, "rssi": -70, "snr": 7.5}'
-# esperado: 201 {"ok": true}
 ```
 
-Verificação do pipeline MQTT → RabbitMQ (serviço `routing`):
+Verificação do pipeline MQTT → RabbitMQ → TimescaleDB (serviços `routing` e
+`telemetry_consumer`):
 
 ```bash
 # publica um uplink ChirpStack válido no broker MQTT
 mosquitto_pub -h localhost -p 1883 \
   -t "application/1/device/dev1/event/up" \
   -m '{"object":{"temperature":25.5},"rxInfo":[{"rssi":-70,"snr":7.5}],"time":"2026-10-08T12:00:00Z"}'
-# esperado: o `routing` valida e publica o envelope no exchange `linx.telemetry`
-# (confirme pela management UI em :15672 ou por um binding de teste no RabbitMQ)
+# esperado: o `routing` valida e publica o envelope no exchange `linx.telemetry`;
+# o `telemetry_consumer` persiste na hypertable `telemetry` e faz broadcast no WS.
+
+# 4. Prova da leitura: histórico persistido do tenant
+# O telemetry_consumer NÃO publica a porta 8000 no host (no stack unificado
+# localhost:8000 é o identity_api). Rode o curl DENTRO do container:
+docker compose exec telemetry_consumer python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/telemetry?limit=10').read().decode())"
+# esperado: 200 {"items": [...], "next_cursor": ...}
 ```
 
 ---

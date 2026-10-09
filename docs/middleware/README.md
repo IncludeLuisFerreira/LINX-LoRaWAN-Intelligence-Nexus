@@ -111,21 +111,24 @@ Backend e resolve a configuração de cada tenant sob demanda via
 | Método | Rota      | Descrição                                                        |
 | :----: | --------- | ---------------------------------------------------------------- |
 | `GET`  | `/health` | Health check: `{"status":"ok","saas_grpc":true}` (503 e `degraded` quando o SaaS está inacessível). |
-| `POST` | `/ingest` | Recebe telemetria validada e encaminha ao `/ingest` do tenant app. `201` em sucesso; `422` payload inválido; `502` tenant app inacessível. |
+
+> A ingestão de telemetria **não** passa por REST: o `client_agent` deixa de expor
+> `POST /ingest`. Ele fica com o cliente gRPC (`GetAppConfig`) e `GET /health`.
+> A ingestão é feita pelo `routing` (MQTT → RabbitMQ) e persistida pelo
+> `telemetry_consumer`.
 
 ## 🌐 Fluxo ponta-a-ponta com `curl`
 
-Dois fluxos demonstram a Sprint 2: **criar um tenant** no SaaS REST e **ingestar
-telemetria** pelo Client Agent. Os comandos valem para local e AWS — troque apenas
-o host.
+O fluxo abaixo demonstra **criar um tenant** no SaaS REST e verificar a
+conectividade gRPC do middleware. Os comandos valem para local e AWS — troque
+apenas o host.
 
 ### Pré-requisitos e portas
 
 | Serviço        | Porta   | Papel no fluxo                                           |
 | -------------- | ------- | -------------------------------------------------------- |
 | `identity_api` | `8000`  | SaaS REST — cria o tenant.                               |
-| `client_agent` | `8001`  | Middleware — recebe a telemetria em `/ingest`.           |
-| `tenant_app`   | `8002`  | Ambiente isolado — persiste a telemetria no TimescaleDB. |
+| `client_agent` | `8001`  | Middleware — gRPC (`GetAppConfig`) e `/health`.          |
 | `agent_bridge` | `50051` | gRPC do SaaS — configuração do tenant (`GetAppConfig`).  |
 
 Suba a stack e confirme que os serviços estão de pé:
@@ -133,11 +136,8 @@ Suba a stack e confirme que os serviços estão de pé:
 ```bash
 cd deploy
 docker compose up -d --build
-docker compose ps          # identity_api, client_agent, tenant_app e agent_bridge "Up"
+docker compose ps          # identity_api, client_agent e agent_bridge "Up"
 ```
-
-> A ingestão só responde `201` com o `tenant_app` no ar e o gRPC do SaaS
-> (`agent_bridge`) resolvível; caso contrário, veja Erros comuns.
 
 ### 1. Criar um tenant no SaaS (`identity_api`)
 
@@ -167,26 +167,12 @@ content-type: application/json
 > O `POST` exige a **barra final** (`/api/v1/tenant/`). Sem ela o FastAPI responde
 > `307 Temporary Redirect`.
 
-### 2. Ingestar telemetria no Client Agent
+### 2. Conferir a conectividade gRPC do Client Agent
 
 ```bash
-curl -i -X POST http://<agent>:8001/ingest \
-  -H 'Content-Type: application/json' \
-  -d '{"dev_eui": "dev1", "payload": {"temperature": 25.5}, "rssi": -50, "snr": 9.5}'
+curl -i http://<agent>:8001/health
+# esperado: 200 {"status":"ok","saas_grpc":true}
 ```
-
-Resposta esperada (`201 Created`):
-
-```http
-HTTP/1.1 201 Created
-content-type: application/json
-
-{"ok": true}
-```
-
-O middleware valida o schema e encaminha para o `POST /ingest` do `tenant_app`
-(`TENANT_APP_URL`, default `http://localhost:8002`), que grava na hypertable
-`telemetry` do TimescaleDB. `rssi` e `snr` são opcionais.
 
 ### Reproduzindo na AWS
 
@@ -194,7 +180,7 @@ Os comandos são os mesmos; mude apenas o host:
 
 - `<saas>` e `<agent>` → IP público ou DNS das instâncias EC2 (podem ser a mesma
   máquina, com portas distintas).
-- **Security Group (inbound):** libere `8000` (REST) e `8001` (ingest). A porta
+- **Security Group (inbound):** libere `8000` (REST) e `8001` (`/health`). A porta
   `50051` (gRPC) **não** deve ir para `0.0.0.0/0` — restrinja ao IP do Client Agent.
 - Com a borda TLS em nginx (#181), use `https://<dominio>` no lugar de
   `http://<saas>`; o encaminhamento interno para o backend permanece em HTTP.
@@ -204,9 +190,8 @@ Os comandos são os mesmos; mude apenas o host:
 | Resposta                   | Causa provável                                                            |
 | -------------------------- | ------------------------------------------------------------------------- |
 | `307` em `/api/v1/tenant`  | Falta a barra final (`/api/v1/tenant/`).                                 |
-| `422 Unprocessable Entity` | Payload fora do schema (`name` ausente, tipos errados, `dev_eui` vazio). |
-| `502 Bad Gateway`          | `tenant_app` inacessível ao `client_agent` (`TENANT_APP_URL`).           |
-| `503 Service Unavailable`  | gRPC do SaaS inacessível ou pool do TimescaleDB indisponível.            |
+| `422 Unprocessable Entity` | Payload fora do schema (`name` ausente, tipos errados).                  |
+| `503 Service Unavailable`  | gRPC do SaaS inacessível (`saas_grpc: false` em `/health`).              |
 | `404 Not Found`            | `tenant_id`/`app_id` inexistente em rotas com `{id}`.                    |
 
 > Visão completa da topologia, contrato gRPC e variáveis de ambiente:
@@ -259,8 +244,6 @@ Configuração por variáveis de ambiente:
 | `SAAS_GRPC_HOST`           | `agent_bridge:50051` | Endereço `host:porta` do gRPC do Linx Core. |
 | `GRPC_TIMEOUT_SECONDS`     | `5`             | Timeout (s) das chamadas/checagem gRPC.        |
 | `CONFIG_CACHE_TTL_SECONDS` | `60`            | TTL (s) do cache de `GetAppConfig` por `app_id`. |
-| `TENANT_APP_URL`           | `http://localhost:8002` | URL base do tenant app (destino da ingestão).  |
-| `INGEST_TIMEOUT_SECONDS`   | `5`             | Timeout (s) do encaminhamento ao tenant app.    |
 
 > `SAAS_GRPC_HOST` precisa apontar para um endereço alcançável de dentro do
 > container do middleware. `localhost:50051` só funciona em dev na mesma máquina;

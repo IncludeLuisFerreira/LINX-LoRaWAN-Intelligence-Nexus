@@ -1,144 +1,130 @@
-# Tenant App Template
+# Client — Telemetry Consumer
 
-Molde do ambiente isolado por aplicação (motor de regras + TimescaleDB),
-instanciado por aplicação no Sprint 4. Este é o scaffold inicial com
-FastAPI + Poetry, entregue na issue #16. O tenant app **não** roda o
-middleware: ele se comunica com o `middleware/services/client_agent` compartilhado.
+Ambiente isolado por aplicação no lado do cliente: um consumidor de
+telemetria que **ingere via AMQP** e expõe **leitura REST/WebSocket** sobre
+o TimescaleDB do tenant. O serviço fica em
+`services/telemetry_consumer/` e substitui o antigo `tenant_app`.
 
-## 📋 O que foi feito
+O `client/` contém apenas:
 
-- [x] Scaffold do serviço com **FastAPI** (`0.141.x`) + **Uvicorn** (`0.52.x`).
-- [x] Estrutura `src/tenant/` com `main.py` (`app = FastAPI()`) e `GET /health`.
-- [x] Teste de smoke (`tests/test_main.py`) validando `/health`.
-- [x] Tooling de dev espelhado do `linx_core`: `black`, `isort`, `flake8`,
-      `mypy`, `pytest` + `pytest-cov`, `taskipy` e `httpx2`.
-- [x] `Dockerfile` mínimo (`python:3.12-slim` + poetry + uvicorn).
-- [x] Schema TimescaleDB (`db/schema.sql`) com hypertable `telemetry`
-      (`time`, `dev_eui`, `payload`, `rssi`, `snr`) e índice `(dev_eui, time DESC)`.
-- [x] Endpoint `POST /ingest`: valida o payload e persiste na hypertable
-      `telemetry` via `asyncpg`.
-- [x] Stubs gRPC do contrato `linx_agent.proto` em `src/tenant/grpc/`
-      (pacote `tenant.grpc`).
-- [x] Busca `GetAppConfig(APP_ID)` via gRPC no startup e loga
-      `AppConfig received` (prova de comunicação da S2).
+| Caminho                       | Responsabilidade                                        |
+| ----------------------------- | ------------------------------------------------------- |
+| `services/telemetry_consumer/` | Serviço FastAPI (ingestão AMQP + leitura REST/WS).     |
+| `db/schema.sql`               | Schema TimescaleDB (hypertable `telemetry`).            |
+| `docker-compose.yml`          | Compose local: TimescaleDB + `telemetry_consumer`.      |
+| `README.md`                   | Este documento.                                         |
+
+A topologia completa (MySQL/Postgres, RabbitMQ, Mosquitto, routing,
+`client_agent`) sobe pelo `deploy/docker-compose.yml` na raiz do repositório.
+
+## 📥 Ingestão (AMQP)
+
+O `telemetry_consumer` consome uma fila por tenant
+(`linx.telemetry.<APP_ID>`) ligada ao exchange topic `linx.telemetry`
+(binding `application.<APP_ID>.#`). Pipeline:
+
+```
+Mosquitto → routing → RabbitMQ (linx.telemetry) → telemetry_consumer → TimescaleDB
+```
+
+Cada mensagem é um envelope JSON validado; campos obrigatórios: `app_id`,
+`dev_eui`, `event_type`, `payload`, `timestamp` (`rssi` e `snr` opcionais).
+Mensagens válidas são persistidas e retransmitidas via WebSocket. Payload
+inválido ou falha após retries vai para a DLQ (`linx.telemetry.<APP_ID>.dlq`).
+Toda mensagem recebe `ack`.
 
 ## 📍 Endpoints
 
-| Método | Rota      | Descrição                                |
-| :----: | --------- | ---------------------------------------- |
-| `GET`  | `/health` | Health check retornando `{"status":"ok"}` |
-| `POST` | `/ingest` | Valida o payload e persiste na hypertable `telemetry`. `201` em sucesso; `422` payload inválido; `503` banco indisponível. |
+| Método | Rota                         | Descrição                                              |
+| :----: | ---------------------------- | ------------------------------------------------------ |
+| `GET`  | `/health`                    | Estado do consumidor e do banco.                       |
+| `GET`  | `/telemetry`                 | Lista telemetria. Filtros `dev_eui`, `limit`, `before`; retorna `items` e `next_cursor`. |
+| `WS`   | `/ws/telemetry/{app_id}`     | Stream em tempo real. Fecha com `1008` se `app_id` não bate com `APP_ID`. |
 
-## 📥 Ingestão
-
-O `POST /ingest` recebe telemetria validada e a persiste no TimescaleDB do
-tenant. Corpo esperado:
-
-```json
-{"dev_eui": "dev1", "payload": {"t": 20}, "rssi": -70, "snr": 7.5}
-```
-
-Pipeline: `Mosquitto → routing (ingest) → exchange RabbitMQ linx.telemetry → consumidores`.
-O endpoint `POST /ingest` deste serviço continua disponível para ingestão direta via REST.
-
-## 🔗 Conexão gRPC com o Linx Core
-
-No startup o tenant app abre um canal gRPC com o Linx Core e chama
-`GetAppConfig(APP_ID)`, logando `AppConfig received` com `app_id`, `db_host`,
-`db_port` e `mqtt_topic` (sem expor `db_user`/`db_password`). A falha da
-chamada não derruba o serviço: o app sobe normalmente e segue usando as envs
-`DB_*` para o pool do TimescaleDB.
-
-Configuração por variáveis de ambiente:
-
-| Variável               | Default           | Descrição                                   |
-| ---------------------- | ----------------- | ------------------------------------------- |
-| `APP_ID`               | `app-abc123`      | ID da aplicação no SaaS.                    |
-| `SAAS_GRPC_HOST`       | `localhost:50051` | Endereço `host:porta` do gRPC do SaaS.      |
-| `GRPC_TIMEOUT_SECONDS` | `5`               | Timeout (s) da chamada `GetAppConfig`.      |
-
-> `SAAS_GRPC_HOST` precisa apontar para um endereço alcançável de dentro do
-> container do tenant. `localhost:50051` só funciona em dev na mesma máquina;
-> em container use o IP privado/DNS do SaaS ou um alias de rede Docker.
+`GET /telemetry` responde `503` quando o banco está indisponível. `limit` é
+limitado ao intervalo `1..1000` (default `100`).
 
 ## 🗄️ Banco de dados (TimescaleDB)
 
-`db/schema.sql` cria a hypertable `telemetry`, que armazena a série temporal de
-cada aplicação isolada. O schema é idempotente e é montado em
-`/docker-entrypoint-initdb.d` do container TimescaleDB:
+O serviço provisiona o pool `asyncpg` no startup e grava na hypertable
+`telemetry` definida em `db/schema.sql`. O schema é idempotente e é montado
+em `/docker-entrypoint-initdb.d` do container TimescaleDB:
 
-| Coluna     | Tipo        | Descrição                              |
-| ---------- | ----------- | -------------------------------------- |
-| `time`     | `TIMESTAMPTZ` | Timestamp da telemetria (dimensão).   |
-| `dev_eui`  | `TEXT`        | Identificador do dispositivo (LoRaWAN). |
-| `payload`  | `JSONB`       | Payload bruto recebido.                |
-| `rssi`     | `INT`         | Indicador de intensidade do sinal.     |
-| `snr`      | `FLOAT`       | Relação sinal-ruído.                   |
+| Coluna       | Tipo          | Descrição                                |
+| ------------ | ------------- | ---------------------------------------- |
+| `time`       | `TIMESTAMPTZ` | Timestamp da telemetria (dimensão).      |
+| `dev_eui`    | `TEXT`        | Identificador do dispositivo (LoRaWAN).  |
+| `payload`    | `JSONB`       | Payload bruto recebido.                  |
+| `rssi`       | `INT`         | Indicador de intensidade do sinal.       |
+| `snr`        | `FLOAT`       | Relação sinal-ruído.                     |
+| `app_id`     | `TEXT`        | ID da aplicação no SaaS.                 |
+| `event_type` | `TEXT`        | Tipo do evento.                          |
 
-Índice composto `(dev_eui, time DESC)` para queries de série temporal por
-dispositivo.
+Há um índice composto `(dev_eui, time DESC)` para queries de série temporal
+por dispositivo e um índice único `(dev_eui, time, event_type)` que
+desduplica eventos.
 
 ## 📁 Estrutura
 
-| Arquivo                       | Responsabilidade                                |
-| ----------------------------- | ----------------------------------------------- |
-| `pyproject.toml`              | Dependências, pacote `tenant` e tasks de dev.   |
-| `poetry.lock`                 | Versões travadas das dependências.              |
-| `src/tenant/main.py`          | Aplicação FastAPI (`app`) e endpoint `/health`. |
-| `src/tenant/config.py`        | `TenantSettings` (host gRPC, `app_id`, `DB_*`) via env. |
-| `src/tenant/grpc_client.py`   | `SaasConfigClient` (`GetAppConfig` + log `AppConfig received`). |
-| `src/tenant/grpc/`            | Stubs gRPC do contrato `linx_agent.proto`.      |
-| `tests/test_main.py`          | Smoke test do `/health` e do lifespan com `TestClient`. |
-| `tests/test_config.py`        | Testes dos defaults de `TenantSettings`.        |
-| `tests/test_grpc_client.py`   | Testes do `SaasConfigClient` (mapeamento, log, erros). |
-| `db/schema.sql`               | Schema TimescaleDB (hypertable `telemetry`).    |
-| `Dockerfile`                  | Imagem mínima para rodar o serviço.             |
+| Arquivo                                        | Responsabilidade                                     |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| `services/telemetry_consumer/pyproject.toml`   | Dependências e tasks de dev (poetry).               |
+| `services/telemetry_consumer/src/.../app.py`   | App FastAPI, lifespan (pool + consumer) e `/health`. |
+| `services/telemetry_consumer/src/.../config.py`| `ConsumerSettings` (AMQP, DB, HTTP) via env.         |
+| `services/telemetry_consumer/src/.../consumer.py` | `RabbitConsumer` com retry, DLQ e thread dedicada. |
+| `services/telemetry_consumer/src/.../db.py`    | Pool `asyncpg` (`insert_event`, `fetch_telemetry`).  |
+| `services/telemetry_consumer/src/.../broadcaster.py` | Fan-out WebSocket em memória.                  |
+| `services/telemetry_consumer/src/.../routers/telemetry.py` | Rotas REST e WS de leitura.          |
+| `services/telemetry_consumer/tests/`           | Testes unitários (app, consumer, db, router, config).|
 
-## ⚙️ Instalação
+## ⚙️ Variáveis de ambiente
+
+| Variável                           | Default                              | Descrição                                   |
+| ---------------------------------- | ------------------------------------ | ------------------------------------------- |
+| `APP_ID`                           | `app-abc123`                         | ID da aplicação no SaaS (fila/binding).     |
+| `RABBIT_URL`                       | `amqp://guest:guest@localhost:5672/%2f` | URL AMQP do RabbitMQ.                    |
+| `RABBIT_EXCHANGE`                  | `linx.telemetry`                     | Exchange topic de telemetria.               |
+| `RABBIT_PREFETCH_COUNT`            | `10`                                 | Prefetch do consumidor.                     |
+| `RABBIT_CONNECT_MAX_ATTEMPTS`      | `5`                                  | Tentativas de conexão ao RabbitMQ.          |
+| `RABBIT_CONNECT_BACKOFF_SECONDS`   | `1.0`                                | Backoff entre tentativas de conexão.        |
+| `CONSUMER_MAX_RETRIES`             | `3`                                  | Retries por mensagem antes da DLQ.          |
+| `CONSUMER_RETRY_BACKOFF_SECONDS`   | `1.0`                                | Backoff entre retries de processamento.     |
+| `DB_HOST`                          | `timescaledb`                        | Host do TimescaleDB.                        |
+| `DB_PORT`                          | `5432`                               | Porta do TimescaleDB.                       |
+| `DB_USER`                          | `tenant`                             | Usuário do PostgreSQL.                      |
+| `DB_PASSWORD`                      | `changeme`                           | Senha do PostgreSQL.                        |
+| `DB_NAME`                          | `tenantdb`                           | Nome do banco.                              |
+| `HTTP_HOST`                        | `0.0.0.0`                            | Host de bind do Uvicorn.                    |
+| `HTTP_PORT`                        | `8000`                               | Porta HTTP do serviço.                      |
+
+## ▶️ Executando (local)
+
+A partir de `client/services/telemetry_consumer/`:
 
 ```bash
 poetry install
+poetry run uvicorn telemetry_consumer.app:app --reload
 ```
 
-## ▶️ Executando
-
-```bash
-poetry run uvicorn tenant.main:app --reload
-```
-
-Verificação:
+Atalhos do taskipy: `task run`, `task run_reload`. Verificação:
 
 ```bash
 curl http://localhost:8000/health
-# {"status":"ok"}
 ```
 
-## 🧪 Testes
+Testes e lint:
 
 ```bash
-poetry run pytest
+task test   # task lint + pytest --cov + coverage
+task lint   # black + isort + mypy + flake8
 ```
 
-## 🛠️ Lint e tipos
+## 🐳 Docker Compose
 
-```bash
-task lint          # black + isort + mypy + flake8
-```
+### Ambiente local (`client/docker-compose.yml`)
 
-## 🐳 Docker
-
-```bash
-docker build -t tenant-app-template .
-docker run --rm -p 8000:8000 tenant-app-template
-```
-
-## 🐳 Docker Compose (ambiente tenant completo)
-
-Sobe `timescaledb` + `tenant_app`. O tenant app **não** instancia o
-`middleware/services/client_agent`: ele se comunica com o **middleware compartilhado**, cujo
-endereço vem de `CLIENT_AGENT_URL`.
-
-**Pré-requisitos:** Docker Compose V2 (`docker compose version`).
+Sobe `timescaledb` + `telemetry_consumer`. O schema é montado no container
+do banco e o serviço só inicia após o healthcheck do TimescaleDB.
 
 ```bash
 # a partir de client/
@@ -146,22 +132,21 @@ cp .env.example .env   # preencha as variáveis
 docker compose up --build
 ```
 
-Variáveis obrigatórias no `.env`:
+Variáveis usadas no `.env`: `APP_ID`, `RABBIT_URL`, `DB_USER`,
+`DB_PASSWORD`, `DB_NAME`.
 
-| Variável           | Exemplo                      | Descrição                              |
-| ------------------ | ---------------------------- | -------------------------------------- |
-| `CLIENT_AGENT_URL` | `http://localhost:8001`      | URL base do middleware compartilhado.  |
-| `APP_ID`           | `app-abc123`                 | ID da aplicação no SaaS.               |
-| `SAAS_GRPC_HOST`   | `localhost:50051`            | Endereço `host:porta` do gRPC do SaaS. |
-| `MQTT_TOPIC`       | `au915_0/gateway/+/event/up` | Tópico MQTT de uplink.                 |
-| `TENANT_PORT`      | `8002`                       | Porta exposta do `tenant_app`.         |
-| `DB_USER`          | `tenant`                     | Usuário do PostgreSQL.                 |
-| `DB_PASSWORD`      | `secret`                     | Senha do PostgreSQL.                   |
-| `DB_NAME`          | `tenantdb`                   | Nome do banco.                         |
-| `DB_HOST`          | `timescaledb`                | Host do TimescaleDB (em dev fora do Docker use `localhost`). |
-| `DB_PORT`          | `5432`                       | Porta do TimescaleDB.                  |
+### Stack completa (`deploy/docker-compose.yml`)
 
-> O cliente HTTP tenant→middleware ainda não está implementado (issue
-> futura); aqui entra apenas a configuração/topologia.
+Na raiz do repositório, sobe a topologia de produção: `db`, `identity_api`,
+`nginx`, `agent_bridge`, `client_agent`, `timescaledb`, `telemetry_consumer`,
+`mosquitto`, `rabbitmq` e `routing`. O `telemetry_consumer` é construído a
+partir de `../client/services/telemetry_consumer` e recebe o `RABBIT_URL`
+apontando para o serviço `rabbitmq`.
 
-> `depends_on: condition: service_healthy` requer Docker Compose V2. Não compatível com `docker stack deploy` (Swarm).
+```bash
+# a partir de deploy/
+docker compose up --build
+```
+
+> `depends_on: condition: service_healthy` requer Docker Compose V2. Não é
+> compatível com `docker stack deploy` (Swarm).
