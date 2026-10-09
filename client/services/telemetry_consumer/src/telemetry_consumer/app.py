@@ -24,8 +24,6 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        app.state.settings = app_settings
-
         pool: Any = None
         try:
             pool = await pool_factory(
@@ -40,11 +38,41 @@ def create_app(
             logger.warning("TimescaleDB indisponivel no startup (%s).", exc)
             pool = None
         app.state.db_pool = pool
+        pool_lock = asyncio.Lock()
+
+        async def ensure_pool() -> Any:
+            current = app.state.db_pool
+            if current is not None:
+                return current
+            async with pool_lock:
+                current = app.state.db_pool
+                if current is not None:
+                    return current
+                try:
+                    current = await pool_factory(
+                        host=app_settings.db_host,
+                        port=app_settings.db_port,
+                        user=app_settings.db_user,
+                        password=app_settings.db_password,
+                        database=app_settings.db_name,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "TimescaleDB indisponivel; recuperacao adiada (%s).",
+                        exc,
+                    )
+                    return None
+                app.state.db_pool = current
+                logger.info("Pool TimescaleDB recuperado.")
+                return current
 
         broadcaster = Broadcaster()
         app.state.broadcaster = broadcaster
 
         async def handler(envelope: dict[str, Any]) -> bool:
+            pool = await ensure_pool()
+            if pool is None:
+                raise RuntimeError("database unavailable")
             inserted = await insert_event(
                 pool,
                 event_time=envelope["timestamp"],
@@ -75,12 +103,14 @@ def create_app(
         consumer.start()
         app.state.consumer = consumer
 
-        yield
-
-        consumer.stop()
-        if pool is not None:
-            await pool.close()
-            logger.info("Pool TimescaleDB encerrado.")
+        try:
+            yield
+        finally:
+            await asyncio.to_thread(consumer.stop)
+            current_pool = app.state.db_pool
+            if current_pool is not None:
+                await current_pool.close()
+                logger.info("Pool TimescaleDB encerrado.")
 
     app = FastAPI(lifespan=lifespan)
     app.state.settings = app_settings

@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from telemetry_consumer.app import create_app
@@ -147,3 +148,40 @@ async def test_handler_persists_and_broadcasts():
         assert record["time"] == "2026-10-08T12:00:00Z"
         assert record["rssi"] is None
         assert record["snr"] is None
+
+
+ENVELOPE = {
+    "app_id": "app-abc123",
+    "dev_eui": "dev1",
+    "event_type": "reading",
+    "payload": {"temperature": 21},
+    "timestamp": "2026-10-08T12:00:00Z",
+}
+
+
+async def test_lazy_pool_recovery_recreates_pool():
+    captured = {}
+    state = {"calls": 0}
+
+    async def flaky_factory(**kwargs):
+        state["calls"] += 1
+        if state["calls"] < 3:
+            raise RuntimeError("db down")
+        return InsertPool()
+
+    class CapturingConsumer(FakeConsumer):
+        def __init__(self, settings, loop, handler, *args, **kwargs):
+            super().__init__()
+            captured["handler"] = handler
+
+    app = create_app(
+        pool_factory=flaky_factory, consumer_factory=CapturingConsumer
+    )
+    with TestClient(app):
+        assert app.state.db_pool is None
+        with pytest.raises(RuntimeError):
+            await captured["handler"](ENVELOPE)
+        assert app.state.db_pool is None
+        assert await captured["handler"](ENVELOPE) is True
+        assert app.state.db_pool is not None
+    assert state["calls"] == 3
