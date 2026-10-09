@@ -5,6 +5,36 @@ from telemetry_consumer.app import create_app
 from telemetry_consumer.broadcaster import Broadcaster
 
 
+class FakeConsumer:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def health(self):
+        return {
+            "rabbitmq_connected": False,
+            "processed": 0,
+            "failed": 0,
+            "last_processed_at": None,
+            "last_error": None,
+        }
+
+
+async def _fake_pool_factory(**kwargs):
+    return None
+
+
+def _make_app():
+    return create_app(
+        pool_factory=_fake_pool_factory, consumer_factory=FakeConsumer
+    )
+
+
 class FakePool:
     def __init__(self, rows):
         self.rows = rows
@@ -28,7 +58,7 @@ class FakePool:
 
 
 def test_get_telemetry_returns_items():
-    app = create_app()
+    app = _make_app()
     app.state.db_pool = FakePool([{"dev_eui": "dev1"}])
     client = TestClient(app)
     response = client.get("/telemetry?dev_eui=dev1&limit=10")
@@ -38,7 +68,7 @@ def test_get_telemetry_returns_items():
 
 
 def test_get_telemetry_next_cursor_from_last_item():
-    app = create_app()
+    app = _make_app()
     app.state.db_pool = FakePool(
         [
             {"dev_eui": "dev1", "time": "2026-10-08T12:00:00Z"},
@@ -52,7 +82,7 @@ def test_get_telemetry_next_cursor_from_last_item():
 
 
 def test_get_telemetry_clamps_limit():
-    app = create_app()
+    app = _make_app()
     pool = FakePool([])
     app.state.db_pool = pool
     client = TestClient(app)
@@ -63,14 +93,14 @@ def test_get_telemetry_clamps_limit():
 
 
 def test_get_telemetry_returns_503_without_pool():
-    app = create_app()
+    app = _make_app()
     client = TestClient(app)
     response = client.get("/telemetry")
     assert response.status_code == 503
 
 
 def test_ws_rejects_wrong_app_id():
-    app = create_app()
+    app = _make_app()
     app.state.broadcaster = Broadcaster()
     client = TestClient(app)
     # app_id diferente de settings.app_id (default app-abc123)
@@ -80,7 +110,7 @@ def test_ws_rejects_wrong_app_id():
 
 
 def test_ws_accepts_valid_app_id_and_unregisters():
-    app = create_app()
+    app = _make_app()
     broadcaster = Broadcaster()
     app.state.broadcaster = broadcaster
     client = TestClient(app)
