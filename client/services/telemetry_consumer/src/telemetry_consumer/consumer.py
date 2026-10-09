@@ -15,6 +15,14 @@ from telemetry_consumer.config import ConsumerSettings
 
 logger = logging.getLogger(__name__)
 
+REQUIRED_FIELDS = (
+    "app_id",
+    "dev_eui",
+    "event_type",
+    "payload",
+    "timestamp",
+)
+
 
 class RabbitConsumer:
     """Consome telemetria de uma fila por tenant.
@@ -185,6 +193,7 @@ class RabbitConsumer:
         try:
             envelope = self._parse(raw_body)
             if envelope is None:
+                logger.warning("payload inválido; enviando para a DLQ")
                 self._dead_letter(raw_body, "payload inválido")
                 self._record_failure("payload inválido")
                 return
@@ -206,14 +215,14 @@ class RabbitConsumer:
             return None
         if not isinstance(data, dict):
             return None
-        if "app_id" not in data:
+        if any(field not in data for field in REQUIRED_FIELDS):
             return None
         return data
 
     def _process_with_retry(self, envelope: dict[str, Any]) -> Any:
-        attempts = max(1, self._settings.consumer_max_retries)
+        total_attempts = 1 + max(0, self._settings.consumer_max_retries)
         last_exc: Exception | None = None
-        for attempt in range(1, attempts + 1):
+        for attempt in range(1, total_attempts + 1):
             try:
                 return self._call_handler(envelope)
             except Exception as exc:  # noqa: BLE001
@@ -221,10 +230,10 @@ class RabbitConsumer:
                 logger.warning(
                     "falha ao processar mensagem (tentativa %d/%d): %s",
                     attempt,
-                    attempts,
+                    total_attempts,
                     exc,
                 )
-                if attempt < attempts:
+                if attempt < total_attempts:
                     time.sleep(self._settings.consumer_retry_backoff_seconds)
         if last_exc is not None:
             raise last_exc
@@ -237,9 +246,13 @@ class RabbitConsumer:
         coroutine = invoke()
         if self._loop is None:
             return asyncio.run(coroutine)
-        future: concurrent.futures.Future[Any] = (
-            asyncio.run_coroutine_threadsafe(coroutine, self._loop)
-        )
+        try:
+            future: concurrent.futures.Future[Any] = (
+                asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+            )
+        except Exception:
+            coroutine.close()
+            raise
         return future.result()
 
     def _dead_letter(self, raw_body: Any, reason: str) -> None:

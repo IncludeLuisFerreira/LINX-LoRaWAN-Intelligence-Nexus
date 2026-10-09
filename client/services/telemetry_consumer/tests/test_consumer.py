@@ -33,24 +33,61 @@ async def _always_fail(envelope):
     raise RuntimeError("db down")
 
 
+VALID_ENVELOPE = {
+    "app_id": "app-1",
+    "dev_eui": "dev-1",
+    "event_type": "up",
+    "payload": {"temperature": 21.5},
+    "timestamp": "2026-10-08T12:00:00Z",
+}
+
+
 def test_valid_envelope_is_acked():
     settings = ConsumerSettings(app_id="app-1", consumer_max_retries=1)
     consumer = RabbitConsumer(settings, None, _ok, channel=FakeChannel())
-    message = FakeMessage(json.dumps({"app_id": "app-1"}).encode())
+    message = FakeMessage(json.dumps(VALID_ENVELOPE).encode())
     consumer._handle_message(message)
     assert message.acked is True
     assert consumer.health()["processed"] == 1
+
+
+def test_partial_envelope_goes_to_dlq_and_acks():
+    channel = FakeChannel()
+    settings = ConsumerSettings(app_id="app-1")
+    consumer = RabbitConsumer(settings, None, _ok, channel=channel)
+    message = FakeMessage(json.dumps({"app_id": "app-1"}).encode())
+    consumer._handle_message(message)
+    assert message.acked is True
+    assert channel.published[0][2] == "linx.telemetry.app-1.dlq"
+    assert consumer.health()["failed"] == 1
 
 
 def test_retry_exhausted_goes_to_dlq_and_acks():
     channel = FakeChannel()
     settings = ConsumerSettings(app_id="app-1", consumer_max_retries=2)
     consumer = RabbitConsumer(settings, None, _always_fail, channel=channel)
-    message = FakeMessage(json.dumps({"app_id": "app-1"}).encode())
+    message = FakeMessage(json.dumps(VALID_ENVELOPE).encode())
     consumer._handle_message(message)
     assert message.acked is True
     assert channel.published[0][2] == "linx.telemetry.app-1.dlq"
     assert consumer.health()["failed"] == 1
+
+
+def test_retry_count_is_initial_plus_max_retries():
+    calls = {"n": 0}
+
+    async def _fail(envelope):
+        calls["n"] += 1
+        raise RuntimeError("db down")
+
+    settings = ConsumerSettings(
+        app_id="app-1",
+        consumer_max_retries=2,
+        consumer_retry_backoff_seconds=0.0,
+    )
+    consumer = RabbitConsumer(settings, None, _fail, channel=FakeChannel())
+    consumer._handle_message(FakeMessage(json.dumps(VALID_ENVELOPE).encode()))
+    assert calls["n"] == 3
 
 
 def test_invalid_json_goes_to_dlq_and_acks():
@@ -163,7 +200,7 @@ def test_run_consumes_and_stops():
     consumer._connection = FakeConnection("url")
     consumer._channel = FakeRealChannel()
     queue = FakeQueue(consumer._channel, consumer._settings.queue_name)
-    message = FakeMessage(b'{"app_id": "app-1"}')
+    message = FakeMessage(json.dumps(VALID_ENVELOPE).encode())
     queue.messages = [message]
 
     original_consume = queue.consume
@@ -258,7 +295,10 @@ def test_parse_rejects_invalid_payloads():
     assert consumer._parse(b"[1, 2]") is None
     assert consumer._parse(b'{"dev_eui": "x"}') is None
     assert consumer._parse(b"not-json") is None
-    assert consumer._parse(b'{"app_id": "x"}') == {"app_id": "x"}
+    assert consumer._parse(b'{"app_id": "x"}') is None
+    assert consumer._parse(json.dumps(VALID_ENVELOPE).encode()) == (
+        VALID_ENVELOPE
+    )
 
 
 def test_handler_runs_on_provided_loop():
@@ -272,7 +312,7 @@ def test_handler_runs_on_provided_loop():
             _ok,
             channel=FakeChannel(),
         )
-        message = FakeMessage(b'{"app_id": "app-1"}')
+        message = FakeMessage(json.dumps(VALID_ENVELOPE).encode())
         consumer._handle_message(message)
         assert message.acked is True
         assert consumer.health()["processed"] == 1
