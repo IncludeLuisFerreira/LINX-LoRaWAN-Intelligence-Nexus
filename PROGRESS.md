@@ -25,7 +25,7 @@
 - [x] [#19 feat(backend): define proto/linx_agent.proto (AgentBridge)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/19)
 - [x] [#20 feat(backend): generate Python gRPC stubs](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/20)
 - [x] [#21 feat(devops): multi-stage Dockerfile for middleware/services/client_agent](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/21)
-- [x] [#22 feat(devops): tenant docker-compose (tenant_app + timescaledb)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/22)
+- [x] [#22 feat(devops): tenant docker-compose (tenant_app + timescaledb)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/22) (substituído por `telemetry_consumer` + `timescaledb`, #192)
 
 ## Sprint 2 — Dois Serviços na AWS com gRPC
 
@@ -41,8 +41,8 @@
 - [x] [#32 feat(devops): nginx with TLS (Let's Encrypt / self-signed dev)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/32)
 - [x] [#33 feat(backend): device_routes table (dev_eui, app_id, agent_endpoint)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/33)
 - [x] [#34 feat(backend): gRPC client do middleware + resolução de config por tenant (GetAppConfig)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/34)
-- [x] [#35 feat(backend): POST /ingest (validate schema, persist TimescaleDB)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)
-- [x] [#36 feat(backend): pipeline Mosquitto → routing (MQTT consumer) → exchange RabbitMQ](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/36) (consumidores do exchange pendentes)
+- [x] [#35 feat(backend): POST /ingest (validate schema, persist TimescaleDB)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35) (removido; ingestão via AMQP, #192)
+- [x] [#36 feat(backend): pipeline Mosquitto → routing (MQTT consumer) → exchange RabbitMQ](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/36) (consumidor entregue em #192)
 - [ ] [#37 feat(devops): deploy Client Agent on second EC2 (or port 8001)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/37)
 - [ ] [#38 feat(backend): log AppConfig received via gRPC (proof of communication)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/38)
 - [x] [#39 docs(backend): README with curl for create tenant + ingest telemetry](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/39)
@@ -81,6 +81,7 @@
 - [ ] [#66 feat(devops): network isolation (dedicated bridge per app)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/66)
 - [ ] [#67 feat(backend): tenant /health (TimescaleDB + MQTT consumer)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/67)
 - [ ] [#68 feat(backend): isolation test script (2 apps, no data crossing)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/68)
+- [x] [#192 feat(backend): consumidor RabbitMQ linx.telemetry (persistência idempotente, GET /telemetry e WebSocket)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/192)
 
 ## Sprint 5 — Autenticação, RBAC e TLS
 
@@ -154,4 +155,4 @@
 - [ ] [#127 docs(backend): ARCHITECTURE.md](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/127)
 - [ ] [#128 docs(backend): DR.md (failover/disaster recovery)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/128)
 
-**Total de issues:** 128 (30 concluídas)
+**Total de issues:** 129 (38 concluídas)
