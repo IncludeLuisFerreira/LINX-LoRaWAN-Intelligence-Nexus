@@ -63,6 +63,7 @@
 - [ ] [#51 feat(backend): GET /api/v1/telemetry/{dev_eui} (cursor pagination)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/51)
 - [ ] [#52 feat(backend): WebSocket /ws/telemetry/{app_id} broadcast](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/52)
 - [ ] [#53 feat(devops): docker-compose with full ChirpStack v4](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/53)
+- [x] [#192 feat(backend): consumidor RabbitMQ linx.telemetry (persistência idempotente, GET /telemetry e WebSocket)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/192) (entrega #51/#52)
 
 ## Sprint 4 — Multi-Tenant Real: Provisionamento Automático
 
@@ -81,7 +82,6 @@
 - [ ] [#66 feat(devops): network isolation (dedicated bridge per app)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/66)
 - [ ] [#67 feat(backend): tenant /health (TimescaleDB + MQTT consumer)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/67)
 - [ ] [#68 feat(backend): isolation test script (2 apps, no data crossing)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/68)
-- [x] [#192 feat(backend): consumidor RabbitMQ linx.telemetry (persistência idempotente, GET /telemetry e WebSocket)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/192)
 
 ## Sprint 5 — Autenticação, RBAC e TLS
 

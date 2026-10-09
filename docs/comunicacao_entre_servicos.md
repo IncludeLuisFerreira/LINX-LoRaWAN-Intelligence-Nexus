@@ -28,14 +28,20 @@ Quatro protocolos sustentam a comunicação:
 
 | Serviço (Compose) | Tecnologia            | Porta           | Papel                                                                              |
 | :---------------- | :-------------------- | :-------------- | :--------------------------------------------------------------------------------- |
-| `identity_api`    | FastAPI (REST)        | `8000`          | API do plano de controle: CRUD de tenants e aplicações.                            |
+| `identity_api`    | FastAPI (REST)        | `8000` (host)   | API do plano de controle: CRUD de tenants e aplicações. Único serviço que publica a porta `8000` no host. |
 | `agent_bridge`    | gRPC (`grpcio`)       | `50051`         | **Servidor** do contrato `AgentBridge` — responde `GetAppConfig`.                   |
 | `client_agent`    | FastAPI               | `8001`          | Middleware compartilhado: cliente gRPC (`GetAppConfig`) e `GET /health`.            |
 | `routing`         | Python (paho-mqtt + rabbitpy) | —        | Ingestão: consome uplinks MQTT, valida e publica envelopes no RabbitMQ.            |
 | `rabbitmq`        | RabbitMQ 3 (AMQP)     | `5672`/`15672`  | Exchange `topic` durável `linx.telemetry`; distribui telemetria aos consumidores.  |
-| `telemetry_consumer` | FastAPI            | `8000`          | Ambiente isolado por aplicação: consome a fila AMQP, persiste no TimescaleDB e serve `GET /telemetry`/WebSocket. |
+| `telemetry_consumer` | FastAPI            | `8000` (interna, não publicada) | Ambiente isolado por aplicação: consome a fila AMQP, persiste no TimescaleDB e serve `GET /telemetry`/WebSocket. Acessível apenas pela rede do Compose. |
 | `db`              | PostgreSQL 15         | `5432` (interna) | Banco do plano de controle (tenants/applications).                                 |
 | `timescaledb`     | TimescaleDB (pg14)    | `5432` (interna) | Série temporal isolada do tenant (hypertable `telemetry`).                          |
+
+> O `identity_api` e o `telemetry_consumer` usam a porta `8000`, mas em escopos
+> diferentes: `identity_api` é a única com mapeamento no host
+> (`ports: "8000:8000"`), enquanto `telemetry_consumer` escuta em `8000` **apenas
+> dentro da rede do Compose** (sem `ports:`). Portanto, de fora do host,
+> `localhost:8000` é o `identity_api`.
 
 ### 1.2 Topologia
 
@@ -78,8 +84,8 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 | `rabbitmq` (fila do tenant)     | `telemetry_consumer`             | AMQP                  | `5672`  | Entregar envelope na fila `linx.telemetry.{app_id}`    | por evento    |
 | `telemetry_consumer`            | `timescaledb`                    | PostgreSQL (`asyncpg`)| `5432`  | `INSERT` idempotente e `SELECT` na hypertable `telemetry` | por evento / leitura |
 | `agent_bridge` / `identity_api` | `db`                             | PostgreSQL            | `5432`  | Ler/escrever o plano de controle                       | contínuo      |
-| Frontend / clientes externos    | `telemetry_consumer`             | HTTP/REST + WebSocket | `8000`  | Histórico (`GET /telemetry`) e stream (`WS /ws/telemetry/{app_id}`) | sob demanda / contínuo |
-| Frontend / clientes externos    | `identity_api`                   | HTTP/REST             | `8000`  | CRUD de tenants e aplicações                           | sob demanda   |
+| Clientes na rede do Compose     | `telemetry_consumer`             | HTTP/REST + WebSocket | `8000` (interna) | Histórico (`GET /telemetry`) e stream (`WS /ws/telemetry/{app_id}`) | sob demanda / contínuo |
+| Frontend / clientes externos    | `identity_api`                   | HTTP/REST             | `8000` (host) | CRUD de tenants e aplicações                           | sob demanda   |
 
 > **Direção do gRPC:** o contrato é único (`AgentBridge`), mas cada lado hospeda o RPC
 > que lhe cabe. O **SaaS** hospeda `GetAppConfig` (em `agent_bridge`) e o `client_agent`
@@ -424,7 +430,9 @@ mosquitto_pub -h localhost -p 1883 \
 # o `telemetry_consumer` persiste na hypertable `telemetry` e faz broadcast no WS.
 
 # 4. Prova da leitura: histórico persistido do tenant
-curl -i "localhost:8000/telemetry?limit=10"
+# O telemetry_consumer NÃO publica a porta 8000 no host (no stack unificado
+# localhost:8000 é o identity_api). Rode o curl DENTRO do container:
+docker compose exec telemetry_consumer python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/telemetry?limit=10').read().decode())"
 # esperado: 200 {"items": [...], "next_cursor": ...}
 ```
 
