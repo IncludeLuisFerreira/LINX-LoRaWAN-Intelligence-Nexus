@@ -5,8 +5,8 @@ Documento de migração para bancos TimescaleDB já existentes que rodavam o ant
 colunas `app_id` e `event_type` e um índice único de deduplicação; bancos criados
 antes dessa mudança precisam ser migrados **uma vez** antes de subir o serviço.
 
-O novo esquema canônico está em [`client/db/schema.sql`](../../client/db/schema.sql)
-e [`deploy/db/schema.sql`](../../deploy/db/schema.sql) (arquivos duplicados, mantidos
+O novo esquema canônico está em `client/db/schema.sql` e
+`deploy/db/schema.sql` (arquivos duplicados, mantidos
 idênticos). Bancos novos já nascem migrados; o procedimento abaixo é apenas para
 bancos existentes.
 
@@ -86,4 +86,4 @@ ALTER TABLE telemetry DROP COLUMN IF EXISTS event_type;
 ALTER TABLE telemetry DROP COLUMN IF EXISTS app_id;
 ```
 
-> Referência completa do fluxo: [`docs/superpowers/specs/2026-10-08-telemetry-consumer-design.md`](../superpowers/specs/2026-10-08-telemetry-consumer-design.md).
+> Referência completa do fluxo: `docs/superpowers/specs/2026-10-08-telemetry-consumer-design.md`.
