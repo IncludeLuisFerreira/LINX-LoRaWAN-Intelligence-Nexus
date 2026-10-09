@@ -3,6 +3,7 @@ from typing import Any, Callable
 from fastapi import FastAPI
 
 from telemetry_consumer.config import ConsumerSettings
+from telemetry_consumer.routers.telemetry import router as telemetry_router
 
 
 def create_app(
@@ -19,6 +20,8 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    app.include_router(telemetry_router)
 
     return app
 
