@@ -98,8 +98,6 @@ services:
     depends_on:
       agent_bridge:
         condition: service_started
-      tenant_app:
-        condition: service_started
     ports:
       - "8001:8001"
 
@@ -118,16 +116,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-  tenant_app:
-    build: ../client/.
+  telemetry_consumer:
+    build:
+      context: ../client/services/telemetry_consumer
+      dockerfile: Dockerfile
     restart: unless-stopped
-    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do Linx Core
-    # a partir do container (não use "localhost" aqui).
+    env_file: .env
     environment:
-      - CLIENT_AGENT_URL=${CLIENT_AGENT_URL:-http://client_agent:8001}
       - APP_ID=${APP_ID}
-      - MQTT_TOPIC=${MQTT_TOPIC}
-      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST:-agent_bridge:50051}
+      - RABBIT_URL=amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f
       - DB_HOST=timescaledb
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
@@ -135,12 +132,8 @@ services:
     depends_on:
       timescaledb:
         condition: service_healthy
-      agent_bridge:
-        condition: service_started
-      identity_api:
-        condition: service_started
-    ports:
-      - "${TENANT_PORT:-8002}:8002"
+      rabbitmq:
+        condition: service_healthy
 
   mosquitto:
     image: eclipse-mosquitto:2
