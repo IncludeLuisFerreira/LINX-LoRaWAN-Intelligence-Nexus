@@ -154,13 +154,15 @@ CREATE INDEX IF NOT EXISTS telemetry_dev_eui_time_idx
     ON telemetry (dev_eui, time DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS telemetry_dedup_idx
-    ON telemetry (dev_eui, time, event_type);
+    ON telemetry (app_id, dev_eui, time, event_type);
 ```
 
 ### Migração (bancos existentes)
 
 Aplicar uma vez, antes de subir o novo consumer. O `time` está contido na chave
-única, requisito do TimescaleDB para índice único em hypertable.
+única, requisito do TimescaleDB para índice único em hypertable. O `app_id`
+entra na chave para não descartar eventos de aplicações diferentes que
+compartilhem `dev_eui`, `time` e `event_type`.
 
 ```sql
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS app_id TEXT;
@@ -168,15 +170,19 @@ ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS event_type TEXT;
 UPDATE telemetry SET event_type = 'up' WHERE event_type IS NULL;
 ALTER TABLE telemetry ALTER COLUMN event_type SET NOT NULL;
 
--- Se já houver duplicatas (dev_eui, time, event_type), deduplicar antes do índice:
+-- Índice antigo (sem app_id), caso exista de uma migração anterior:
+DROP INDEX IF EXISTS telemetry_dedup_idx;
+
+-- Se já houver duplicatas (app_id, dev_eui, time, event_type), deduplicar antes:
 DELETE FROM telemetry a USING telemetry b
  WHERE a.ctid < b.ctid
+   AND a.app_id IS NOT DISTINCT FROM b.app_id
    AND a.dev_eui = b.dev_eui
    AND a.time = b.time
    AND a.event_type = b.event_type;
 
 CREATE UNIQUE INDEX IF NOT EXISTS telemetry_dedup_idx
-    ON telemetry (dev_eui, time, event_type);
+    ON telemetry (app_id, dev_eui, time, event_type);
 ```
 
 ### Insert idempotente (`db.insert_event`)
@@ -184,7 +190,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS telemetry_dedup_idx
 ```sql
 INSERT INTO telemetry (time, app_id, dev_eui, event_type, payload, rssi, snr)
 VALUES ($1::timestamptz, $2, $3, $4, $5::jsonb, $6, $7)
-ON CONFLICT (dev_eui, time, event_type) DO NOTHING
+ON CONFLICT (app_id, dev_eui, time, event_type) DO NOTHING
 ```
 
 Retorna `True` se inseriu (status `INSERT 0 1`), `False` se foi duplicata
@@ -192,10 +198,12 @@ Retorna `True` se inseriu (status `INSERT 0 1`), `False` se foi duplicata
 
 ### Leitura paginada (`db.fetch_telemetry`)
 
-- Filtro opcional por `dev_eui`; serviço é por tenant, então `app_id` é implícito.
-- Ordenação `time DESC`; `limit` padrão 100 (máx. 1000).
-- Cursor por `before` (timestamp ISO): retorna eventos estritamente anteriores.
-- Resposta: `{"items": [ {time, app_id, dev_eui, event_type, payload, rssi, snr} ], "next_cursor": "<time do último item ou null>"}`.
+- Filtro obrigatório por `app_id` (isolamento entre tenants mesmo com banco
+  compartilhado) e opcional por `dev_eui`.
+- Ordenação `time DESC, dev_eui, event_type`; `limit` padrão 100 (máx. 1000).
+- Cursor por `before` (timestamp ISO ou token composto): retorna eventos
+  estritamente anteriores.
+- Resposta: `{"items": [ {time, app_id, dev_eui, event_type, payload, rssi, snr} ], "next_cursor": "<cursor do último item ou null>"}`.
 
 ## API de leitura
 

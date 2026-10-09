@@ -17,14 +17,15 @@ bancos existentes.
    `client/docker-compose.yml`).
 
 A migração precisa vir antes do serviço: o `insert_event` usa
-`ON CONFLICT (dev_eui, time, event_type)` e falha se o índice único não existir.
-Mantenha a fila de auditoria `linx.telemetry.audit` do `routing` ativa durante a
-transição para não perder telemetria.
+`ON CONFLICT (app_id, dev_eui, time, event_type)` e falha se o índice único não
+existir. Mantenha a fila de auditoria `linx.telemetry.audit` do `routing` ativa
+durante a transição para não perder telemetria.
 
 ## SQL de migração
 
 O `time` está contido na chave única — requisito do TimescaleDB para índice único
-em hypertable.
+em hypertable. O `app_id` entra na chave para não descartar eventos de
+aplicações diferentes que compartilhem `dev_eui`, `time` e `event_type`.
 
 ```sql
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS app_id TEXT;
@@ -32,15 +33,19 @@ ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS event_type TEXT;
 UPDATE telemetry SET event_type = 'up' WHERE event_type IS NULL;
 ALTER TABLE telemetry ALTER COLUMN event_type SET NOT NULL;
 
--- Se já houver duplicatas (dev_eui, time, event_type), deduplicar antes do índice:
+-- Índice antigo (sem app_id), caso exista de uma migração anterior:
+DROP INDEX IF EXISTS telemetry_dedup_idx;
+
+-- Se já houver duplicatas (app_id, dev_eui, time, event_type), deduplicar antes:
 DELETE FROM telemetry a USING telemetry b
  WHERE a.ctid < b.ctid
+   AND a.app_id IS NOT DISTINCT FROM b.app_id
    AND a.dev_eui = b.dev_eui
    AND a.time = b.time
    AND a.event_type = b.event_type;
 
 CREATE UNIQUE INDEX IF NOT EXISTS telemetry_dedup_idx
-    ON telemetry (dev_eui, time, event_type);
+    ON telemetry (app_id, dev_eui, time, event_type);
 ```
 
 Índice de leitura (idempotente, seguro repetir):
@@ -63,9 +68,9 @@ ORDER BY ordinal_position;
 SELECT indexname FROM pg_indexes WHERE tablename = 'telemetry';
 
 -- contagem de duplicatas restantes (deve ser 0)
-SELECT dev_eui, time, event_type, count(*)
+SELECT app_id, dev_eui, time, event_type, count(*)
 FROM telemetry
-GROUP BY dev_eui, time, event_type
+GROUP BY app_id, dev_eui, time, event_type
 HAVING count(*) > 1;
 ```
 

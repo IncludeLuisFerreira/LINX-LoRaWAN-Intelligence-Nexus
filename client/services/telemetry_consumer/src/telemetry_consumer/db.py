@@ -108,7 +108,7 @@ async def insert_event(
         INSERT INTO telemetry
             (time, dev_eui, payload, rssi, snr, app_id, event_type)
         VALUES ($1::timestamptz, $2, $3::jsonb, $4, $5, $6, $7)
-        ON CONFLICT (dev_eui, time, event_type) DO NOTHING
+        ON CONFLICT (app_id, dev_eui, time, event_type) DO NOTHING
     """
     async with pool.acquire() as connection:
         status = await connection.execute(
@@ -130,13 +130,16 @@ async def insert_event(
 async def fetch_telemetry(
     pool: asyncpg.Pool,
     *,
+    app_id: str,
     dev_eui: str | None,
     limit: int,
     before: str | None,
 ) -> list[dict[str, Any]]:
-    """Busca telemetria recente, opcionalmente filtrada por dev_eui e tempo.
+    """Busca telemetria recente, filtrada por app_id.
 
-    ``before`` aceita timestamp ISO puro (``time < $ts``) ou token composto
+    O filtro por ``app_id`` garante isolamento entre tenants mesmo quando
+    várias aplicações compartilham o mesmo banco. ``before`` aceita timestamp
+    ISO puro (``time < $ts``) ou token composto
     (``time < $ts OR (time = $ts AND (dev_eui, event_type) < ($de, $et))``),
     evitando descarte silencioso em timestamps iguais.
     """
@@ -144,14 +147,15 @@ async def fetch_telemetry(
     query = """
         SELECT time, dev_eui, payload, rssi, snr, app_id, event_type
         FROM telemetry
-        WHERE ($2::text IS NULL OR dev_eui = $2)
+        WHERE app_id = $2
+          AND ($3::text IS NULL OR dev_eui = $3)
           AND (
-            $3::timestamptz IS NULL
-            OR time < $3::timestamptz
+            $4::timestamptz IS NULL
+            OR time < $4::timestamptz
             OR (
-              time = $3::timestamptz
-              AND $4::text IS NOT NULL
-              AND (dev_eui, event_type) < ($4::text, $5::text)
+              time = $4::timestamptz
+              AND $5::text IS NOT NULL
+              AND (dev_eui, event_type) < ($5::text, $6::text)
             )
           )
         ORDER BY time DESC, dev_eui, event_type
@@ -164,6 +168,7 @@ async def fetch_telemetry(
         rows = await connection.fetch(
             query,
             limit,
+            app_id,
             dev_eui,
             cursor_time,
             cursor_dev_eui,

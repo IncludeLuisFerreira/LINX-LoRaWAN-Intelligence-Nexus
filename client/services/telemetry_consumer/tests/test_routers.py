@@ -107,9 +107,20 @@ def test_get_telemetry_accepts_composite_before():
     client = TestClient(app)
     response = client.get("/telemetry?before=2026-10-08T12:00:00Z|dev1|up")
     assert response.status_code == 200
-    assert pool.calls[0][3] == "2026-10-08T12:00:00Z"
-    assert pool.calls[0][4] == "dev1"
-    assert pool.calls[0][5] == "up"
+    assert pool.calls[0][2] == "app-abc123"
+    assert pool.calls[0][4] == "2026-10-08T12:00:00Z"
+    assert pool.calls[0][5] == "dev1"
+    assert pool.calls[0][6] == "up"
+
+
+def test_get_telemetry_scopes_query_to_settings_app_id():
+    app = _make_app()
+    pool = FakePool([])
+    app.state.db_pool = pool
+    client = TestClient(app)
+    assert client.get("/telemetry").status_code == 200
+    assert pool.calls[0][1] == 100
+    assert pool.calls[0][2] == "app-abc123"
 
 
 def test_get_telemetry_clamps_limit():

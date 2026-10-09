@@ -50,7 +50,8 @@ async def test_insert_event_returns_true_on_insert():
         snr=7.5,
     )
     assert result is True
-    assert "ON CONFLICT" in conn.calls[0][0]
+    query = conn.calls[0][0]
+    assert "ON CONFLICT (app_id, dev_eui, time, event_type)" in query
 
 
 @pytest.mark.asyncio
@@ -73,13 +74,29 @@ async def test_insert_event_returns_false_on_conflict():
 async def test_fetch_telemetry_filters_and_limits():
     conn = FakeConnection()
     rows = await db.fetch_telemetry(
-        FakePool(conn), dev_eui="dev1", limit=50, before="2026-10-08T12:00:00Z"
+        FakePool(conn),
+        app_id="app-1",
+        dev_eui="dev1",
+        limit=50,
+        before="2026-10-08T12:00:00Z",
     )
     assert rows == [{"dev_eui": "dev1"}]
     query = conn.calls[0][0]
     assert "LIMIT" in query
     assert "time <" in query
+    assert "app_id = $2" in query
     assert "ORDER BY time DESC, dev_eui, event_type" in query
+
+
+@pytest.mark.asyncio
+async def test_fetch_telemetry_scopes_to_app_id():
+    conn = FakeConnection()
+    await db.fetch_telemetry(
+        FakePool(conn), app_id="app-42", dev_eui=None, limit=10, before=None
+    )
+    query, args = conn.calls[0]
+    assert "WHERE app_id = $2" in query
+    assert args == (10, "app-42", None, None, None, None)
 
 
 @pytest.mark.asyncio
@@ -87,14 +104,16 @@ async def test_fetch_telemetry_with_composite_cursor():
     conn = FakeConnection()
     await db.fetch_telemetry(
         FakePool(conn),
+        app_id="app-1",
         dev_eui=None,
         limit=10,
         before="2026-10-08T12:00:00Z|dev1|up",
     )
     query, args = conn.calls[0]
-    assert "(dev_eui, event_type) < ($4::text, $5::text)" in query
+    assert "(dev_eui, event_type) < ($5::text, $6::text)" in query
     assert args == (
         10,
+        "app-1",
         None,
         "2026-10-08T12:00:00Z",
         "dev1",
