@@ -1,34 +1,36 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Routes, Route } from 'react-router-dom';
-import Spinner from './components/Spinner';
-import { Layout } from './components/Layout';
+import { Spinner } from './components/ui/Spinner';
+import { AppShell } from './components/layout/AppShell';
 
-const Login = lazy(() => import('./pages/Login'));
-const Tenants = lazy(() => import('./pages/Tenants'));
-const NewTenant = lazy(() => import('./pages/tenants/NewTenant'));
-const NewApp = lazy(() => import('./pages/app/NewApp'));
-const AppDetail = lazy(() => import('./pages/AppDetail'));
-const Devices = lazy(() => import('./pages/Devices'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const TenantListPage = lazy(() => import('./pages/tenants/TenantListPage'));
+const TenantDetailPage = lazy(() => import('./pages/tenants/TenantDetailPage'));
+const ApplicationDetailPage = lazy(
+  () => import('./pages/applications/ApplicationDetailPage'),
+);
+const DeviceListPage = lazy(() => import('./pages/devices/DeviceListPage'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<Spinner />}>
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center">
+          <Spinner size="lg" />
+        </div>
+      }
+    >
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<Navigate to="/tenants" replace />} />
 
-        <Route element={<Layout />}>
-          <Route path="/apps/new" element={<NewApp />} />
-          <Route path="/tenants" element={<Tenants />} />
-          <Route path="/tenants/new" element={<NewTenant />} />
+        <Route element={<AppShell />}>
+          <Route path="/tenants" element={<TenantListPage />} />
+          <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
           <Route
-            path="/tenants/:tenant_id/apps/:app_id"
-            element={<AppDetail />}
+            path="/tenants/:tenantId/applications/:appId"
+            element={<ApplicationDetailPage />}
           />
-          <Route path="/tenants/apps/:id/devices" element={<Devices />} />
-          <Route path="/tenants/apps/:id/dashboard" element={<Dashboard />} />
+          <Route path="/devices" element={<DeviceListPage />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

@@ -1,21 +1,20 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
-import { AppBar } from './AppBar';
+import { Topbar } from './Topbar';
 
-export function Layout() {
+export function AppShell() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <AppBar onMenuClick={() => setIsMobileMenuOpen(true)} />
-
+        <Topbar onMenuClick={() => setIsMobileMenuOpen(true)} />
         <main className="flex-1 overflow-auto p-6">
           <Outlet />
         </main>
