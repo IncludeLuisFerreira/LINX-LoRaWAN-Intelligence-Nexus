@@ -1,115 +1,121 @@
 # Frontend - React + TypeScript + Tailwind CSS
 
-Este projeto foi inicializado utilizando o **Vite** para um ambiente de desenvolvimento rápido e moderno, configurado com **TypeScript**, **Tailwind CSS**, **MSW** para mocking de contratos de API e padronização automatizada de código com **OxLint**, **Prettier** e **Husky**.
+Console de gestão da plataforma LINX. Permite administrar **Tenants**,
+**Applications** e **Devices** consumindo o `identity_api` do `linx_core`.
+Não há autenticação nesta versão — o acesso é direto.
 
----
+## Stack
 
-## 🛠️ Tecnologias e Ferramentas Utilizadas
+- **[Vite](https://vitejs.dev/)** — build tool e dev server.
+- **[React 19](https://react.dev/)** + **TypeScript**.
+- **[Tailwind CSS](https://tailwindcss.com/)** — design system com tokens de
+  tema claro (fundo `slate-50`, superfícies brancas, acento azul).
+- **[React Router](https://reactrouter.com/)** — roteamento SPA com `lazy`.
+- **[Axios](https://axios-http.com/)** — cliente HTTP com `baseURL` `/api/v1`.
+- **[React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)** —
+  formulários em modais com validação tipada.
+- **[Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/)**
+  — testes de unidade e integração (cobertura mínima de 70%).
+- **[MSW (Mock Service Worker)](https://mswjs.io/)** — mocking de API por
+  contrato.
+- **OxLint** / **Prettier** / **Husky** — qualidade e formatação.
 
-* **[Vite](https://vitejs.dev/)**: Build tool e servidor de desenvolvimento ultrarrápido.
-* **[React](https://react.dev/)**: Biblioteca para construção de interfaces de usuário.
-* **[TypeScript](https://www.typescriptlang.org/)**: Superset do JavaScript com tipagem estática.
-* **[Tailwind CSS](https://tailwindcss.com/)**: Framework CSS utility-first para estilização rápida e responsiva.
-* **[Axios](https://axios-http.com/)**: Cliente HTTP centralizado com suporte a interceptors de autenticação (JWT) e tratamento global de erros (401).
-* **[React Router](https://reactrouter.com/)**: Roteamento dinâmico SPA, suporte a `lazy loading` de páginas e agrupamento de rotas protegidas sob o layout principal.
-* **[React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)**: Gerenciamento de formulários com validações estritamente tipadas baseadas em schemas.
-* **[MSW (Mock Service Worker)](https://mswjs.io/)**: Interceptação de requisições HTTP locais via Service Worker para mocking de APIs baseado no contrato OpenAPI.
-* **[OpenAPI / Redocly](https://redocly.com/)**: Especificação do contrato da API REST (`openapi-stub.yaml`) e linter para validação dos schemas.
-* **[OxLint](https://oxc.rs/) & [Prettier](https://prettier.io/)**: Análise estática ultrarrápida e formatador de código para manutenção da qualidade visual e lógica.
-* **[Husky](https://typicode.github.io/husky/) & [Lint-staged](https://github.com/lint-staged/lint-staged)**: Automação de hooks do Git para validação de linting e formatação antes dos commits.
-* **[GitHub Actions](https://github.com/features/actions)**: Pipeline de CI (`.github/workflows/frontend-ci.yml`) para validação automatizada de contrato OpenAPI, linting, checagem de tipos com TypeScript e build.
+## Navegação
 
----
+Drill-down hierárquico com breadcrumbs:
 
-## 📁 Estrutura do Projeto
-
-Abaixo está a organização atualizada da raiz e do diretório `frontend/`:
-
-```text
-.
-├── .github/
-│   └── workflows/
-│       └── frontend-ci.yml   # Pipeline de CI/CD (GitHub Actions)
-└── frontend/
-    ├── .husky/               # Hooks do Git configurados pelo Husky
-    ├── public/
-    │   └── mockServiceWorker.js # Service Worker estático gerado pelo MSW
-    ├── src/
-    │   ├── assets/           # Imagens, ícones e recursos estáticos
-    │   ├── components/       # Componentes genéricos e de layout (Layout, Spinner, etc.)
-    │   ├── contexts/         # Contextos globais do React (ex: AuthContext)
-    │   ├── hooks/            # Custom React Hooks
-    │   ├── mocks/            # Configurações e handlers do MSW para desenvolvimento local
-    │   │   ├── browser.ts
-    │   │   └── handlers.ts
-    │   ├── pages/            # Páginas/Rotas da aplicação
-    │   │   ├── app/
-    │   │   │   └── NewApp.tsx # Tela de cadastro de Aplicação
-    │   │   ├── tenants/
-    │   │   │   └── NewTenant.tsx # Tela de cadastro de Tenant
-    │   │   ├── AppDetail.tsx
-    │   │   ├── Dashboard.tsx
-    │   │   ├── Devices.tsx
-    │   │   ├── Login.tsx
-    │   │   ├── NotFound.tsx
-    │   │   └── Tenants.tsx   # Listagem e associação de Tenants/Aplicações
-    │   ├── services/         # Instância centralizada do Axios e serviços de API
-    │   │   ├── api.ts        # Cliente Axios base com Interceptors
-    │   │   ├── app.ts        # Métodos de integração do módulo de Aplicações
-    │   │   └── tenant.ts     # Métodos de integração do módulo de Tenant
-    │   ├── types/            # Definições de tipos e interfaces TypeScript
-    │   ├── App.tsx           # Componente principal de entrada da interface
-    │   ├── routes.tsx        # Definição e agrupamento de rotas (AppRoutes)
-    │   ├── index.css         # Estilos globais e diretivas do Tailwind CSS
-    │   └── main.tsx          # Ponto de entrada do React e ativador do MSW (Dev ou flag)
-    ├── .dockerignore         # Arquivos ignorados no contexto de build do Docker
-    ├── .env                  # Variáveis de ambiente locais (não versionado)
-    ├── .env.example          # Modelo das variáveis de ambiente
-    ├── .oxlintrc.json        # Configuração do OxLint
-    ├── .prettierrc           # Regras de formatação do Prettier
-    ├── Dockerfile            # Build multi-stage (Node -> nginx) da aplicação
-    ├── index.html            # Documento HTML principal
-    ├── nginx.conf            # Config do nginx (SPA fallback + proxy /api)
-    ├── openapi-stub.yaml     # Contrato OpenAPI 3.0 (Source of Truth da API REST)
-    ├── package.json          # Dependências e scripts do projeto
-    ├── postcss.config.js     # Processamento do Tailwind CSS
-    ├── tailwind.config.js    # Configuração de temas e plugins do Tailwind
-    └── vite.config.ts        # Configuração do Vite
+```
+/                                            → redireciona para /tenants
+/tenants                                     → lista de tenants
+/tenants/:tenantId                           → workspace (Applications | Configurações)
+/tenants/:tenantId/applications/:appId       → workspace (Devices | Configurações)
+/devices                                     → lista global de devices
 ```
 
----
+## Estrutura
 
-## 🐳 Docker
+```text
+frontend/
+├── public/
+│   └── mockServiceWorker.js
+├── src/
+│   ├── components/
+│   │   ├── layout/          # AppShell, Sidebar, Topbar, PageHeader
+│   │   └── ui/              # design system (Button, Card, Table, Modal, ...)
+│   │       └── icons/       # ícones SVG inline
+│   ├── hooks/
+│   │   └── useAsyncData.ts  # loading/erro/reload para fetches de página
+│   ├── mocks/               # handlers MSW (tenant, application, device)
+│   ├── pages/
+│   │   ├── tenants/         # TenantListPage, TenantDetailPage, TenantFormModal
+│   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal, DeviceFormModal
+│   │   ├── devices/         # DeviceListPage, DeviceCreateModal
+│   │   └── NotFound.tsx
+│   ├── services/            # api, tenant, app, device
+│   ├── utils/               # cn, format
+│   ├── routes.tsx
+│   └── main.tsx
+├── nginx.conf
+├── vitest.config.ts
+└── vite.config.ts
+```
 
-O `Dockerfile` compila o Vite e serve o resultado estático com nginx, incluindo
-fallback do React Router (`try_files ... /index.html`) e proxy de `/api/` para o
-backend, evitando que rotas de API recebam `index.html` em vez de JSON.
+## API consumida
+
+O front consome o `identity_api` via `baseURL` `/api/v1`:
+
+| Recurso | Endpoints |
+| --- | --- |
+| Tenant | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}` |
+| Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}` |
+| Device | `GET /devices?app_id=`, `POST /devices`, `DELETE /devices/{id}` |
+
+> Device não possui edição (o backend não expõe `PATCH`).
+
+## Desenvolvimento
 
 ```bash
 cd frontend
+npm install
+npm run dev
+```
 
-# Build de produção (mocks desligados por padrão)
+O dev server faz **proxy de `/api` para `http://localhost:8000`**
+(configurado em `vite.config.ts`), então não há CORS envolvido. Suba o
+`identity_api` na porta 8000.
+
+### Scripts
+
+```bash
+npm run dev          # dev server
+npm run build        # typecheck + build de produção
+npm run lint         # oxlint
+npm run format       # prettier
+npm test             # vitest (run)
+npm run test:watch   # vitest (watch)
+npx vitest run --coverage   # cobertura (mínimo 70%)
+```
+
+### Variáveis
+
+| Variável | Default | Descrição |
+| --- | --- | --- |
+| `VITE_API_URL` | `/api/v1` | Base URL da API (relativo; resolvido pelo proxy). |
+| `VITE_ENABLE_MOCKS` | `false` | Liga o MSW no bundle. Use `true` para demos sem backend. |
+
+## Docker
+
+Build multi-stage (Node → nginx). O `nginx.conf` faz fallback do SPA e proxy
+de `/api/` para `BACKEND_URL`.
+
+```bash
 docker build -t frontend:dev .
-
-# Execução apontando o proxy /api/ para o backend rodando no host
-# (no Linux adicione --add-host=host.docker.internal:host-gateway)
 docker run --rm -p 8080:80 \
   -e BACKEND_URL=http://host.docker.internal:8000 \
   frontend:dev
 ```
 
-Acesse `http://localhost:8080`. Recarregar subrotas (ex.: `/tenants`) funciona
-graças ao fallback do SPA.
-
-### Variáveis
-
-| Variável | Default | Escopo | Descrição |
-| --- | --- | --- | --- |
-| `VITE_API_URL` | `/api/v1` | build | Base URL da API consumida pelo frontend (same-origin, resolvida pelo proxy do nginx). |
-| `VITE_ENABLE_MOCKS` | `false` | build | Liga o MSW no bundle. Use `true` apenas para demos locais. |
-| `BACKEND_URL` | `http://127.0.0.1:8000` | runtime | Destino do proxy nginx para `/api/` (sobrescreva com `-e`; em compose use o nome do serviço). |
-
-Para habilitar os mocks em um container de demonstração:
+Para habilitar mocks em um container de demonstração:
 
 ```bash
 docker build --build-arg VITE_ENABLE_MOCKS=true -t frontend:demo .
