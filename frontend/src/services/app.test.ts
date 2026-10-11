@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api';
 import { applicationService, loadApplicationsByTenant } from './app';
 import type { TenantOutput } from './tenant';
@@ -12,7 +12,10 @@ vi.mock('./api', () => ({
   },
 }));
 
-const mocked = vi.mocked(api);
+const mocked = api as unknown as Record<
+  'get' | 'post' | 'patch' | 'delete',
+  Mock
+>;
 
 const tenant = (id: string, name = id): TenantOutput => ({
   id,
