@@ -49,9 +49,31 @@ const mockAppsByTenant: Record<string, MockApplication[]> = {
   ],
 };
 
+interface MockDevice {
+  id: string;
+  dev_eui: string;
+  app_id: string;
+  join_eui: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const mockDevices: MockDevice[] = [];
+
 function findTenant(tenantId: string): MockTenant | undefined {
   return mockTenants.find((tenant) => tenant.id === tenantId);
 }
+
+function findAnyApplication(
+  applicationId: string,
+): MockApplication | undefined {
+  return Object.values(mockAppsByTenant)
+    .flat()
+    .find((app) => app.id === applicationId);
+}
+
+const HEX16 = /^[0-9a-fA-F]{16}$/;
+const HEX32 = /^[0-9a-fA-F]{32}$/;
 
 function findApp(
   tenantId: string,
@@ -222,4 +244,62 @@ export const handlers = [
       return new HttpResponse(null, { status: 204 });
     },
   ),
+
+  // --- DEVICES ---
+  http.get('*/api/v1/devices', ({ request }) => {
+    const appId = new URL(request.url).searchParams.get('app_id');
+    if (!appId) return validationError('app_id is required');
+    return HttpResponse.json(
+      mockDevices.filter((device) => device.app_id === appId),
+    );
+  }),
+
+  http.post('*/api/v1/devices', async ({ request }) => {
+    const body = (await request.json()) as {
+      dev_eui: string;
+      app_id: string;
+      join_eui: string;
+      app_key: string;
+    };
+
+    if (
+      !HEX16.test(body.dev_eui) ||
+      !HEX16.test(body.join_eui) ||
+      !HEX32.test(body.app_key)
+    ) {
+      return validationError('invalid device keys');
+    }
+    if (!findAnyApplication(body.app_id)) return applicationNotFound();
+    if (mockDevices.some((device) => device.dev_eui === body.dev_eui)) {
+      return HttpResponse.json(
+        { detail: 'Device already exists!' },
+        { status: 409 },
+      );
+    }
+
+    const newDevice: MockDevice = {
+      id: crypto.randomUUID(),
+      dev_eui: body.dev_eui.toLowerCase(),
+      app_id: body.app_id,
+      join_eui: body.join_eui.toLowerCase(),
+      created_at: now(),
+      updated_at: now(),
+    };
+    mockDevices.push(newDevice);
+    return HttpResponse.json(newDevice, { status: 201 });
+  }),
+
+  http.delete('*/api/v1/devices/:device_id', ({ params }) => {
+    const index = mockDevices.findIndex(
+      (device) => device.id === String(params.device_id),
+    );
+    if (index === -1) {
+      return HttpResponse.json(
+        { detail: 'Device not found!' },
+        { status: 404 },
+      );
+    }
+    mockDevices.splice(index, 1);
+    return new HttpResponse(null, { status: 204 });
+  }),
 ];
