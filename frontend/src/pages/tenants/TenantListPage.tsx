@@ -4,6 +4,7 @@ import { tenantService, type TenantOutput } from '../../services/tenant';
 import { loadApplicationsByTenant } from '../../services/app';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { getErrorMessage } from '../../services/api';
+import { cleanOptionalDescription } from '../../utils/form';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -36,17 +37,19 @@ export default function TenantListPage() {
   const [deleting, setDeleting] = useState<TenantOutput | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const tenants = data?.tenants ?? [];
 
   async function handleSubmit(values: TenantFormData) {
     setFormError('');
     setBusy(true);
+    const payload = cleanOptionalDescription(values);
     try {
       if (editing) {
-        await tenantService.update(editing.id, values);
+        await tenantService.update(editing.id, payload);
       } else {
-        await tenantService.create(values);
+        await tenantService.create(payload);
       }
       setEditing(null);
       setCreating(false);
@@ -60,11 +63,14 @@ export default function TenantListPage() {
 
   async function handleDelete() {
     if (!deleting) return;
+    setActionError('');
     setBusy(true);
     try {
       await tenantService.remove(deleting.id);
       setDeleting(null);
       reload();
+    } catch (err) {
+      setActionError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -82,6 +88,12 @@ export default function TenantListPage() {
           </Button>
         }
       />
+
+      {actionError && (
+        <Alert variant="error" className="mb-4">
+          {actionError}
+        </Alert>
+      )}
 
       {loading && (
         <div className="flex justify-center py-16">

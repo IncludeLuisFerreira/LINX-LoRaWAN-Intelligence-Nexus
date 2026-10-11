@@ -13,6 +13,16 @@ export function getErrorMessage(
       | { detail?: unknown; message?: unknown }
       | undefined;
     if (typeof data?.detail === 'string' && data.detail) return data.detail;
+    if (Array.isArray(data?.detail)) {
+      const messages = data.detail
+        .map((item) =>
+          item && typeof item === 'object' && 'msg' in item
+            ? String((item as { msg: unknown }).msg)
+            : '',
+        )
+        .filter(Boolean);
+      if (messages.length > 0) return messages.join('; ');
+    }
     if (typeof data?.message === 'string' && data.message) return data.message;
     return error.message || fallbackMessage;
   }

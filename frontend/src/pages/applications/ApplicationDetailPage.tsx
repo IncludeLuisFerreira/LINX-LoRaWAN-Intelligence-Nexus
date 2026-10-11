@@ -8,7 +8,9 @@ import {
 import { deviceService, type DeviceOutput } from '../../services/device';
 import type { TenantOutput } from '../../services/tenant';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { getErrorMessage } from '../../services/api';
 import { formatDate } from '../../utils/format';
+import { cleanOptionalDescription } from '../../utils/form';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
 import { Tabs } from '../../components/ui/Tabs';
@@ -60,17 +62,26 @@ export default function ApplicationDetailPage() {
   );
   const [deletingApp, setDeletingApp] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const tenant = data?.tenant;
   const app = data?.app;
   const devices = data?.devices ?? [];
 
   async function updateApp(values: ApplicationFormData) {
+    setFormError('');
     setBusy(true);
     try {
-      await applicationService.update(tenantId, appId, values);
+      await applicationService.update(
+        tenantId,
+        appId,
+        cleanOptionalDescription(values),
+      );
       setEditingApp(false);
       reload();
+    } catch (err) {
+      setFormError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -78,21 +89,27 @@ export default function ApplicationDetailPage() {
 
   async function deleteDevice() {
     if (!deletingDevice) return;
+    setActionError('');
     setBusy(true);
     try {
       await deviceService.remove(deletingDevice.id);
       setDeletingDevice(null);
       reload();
+    } catch (err) {
+      setActionError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
   }
 
   async function deleteApp() {
+    setActionError('');
     setBusy(true);
     try {
       await applicationService.remove(tenantId, appId);
       navigate(`/tenants/${tenantId}`);
+    } catch (err) {
+      setActionError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -172,6 +189,12 @@ export default function ApplicationDetailPage() {
         }
       />
 
+      {actionError && (
+        <Alert variant="error" className="mb-4">
+          {actionError}
+        </Alert>
+      )}
+
       <Tabs
         active={tab}
         onChange={setTab}
@@ -241,7 +264,11 @@ export default function ApplicationDetailPage() {
         open={editingApp}
         title="Editar Application"
         initial={{ name: app.name, description: app.description }}
-        onClose={() => setEditingApp(false)}
+        error={formError}
+        onClose={() => {
+          setEditingApp(false);
+          setFormError('');
+        }}
         onSubmit={updateApp}
       />
 

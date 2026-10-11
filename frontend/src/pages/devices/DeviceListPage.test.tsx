@@ -89,6 +89,28 @@ describe('DeviceListPage', () => {
     expect(await screen.findByText('aabbccddeeff0202')).toBeInTheDocument();
   });
 
+  it('surfaces an error when deleting a device fails', async () => {
+    const { appId } = await firstTenantAndApp();
+    await createDevice(appId, 'aabbccddeeff0404');
+    server.use(
+      http.delete('*/api/v1/devices/:id', () =>
+        HttpResponse.json({ detail: 'delete forbidden' }, { status: 500 }),
+      ),
+    );
+
+    renderPage();
+    await screen.findByText('aabbccddeeff0404');
+
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Excluir device aabbccddeeff0404',
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    expect(await screen.findByText('delete forbidden')).toBeInTheDocument();
+  });
+
   it('creates a device through the global modal', async () => {
     const { appId } = await firstTenantAndApp();
 

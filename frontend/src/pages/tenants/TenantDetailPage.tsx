@@ -9,6 +9,7 @@ import type { TenantOutput } from '../../services/tenant';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { getErrorMessage } from '../../services/api';
 import { formatDate } from '../../utils/format';
+import { cleanOptionalDescription } from '../../utils/form';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
 import { Tabs } from '../../components/ui/Tabs';
@@ -53,6 +54,7 @@ export default function TenantDetailPage() {
   const [deletingTenant, setDeletingTenant] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const tenant = data?.tenant;
   const apps = data?.apps ?? [];
@@ -61,7 +63,10 @@ export default function TenantDetailPage() {
     setFormError('');
     setBusy(true);
     try {
-      await applicationService.create(tenantId, values);
+      await applicationService.create(
+        tenantId,
+        cleanOptionalDescription(values),
+      );
       setCreatingApp(false);
       reload();
     } catch (err) {
@@ -75,7 +80,7 @@ export default function TenantDetailPage() {
     setFormError('');
     setBusy(true);
     try {
-      await tenantService.update(tenantId, values);
+      await tenantService.update(tenantId, cleanOptionalDescription(values));
       setEditingTenant(false);
       reload();
     } catch (err) {
@@ -86,10 +91,13 @@ export default function TenantDetailPage() {
   }
 
   async function deleteTenant() {
+    setActionError('');
     setBusy(true);
     try {
       await tenantService.remove(tenantId);
       navigate('/tenants');
+    } catch (err) {
+      setActionError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -152,6 +160,12 @@ export default function TenantDetailPage() {
           </Button>
         }
       />
+
+      {actionError && (
+        <Alert variant="error" className="mb-4">
+          {actionError}
+        </Alert>
+      )}
 
       <Tabs
         active={tab}

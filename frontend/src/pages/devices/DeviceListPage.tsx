@@ -4,6 +4,7 @@ import { loadApplicationsByTenant } from '../../services/app';
 import type { ApplicationOutput } from '../../services/app';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { getErrorMessage } from '../../services/api';
 import { formatDate } from '../../utils/format';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Table, type Column } from '../../components/ui/Table';
@@ -59,6 +60,7 @@ export default function DeviceListPage() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<DeviceRow | null>(null);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [query, setQuery] = useState('');
 
   const rows = data?.rows ?? [];
@@ -69,11 +71,14 @@ export default function DeviceListPage() {
 
   async function handleDelete() {
     if (!deleting) return;
+    setActionError('');
     setBusy(true);
     try {
       await deviceService.remove(deleting.device.id);
       setDeleting(null);
       reload();
+    } catch (err) {
+      setActionError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -129,6 +134,12 @@ export default function DeviceListPage() {
           </Button>
         }
       />
+
+      {actionError && (
+        <Alert variant="error" className="mb-4">
+          {actionError}
+        </Alert>
+      )}
 
       {loading && (
         <div className="flex justify-center py-16">
