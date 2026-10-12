@@ -44,7 +44,7 @@ def get_tenant_or_404(
     tenant_id: UUID, db: Session = Depends(get_db)
 ) -> Tenant:
     """Busca um tenant ou retorna 404. Usado por GET, PATCH e DELETE."""
-    tenant = db.get(Tenant, tenant_id)  # Forma otimizada do SQLAlchemy para PK
+    tenant = db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found!"
@@ -72,14 +72,19 @@ def create_tenant(
             detail=f"Failed to create tenant in ChirpStack: {exc.message}",
         ) from exc
 
+    try:
+        tenant_uuid = UUID(chirpstack_tenant_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"ChirpStack returned invalid tenant ID: {chirpstack_tenant_id}",
+        )
+
     new_tenant = Tenant(
-        id=UUID(chirpstack_tenant_id),
+        id=tenant_uuid,
         name=payload.name,
         description=payload.description,
     )
-
-    # Dica: Se o nome precisar ser único, envolva db.commit()
-    # em um try/except capturando sqlalchemy.exc.IntegrityError
     db.add(new_tenant)
     try:
         db.commit()
@@ -92,7 +97,6 @@ def create_tenant(
         ) from None
     db.refresh(new_tenant)
 
-    # Gera a URL de forma dinâmica e independente do prefixo
     response.headers["Location"] = str(
         request.url_for("get_tenant", tenant_id=new_tenant.id)
     )
@@ -105,7 +109,6 @@ def create_tenant(
 def list_tenants(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
-    # Paginação adicionada para evitar memory leak ou sobrecarga do banco
     tenants = db.query(Tenant).offset(skip).limit(limit).all()
     return tenants
 
@@ -116,7 +119,6 @@ def list_tenants(
     response_model=TenantResponse,
 )
 def get_tenant(tenant: Tenant = Depends(get_tenant_or_404)):
-    # A dependência já fez todo o trabalho sujo de buscar e validar
     return tenant
 
 
@@ -132,23 +134,22 @@ def update_tenant(
     chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
 ):
     update_data = payload.model_dump(exclude_unset=True)
-
     name = update_data.get("name", tenant.name)
     description = update_data.get("description", tenant.description)
 
-    try:
-        chirpstack.update_tenant(str(tenant.id), name, description)
-    except ExternalServiceError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to update tenant in ChirpStack: {exc.message}",
-        ) from exc
-
     for key, value in update_data.items():
         setattr(tenant, key, value)
-
     db.commit()
     db.refresh(tenant)
+
+    try:
+        chirpstack.update_tenant(str(tenant.id), name, description)
+    except ExternalServiceError:
+        logger.warning(
+            "ChirpStack update failed for tenant %s; DB already updated",
+            tenant.id,
+        )
+
     return tenant
 
 

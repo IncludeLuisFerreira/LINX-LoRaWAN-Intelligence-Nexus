@@ -60,13 +60,19 @@ def create_application(
     except ExternalServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Failed to create application in ChirpStack: " f"{exc.message}"
-            ),
+            detail=f"Failed to create application in ChirpStack: {exc.message}",
         ) from exc
 
+    try:
+        application_uuid = UUID(chirpstack_application_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"ChirpStack returned invalid application ID: {chirpstack_application_id}",
+        )
+
     new_application = Application(
-        id=UUID(chirpstack_application_id),
+        id=application_uuid,
         tenant_id=tenant_id,
         name=payload.name,
         description=payload.description,
@@ -158,25 +164,22 @@ def update_application(
         )
 
     update_data = payload.model_dump(exclude_unset=True)
-
     name = update_data.get("name", application.name)
     description = update_data.get("description", application.description)
 
-    try:
-        chirpstack.update_application(str(application_id), name, description)
-    except ExternalServiceError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Failed to update application in ChirpStack: " f"{exc.message}"
-            ),
-        ) from exc
-
     for key, value in update_data.items():
         setattr(application, key, value)
-
     db.commit()
     db.refresh(application)
+
+    try:
+        chirpstack.update_application(str(application_id), name, description)
+    except ExternalServiceError:
+        logger.warning(
+            "ChirpStack update failed for application %s; DB already updated",
+            application_id,
+        )
+
     return application
 
 
@@ -209,9 +212,7 @@ def delete_application(
     except ExternalServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Failed to delete application in ChirpStack: " f"{exc.message}"
-            ),
+            detail=f"Failed to delete application in ChirpStack: {exc.message}",
         ) from exc
 
     db.delete(application)

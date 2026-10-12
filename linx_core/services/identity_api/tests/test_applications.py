@@ -341,7 +341,7 @@ def test_create_application_chirpstack_failure_returns_502(chirpstack):
     }
 
 
-def test_update_application_chirpstack_failure_returns_502(chirpstack):
+def test_update_application_chirpstack_failure_still_returns_200(chirpstack):
     tenant_id = _create_tenant()
     created = client.post(
         _applications_url(tenant_id), json={"name": "Fazenda"}
@@ -355,10 +355,8 @@ def test_update_application_chirpstack_failure_returns_502(chirpstack):
         json={"name": "Fazenda Nova"},
     )
 
-    assert response.status_code == 502
-    assert response.json() == {
-        "detail": "Failed to update application in ChirpStack: boom"
-    }
+    assert response.status_code == 200
+    assert response.json()["name"] == "Fazenda Nova"
 
 
 def test_delete_application_chirpstack_failure_returns_502(chirpstack):

@@ -272,7 +272,7 @@ def test_create_tenant_chirpstack_failure_returns_502(chirpstack):
     }
 
 
-def test_update_tenant_chirpstack_failure_returns_502(chirpstack):
+def test_update_tenant_chirpstack_failure_still_returns_200(chirpstack):
     created = client.post("/api/v1/tenant/", json={"name": "Tenant"}).json()
     chirpstack.tenant_error = ExternalServiceError(
         "chirpstack", "update_tenant", "boom"
@@ -282,10 +282,8 @@ def test_update_tenant_chirpstack_failure_returns_502(chirpstack):
         f"/api/v1/tenant/{created['id']}", json={"name": "Tenant Novo"}
     )
 
-    assert response.status_code == 502
-    assert response.json() == {
-        "detail": "Failed to update tenant in ChirpStack: boom"
-    }
+    assert response.status_code == 200
+    assert response.json()["name"] == "Tenant Novo"
 
 
 def test_delete_tenant_chirpstack_failure_returns_502(chirpstack):
