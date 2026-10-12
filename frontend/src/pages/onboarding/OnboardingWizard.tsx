@@ -36,6 +36,7 @@ const schema = z.object({
     .regex(/^[0-9a-fA-F]{32}$/, 'Deve ter 32 caracteres hexadecimais'),
   app_id: z.string().min(1, 'Selecione uma aplicação'),
   device_profile_id: z.string().min(1, 'Selecione um device profile'),
+  nickname: z.string().max(50, 'Máximo de 50 caracteres').optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -80,6 +81,7 @@ export default function OnboardingWizard() {
       app_key: '',
       app_id: '',
       device_profile_id: '',
+      nickname: '',
     },
   });
 
@@ -147,6 +149,7 @@ export default function OnboardingWizard() {
         app_key: values.app_key,
         app_id: values.app_id,
         device_profile_id: values.device_profile_id,
+        nickname: values.nickname?.trim() ? values.nickname.trim() : undefined,
       });
       navigate('/devices');
     } catch (err) {
@@ -248,6 +251,12 @@ export default function OnboardingWizard() {
               AppKey gerada localmente. Programe este mesmo valor no dispositivo
               antes do join (OTAA).
             </p>
+            <Input
+              label="Nickname (opcional)"
+              placeholder="Ex: Sensor Galpão"
+              error={errors.nickname?.message}
+              {...register('nickname')}
+            />
             <Input
               label="ProfileID (QR Code)"
               name="qr-profile-id"

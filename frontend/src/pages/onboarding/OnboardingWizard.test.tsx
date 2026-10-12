@@ -347,4 +347,34 @@ describe('OnboardingWizard', () => {
     ).toBeInTheDocument();
     expect(await screen.findByLabelText('Aplicação')).toBeInTheDocument();
   });
+
+  it('submits the device nickname when provided', async () => {
+    const appId = await firstAppId();
+    await decodeToStep2();
+
+    const devEui = screen.getByLabelText('DevEUI');
+    await userEvent.clear(devEui);
+    await userEvent.type(devEui, 'aabbccddeeff2001');
+    await userEvent.type(
+      screen.getByLabelText('Nickname (opcional)'),
+      'Sensor Galpão',
+    );
+    await goToStep3();
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Aplicação'),
+      appId,
+    );
+    await screen.findByRole('option', { name: 'Perfil Teste' });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Cadastrar device' }),
+    );
+    await screen.findByText('devices-page');
+
+    const devices = (await (
+      await fetch(`${base}/devices?app_id=${appId}`)
+    ).json()) as { dev_eui: string; nickname: string | null }[];
+    const device = devices.find((d) => d.dev_eui === 'aabbccddeeff2001');
+    expect(device?.nickname).toBe('Sensor Galpão');
+  });
 });
