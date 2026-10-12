@@ -40,6 +40,7 @@ frontend/
 │   └── mockServiceWorker.js
 ├── src/
 │   ├── components/
+│   │   ├── QrScanner.tsx    # leitura de QR Code TR005 (câmera + manual)
 │   │   ├── layout/          # AppShell, Sidebar, Topbar, PageHeader
 │   │   └── ui/              # design system (Button, Card, Table, Modal, ...)
 │   │       └── icons/       # ícones SVG inline
@@ -52,7 +53,7 @@ frontend/
 │   │   ├── devices/         # DeviceListPage, DeviceCreateModal
 │   │   └── NotFound.tsx
 │   ├── services/            # api, tenant, app, device
-│   ├── utils/               # cn, format
+│   ├── utils/               # cn, format, tr005 (parser do QR Code)
 │   ├── routes.tsx
 │   └── main.tsx
 ├── nginx.conf
@@ -71,6 +72,26 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 | Device | `GET /devices?app_id=`, `POST /devices`, `DELETE /devices/{id}` |
 
 > Device não possui edição (o backend não expõe `PATCH`).
+
+## Leitura de QR Code (TR005)
+
+O cadastro de device aceita leitura de QR Code no padrão LoRa Alliance
+TR005 (`LW:SchemaID:JoinEUI:DevEUI:ProfileID`, com extensões opcionais,
+conforme TR005 §4.2/§4.3). O botão **Escanear QR Code TR005** no
+`DeviceCreateModal` abre o `QrScanner`, que lê pela câmera com
+`html5-qrcode` ou aceita o código digitado manualmente. A decodificação
+preenche DevEUI e JoinEUI.
+
+A AppKey **não** faz parte do QR TR005: ela é gerada localmente
+(`generateAppKey()`) e o mesmo valor deve ser programado no dispositivo
+antes do join (OTAA).
+
+A câmera exige *secure context* — funciona em `localhost` ou HTTPS, não
+em HTTP via IP de LAN. Para testar sem QR físico, cole um código como:
+
+```
+LW:D0:1122334455667788:AABBCCDDEEFF0011:AABB1122
+```
 
 ## Desenvolvimento
 

@@ -77,6 +77,8 @@ export function DeviceCreateModal({
 
   useEffect(() => {
     if (!open) return;
+    setScanning(false);
+    setAppKeyGenerated(false);
     reset({
       app_id: '',
       dev_eui: '',

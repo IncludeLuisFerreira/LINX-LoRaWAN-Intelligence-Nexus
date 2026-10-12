@@ -144,4 +144,76 @@ describe('QrScanner', () => {
     fireEvent.click(screen.getByRole('button', { name: /Cancelar/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('ignora callbacks repetidos para o mesmo QR (html5-qrcode por frame)', async () => {
+    const onDecoded = vi.fn();
+    const getCallback = captureDecodeCallback();
+    render(<QrScanner onDecoded={onDecoded} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar Scanner/i }));
+    await waitFor(() => expect(startMock).toHaveBeenCalled());
+
+    await act(async () => {
+      await getCallback()(VALID_CODE);
+      await getCallback()(VALID_CODE);
+      await getCallback()(VALID_CODE);
+    });
+
+    expect(onDecoded).toHaveBeenCalledTimes(1);
+    expect(stopMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('após erro de QR inválido processa um código diferente', async () => {
+    const onDecoded = vi.fn();
+    const getCallback = captureDecodeCallback();
+    render(<QrScanner onDecoded={onDecoded} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar Scanner/i }));
+    await waitFor(() => expect(startMock).toHaveBeenCalled());
+
+    await act(async () => {
+      await getCallback()('codigo-invalido');
+    });
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(onDecoded).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await getCallback()(VALID_CODE);
+    });
+    expect(onDecoded).toHaveBeenCalledTimes(1);
+  });
+
+  it('botão Parar volta ao estado idle e permite reiniciar o scanner', async () => {
+    render(<QrScanner onDecoded={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar Scanner/i }));
+
+    const parar = await screen.findByRole('button', { name: /^Parar$/i });
+    fireEvent.click(parar);
+
+    expect(
+      await screen.findByRole('button', { name: /Iniciar Scanner/i }),
+    ).toBeInTheDocument();
+    expect(stopMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar Scanner/i }));
+    await waitFor(() => expect(startMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('desmontar durante start pendente desliga a câmera', async () => {
+    let resolveStart: () => void = () => {};
+    startMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveStart = resolve;
+        }),
+    );
+
+    const { unmount } = render(
+      <QrScanner onDecoded={vi.fn()} onClose={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar Scanner/i }));
+    await waitFor(() => expect(startMock).toHaveBeenCalled());
+
+    unmount();
+    resolveStart();
+    await waitFor(() => expect(stopMock).toHaveBeenCalledTimes(2));
+  });
 });
