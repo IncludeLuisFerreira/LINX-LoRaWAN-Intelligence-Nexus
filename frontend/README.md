@@ -59,7 +59,7 @@ frontend/
 │   ├── pages/
 │   │   ├── tenants/         # TenantListPage, TenantDetailPage, TenantFormModal
 │   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal
-│   │   ├── devices/         # DeviceListPage
+│   │   ├── devices/         # DeviceListPage, DeviceNicknameModal
 │   │   ├── dashboard/       # DashboardSelectPage, Dashboard (telemetria)
 │   │   ├── onboarding/      # OnboardingWizard (scan → confirm → select app)
 │   │   └── NotFound.tsx
@@ -80,10 +80,10 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 | --- | --- |
 | Tenant | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}` |
 | Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}` |
-| Device | `GET /devices?app_id=`, `POST /devices`, `DELETE /devices/{id}` |
+| Device | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
 | Telemetry | `GET /telemetry?dev_eui=&limit=&before=` |
 
-> Device não possui edição (o backend não expõe `PATCH`).
+> O `PATCH /devices/{id}` aceita apenas `nickname`.
 
 ## Dashboard de Telemetria
 
@@ -94,8 +94,21 @@ A rota `/dashboard/:appId` busca o histórico via
 uma métrica numérica do `payload` (o usuário escolhe entre as chaves numéricas
 disponíveis) em função do tempo, com `recharts`.
 
+O select de device mostra o **nickname** (com fallback para o `dev_eui`) e
+oferece a opção **"Todos os devices"**, que busca o histórico de cada device e
+sobrepõe as séries em um gráfico multi-linha (uma linha por device).
+
 O componente se recarrega ao trocar de device ou de aplicação. Em
 desenvolvimento sem backend, o MSW serve uma série sintética (`VITE_ENABLE_MOCKS=true`).
+
+## Nickname de device
+
+Cada device aceita um `nickname` opcional (até 50 caracteres), útil para
+identificar o sensor. Ele é informado no **passo 2 do onboarding** e pode ser
+editado depois pelo ícone de lápis nas tabelas de devices (lista global e
+página da aplicação), que abre o `DeviceNicknameModal`. Quando vazio, a UI
+exibe o `dev_eui` como fallback. A edição usa `PATCH /devices/{id}` e é
+metadado local — não é enviada ao ChirpStack.
 
 ## Leitura de QR Code (TR005)
 
@@ -116,15 +129,16 @@ acessível pela barra lateral):
 
 1. **Ler QR Code** — `QrScanner` (câmera ou colagem manual do TR005).
 2. **Confirmar dados** — DevEUI, JoinEUI e AppKey pré-preenchidos e
-   editáveis (validação com Zod); o ProfileID lido do QR é exibido.
+   editáveis (validação com Zod), além de um nickname opcional; o ProfileID
+   lido do QR é exibido.
 3. **Selecionar App** — escolha da aplicação e do Device Profile. O
    wizard consulta `GET /device-profile/?app_id=` e, se o ProfileID do QR
    corresponder ao `id` ou `name` de um perfil, já o pré-seleciona (senão
    usa o primeiro).
 
 O envio chama `POST /devices` com o contrato real (`dev_eui`, `join_eui`,
-`app_key`, `app_id`, `device_profile_id`) e redireciona para `/devices` em
-caso de sucesso.
+`app_key`, `app_id`, `device_profile_id`, `nickname`) e redireciona para
+`/devices` em caso de sucesso.
 
 A câmera exige *secure context* — funciona em `localhost` ou HTTPS, não
 em HTTP via IP de LAN. Para testar sem QR físico, cole um código como:
