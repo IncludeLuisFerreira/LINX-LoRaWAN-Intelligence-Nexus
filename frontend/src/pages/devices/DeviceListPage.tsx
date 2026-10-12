@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { tenantService, type TenantOutput } from '../../services/tenant';
-import { loadApplicationsByTenant } from '../../services/app';
+import { loadApplicationsByTenant, type AppOption } from '../../services/app';
 import type { ApplicationOutput } from '../../services/app';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import { useAsyncData } from '../../hooks/useAsyncData';
@@ -15,7 +16,6 @@ import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Plus, Trash } from '../../components/ui/icons';
-import { DeviceCreateModal, type AppOption } from './DeviceCreateModal';
 
 interface DeviceRow {
   device: DeviceOutput;
@@ -56,8 +56,8 @@ async function loadDevices(): Promise<LoadResult> {
 }
 
 export default function DeviceListPage() {
+  const navigate = useNavigate();
   const { data, error, loading, reload } = useAsyncData(loadDevices, []);
-  const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<DeviceRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -128,7 +128,10 @@ export default function DeviceListPage() {
         title="Devices"
         description="Todos os dispositivos da plataforma, por aplicação e tenant."
         actions={
-          <Button onClick={() => setCreating(true)} disabled={apps.length === 0}>
+          <Button
+            onClick={() => navigate('/onboarding')}
+            disabled={apps.length === 0}
+          >
             <Plus className="h-4 w-4" />
             Novo Device
           </Button>
@@ -174,7 +177,7 @@ export default function DeviceListPage() {
               }
               action={
                 apps.length > 0 ? (
-                  <Button onClick={() => setCreating(true)}>
+                  <Button onClick={() => navigate('/onboarding')}>
                     <Plus className="h-4 w-4" />
                     Novo Device
                   </Button>
@@ -190,13 +193,6 @@ export default function DeviceListPage() {
           )}
         </div>
       )}
-
-      <DeviceCreateModal
-        open={creating}
-        apps={apps}
-        onClose={() => setCreating(false)}
-        onCreated={() => reload()}
-      />
 
       <ConfirmDialog
         open={deleting !== null}

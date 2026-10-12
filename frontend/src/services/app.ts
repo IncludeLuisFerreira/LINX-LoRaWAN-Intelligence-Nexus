@@ -19,6 +19,12 @@ export interface UpdateApplicationInput {
   description?: string;
 }
 
+/** Opção de aplicação para selects (label "Tenant / App") */
+export interface AppOption {
+  id: string;
+  label: string;
+}
+
 export const applicationService = {
   create: async (
     tenantId: string,

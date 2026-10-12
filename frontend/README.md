@@ -30,6 +30,7 @@ Drill-down hierárquico com breadcrumbs:
 /tenants/:tenantId                           → workspace (Applications | Configurações)
 /tenants/:tenantId/applications/:appId       → workspace (Devices | Configurações)
 /devices                                     → lista global de devices
+/onboarding                                  → wizard de cadastro de device (3 passos; aceita `?app=<id>` para pré-selecionar a aplicação)
 ```
 
 ## Estrutura
@@ -49,8 +50,9 @@ frontend/
 │   ├── mocks/               # handlers MSW (tenant, application, device)
 │   ├── pages/
 │   │   ├── tenants/         # TenantListPage, TenantDetailPage, TenantFormModal
-│   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal, DeviceFormModal
-│   │   ├── devices/         # DeviceListPage, DeviceCreateModal
+│   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal
+│   │   ├── devices/         # DeviceListPage
+│   │   ├── onboarding/      # OnboardingWizard (scan → confirm → select app)
 │   │   └── NotFound.tsx
 │   ├── services/            # api, tenant, app, device
 │   ├── utils/               # cn, format, tr005 (parser do QR Code)
@@ -77,14 +79,30 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 
 O cadastro de device aceita leitura de QR Code no padrão LoRa Alliance
 TR005 (`LW:SchemaID:JoinEUI:DevEUI:ProfileID`, com extensões opcionais,
-conforme TR005 §4.2/§4.3). O botão **Escanear QR Code TR005** no
-`DeviceCreateModal` abre o `QrScanner`, que lê pela câmera com
-`html5-qrcode` ou aceita o código digitado manualmente. A decodificação
-preenche DevEUI e JoinEUI.
+conforme TR005 §4.2/§4.3). O passo 1 do `OnboardingWizard` abre o
+`QrScanner`, que lê pela câmera com `html5-qrcode` ou aceita o código
+digitado manualmente. A decodificação preenche DevEUI e JoinEUI.
 
 A AppKey **não** faz parte do QR TR005: ela é gerada localmente
 (`generateAppKey()`) e o mesmo valor deve ser programado no dispositivo
 antes do join (OTAA).
+
+## Wizard de Onboarding
+
+A rota `/onboarding` oferece o cadastro guiado em 3 passos (também
+acessível pela barra lateral):
+
+1. **Ler QR Code** — `QrScanner` (câmera ou colagem manual do TR005).
+2. **Confirmar dados** — DevEUI, JoinEUI e AppKey pré-preenchidos e
+   editáveis (validação com Zod); o ProfileID lido do QR é exibido.
+3. **Selecionar App** — escolha da aplicação e do Device Profile. O
+   wizard consulta `GET /device-profile/?app_id=` e, se o ProfileID do QR
+   corresponder ao `id` ou `name` de um perfil, já o pré-seleciona (senão
+   usa o primeiro).
+
+O envio chama `POST /devices` com o contrato real (`dev_eui`, `join_eui`,
+`app_key`, `app_id`, `device_profile_id`) e redireciona para `/devices` em
+caso de sucesso.
 
 A câmera exige *secure context* — funciona em `localhost` ou HTTPS, não
 em HTTP via IP de LAN. Para testar sem QR físico, cole um código como:

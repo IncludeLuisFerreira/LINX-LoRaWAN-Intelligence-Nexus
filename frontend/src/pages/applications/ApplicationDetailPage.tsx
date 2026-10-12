@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { tenantService } from '../../services/tenant';
-import {
-  applicationService,
-  type ApplicationOutput,
-} from '../../services/app';
+import { applicationService, type ApplicationOutput } from '../../services/app';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import type { TenantOutput } from '../../services/tenant';
 import { useAsyncData } from '../../hooks/useAsyncData';
@@ -26,7 +23,6 @@ import {
   ApplicationFormModal,
   type ApplicationFormData,
 } from './ApplicationFormModal';
-import { DeviceFormModal } from './DeviceFormModal';
 
 type LoadResult = {
   tenant: TenantOutput;
@@ -55,7 +51,6 @@ export default function ApplicationDetailPage() {
   );
 
   const [tab, setTab] = useState('devices');
-  const [creatingDevice, setCreatingDevice] = useState(false);
   const [editingApp, setEditingApp] = useState(false);
   const [deletingDevice, setDeletingDevice] = useState<DeviceOutput | null>(
     null,
@@ -205,7 +200,7 @@ export default function ApplicationDetailPage() {
             content: (
               <div className="space-y-4">
                 <div className="flex justify-end">
-                  <Button onClick={() => setCreatingDevice(true)}>
+                  <Button onClick={() => navigate(`/onboarding?app=${appId}`)}>
                     <Plus className="h-4 w-4" />
                     Novo Device
                   </Button>
@@ -215,7 +210,9 @@ export default function ApplicationDetailPage() {
                     title="Nenhum device"
                     description="Provisione o primeiro dispositivo desta aplicação."
                     action={
-                      <Button onClick={() => setCreatingDevice(true)}>
+                      <Button
+                        onClick={() => navigate(`/onboarding?app=${appId}`)}
+                      >
                         <Plus className="h-4 w-4" />
                         Novo Device
                       </Button>
@@ -251,13 +248,6 @@ export default function ApplicationDetailPage() {
             ),
           },
         ]}
-      />
-
-      <DeviceFormModal
-        open={creatingDevice}
-        appId={appId}
-        onClose={() => setCreatingDevice(false)}
-        onCreated={() => reload()}
       />
 
       <ApplicationFormModal
