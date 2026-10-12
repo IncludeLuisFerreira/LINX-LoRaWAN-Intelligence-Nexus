@@ -288,4 +288,63 @@ describe('OnboardingWizard', () => {
       expect(screen.getByLabelText('DevEUI')).toHaveValue('aabbccddeeff9999'),
     );
   });
+
+  it('shows an empty state and disables submit when the app has no device profiles', async () => {
+    const appId = await firstAppId();
+    server.use(
+      http.get('*/api/v1/device-profile/', () => HttpResponse.json([])),
+    );
+
+    await decodeToStep2();
+    await goToStep3();
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Aplicação'),
+      appId,
+    );
+
+    expect(
+      await screen.findByText(/Nenhum device profile nesta aplicação/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Cadastrar device' }),
+    ).toBeDisabled();
+  });
+
+  it('shows the profile fetch error and disables submit', async () => {
+    const appId = await firstAppId();
+    server.use(
+      http.get('*/api/v1/device-profile/', () =>
+        HttpResponse.json({ detail: 'Falha ao carregar perfis' }, { status: 500 }),
+      ),
+    );
+
+    await decodeToStep2();
+    await goToStep3();
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Aplicação'),
+      appId,
+    );
+
+    expect(
+      await screen.findByText('Falha ao carregar perfis'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Cadastrar device' }),
+    ).toBeDisabled();
+  });
+
+  it('warns when the ?app= link does not resolve to a known application', async () => {
+    renderWizard('/onboarding?app=00000000-0000-0000-0000-000000000000');
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'simular-decode' }),
+    );
+    await screen.findByLabelText('DevEUI');
+    await goToStep3();
+
+    expect(
+      await screen.findByText(/A aplicação informada no link não foi encontrada/i),
+    ).toBeInTheDocument();
+    expect(await screen.findByLabelText('Aplicação')).toBeInTheDocument();
+  });
 });

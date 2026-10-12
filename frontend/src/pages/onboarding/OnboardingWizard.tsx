@@ -61,7 +61,7 @@ export default function OnboardingWizard() {
   const [scanned, setScanned] = useState<Tr005Data | null>(null);
   const [profiles, setProfiles] = useState<DeviceProfileOutput[]>([]);
   const [profilesError, setProfilesError] = useState('');
-  const [profilesLoading, setProfilesLoading] = useState(false);
+  const [loadedAppId, setLoadedAppId] = useState('');
   const [profileWarning, setProfileWarning] = useState('');
 
   const {
@@ -92,6 +92,8 @@ export default function OnboardingWizard() {
 
   const lockedAppLabel = appData?.find((app) => app.id === lockedAppId)?.label;
   const appLocked = Boolean(lockedAppId && lockedAppLabel);
+  const appLockUnresolved =
+    Boolean(lockedAppId) && !appsLoading && !appsError && !appLocked;
 
   useEffect(() => {
     if (!appLocked || !lockedAppId) return;
@@ -99,16 +101,11 @@ export default function OnboardingWizard() {
   }, [appLocked, lockedAppId, setValue]);
 
   const appId = useWatch({ control, name: 'app_id' });
+  const profilesLoading = Boolean(appId) && loadedAppId !== appId;
 
   useEffect(() => {
-    if (!appId) {
-      setProfiles([]);
-      setProfilesError('');
-      setProfileWarning('');
-      return;
-    }
+    if (!appId) return;
     let active = true;
-    setProfilesLoading(true);
     deviceProfileService
       .listByApp(appId)
       .then((data) => {
@@ -122,7 +119,7 @@ export default function OnboardingWizard() {
         if (active) setProfilesError(getErrorMessage(err));
       })
       .finally(() => {
-        if (active) setProfilesLoading(false);
+        if (active) setLoadedAppId(appId);
       });
     return () => {
       active = false;
@@ -161,6 +158,14 @@ export default function OnboardingWizard() {
     value: profile.id,
     label: profile.name,
   }));
+
+  const noProfiles =
+    Boolean(appId) && !profilesLoading && !profilesError && profiles.length === 0;
+  const canSubmit =
+    Boolean(appId) &&
+    !profilesLoading &&
+    !profilesError &&
+    profiles.length > 0;
 
   return (
     <div className="mx-auto max-w-xl">
@@ -272,6 +277,12 @@ export default function OnboardingWizard() {
             {!appsLoading && appsError && (
               <Alert variant="error">{appsError}</Alert>
             )}
+            {appLockUnresolved && apps.length > 0 && (
+              <Alert variant="info">
+                A aplicação informada no link não foi encontrada. Selecione a
+                aplicação de destino manualmente.
+              </Alert>
+            )}
             {!appsLoading && !appsError && appLocked && (
               <Input
                 label="Aplicação"
@@ -320,6 +331,12 @@ export default function OnboardingWizard() {
             {appId && !profilesLoading && profilesError && (
               <Alert variant="error">{profilesError}</Alert>
             )}
+            {noProfiles && (
+              <Alert variant="info">
+                Nenhum device profile nesta aplicação. Crie um device profile
+                antes de provisionar dispositivos.
+              </Alert>
+            )}
           </form>
         )}
       </Card>
@@ -340,7 +357,7 @@ export default function OnboardingWizard() {
             type="submit"
             form="onboarding-form"
             loading={isSubmitting}
-            disabled={!appLocked && apps.length === 0}
+            disabled={!canSubmit}
           >
             Cadastrar device
           </Button>
