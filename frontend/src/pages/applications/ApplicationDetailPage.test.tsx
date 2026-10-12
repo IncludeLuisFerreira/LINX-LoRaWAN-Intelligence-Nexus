@@ -68,4 +68,34 @@ describe('ApplicationDetailPage', () => {
 
     expect(await screen.findByText('wizard-page')).toBeInTheDocument();
   });
+
+  it('shows the nickname and edits it from the device table', async () => {
+    const { tenantId, appId } = await firstTenantAndApp();
+    await fetch(`${base}/devices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dev_eui: 'aabbccddeeff0707',
+        app_id: appId,
+        join_eui: '1122334455667788',
+        app_key: '00112233445566778899aabbccddeeff',
+        device_profile_id: 'profile-test',
+        nickname: 'Sensor A',
+      }),
+    });
+
+    renderDetail(tenantId, appId);
+    await screen.findByText('aabbccddeeff0707');
+    expect(screen.getByText('Sensor A')).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Editar nickname aabbccddeeff0707' }),
+    );
+    const input = await screen.findByLabelText('Nickname');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Sensor B');
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect(await screen.findByText('Sensor B')).toBeInTheDocument();
+  });
 });

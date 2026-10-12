@@ -15,7 +15,8 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { Plus, Trash } from '../../components/ui/icons';
+import { Edit, Plus, Trash } from '../../components/ui/icons';
+import { DeviceNicknameModal } from './DeviceNicknameModal';
 
 interface DeviceRow {
   device: DeviceOutput;
@@ -59,6 +60,7 @@ export default function DeviceListPage() {
   const navigate = useNavigate();
   const { data, error, loading, reload } = useAsyncData(loadDevices, []);
   const [deleting, setDeleting] = useState<DeviceRow | null>(null);
+  const [editing, setEditing] = useState<DeviceRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [query, setQuery] = useState('');
@@ -102,6 +104,11 @@ export default function DeviceListPage() {
     { key: 'app', header: 'Application', render: (row) => row.app.name },
     { key: 'tenant', header: 'Tenant', render: (row) => row.tenant.name },
     {
+      key: 'nickname',
+      header: 'Nickname',
+      render: (row) => row.device.nickname ?? '—',
+    },
+    {
       key: 'created_at',
       header: 'Criado em',
       render: (row) => formatDate(row.device.created_at),
@@ -111,13 +118,22 @@ export default function DeviceListPage() {
       header: '',
       className: 'text-right',
       render: (row) => (
-        <Button
-          variant="ghost"
-          aria-label={`Excluir device ${row.device.dev_eui}`}
-          onClick={() => setDeleting(row)}
-        >
-          <Trash className="h-4 w-4 text-red-500" />
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            aria-label={`Editar nickname ${row.device.dev_eui}`}
+            onClick={() => setEditing(row)}
+          >
+            <Edit className="h-4 w-4 text-slate-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            aria-label={`Excluir device ${row.device.dev_eui}`}
+            onClick={() => setDeleting(row)}
+          >
+            <Trash className="h-4 w-4 text-red-500" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -202,6 +218,16 @@ export default function DeviceListPage() {
         loading={busy}
         onConfirm={handleDelete}
         onCancel={() => setDeleting(null)}
+      />
+
+      <DeviceNicknameModal
+        open={editing !== null}
+        device={editing?.device ?? null}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          reload();
+        }}
       />
     </div>
   );
