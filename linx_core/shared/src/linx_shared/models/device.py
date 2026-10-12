@@ -33,6 +33,11 @@ class Device(Base):
         nullable=False,
     )
 
+    device_profile_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+    )
+
     join_eui: Mapped[str] = mapped_column(
         String(16),
         nullable=False,

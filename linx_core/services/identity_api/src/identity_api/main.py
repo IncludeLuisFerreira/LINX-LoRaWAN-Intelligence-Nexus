@@ -7,10 +7,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from identity_api.dependencies import close_chirpstack_client
 from identity_api.routes.application import router as application_router
-from identity_api.routes.devices import (
-    close_chirpstack_client,
-)
+from identity_api.routes.device_profile import router as device_profile_router
 from identity_api.routes.devices import router as devices_router
 from identity_api.routes.tenant import router
 from identity_api.routes.user import router as user_router
@@ -49,3 +48,4 @@ app.include_router(router)
 app.include_router(application_router)
 app.include_router(devices_router)
 app.include_router(user_router)
+app.include_router(device_profile_router)
