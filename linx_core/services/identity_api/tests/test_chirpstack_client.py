@@ -136,6 +136,82 @@ def test_create_device_keys_wraps_rpc_error(monkeypatch):
     assert isinstance(error.original_error, grpc.RpcError)
 
 
+def test_list_device_profiles_sends_tenant_id_and_returns_items(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.List.return_value = api.ListDeviceProfilesResponse(
+        result=[
+            api.DeviceProfileListItem(id="p1", name="profile-1"),
+            api.DeviceProfileListItem(id="p2", name="profile-2"),
+        ],
+        total_count=2,
+    )
+    monkeypatch.setattr(
+        api, "DeviceProfileServiceStub", lambda channel: fake_stub
+    )
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    profiles = client.list_device_profiles("tenant-abc")
+
+    fake_stub.List.assert_called_once()
+    args, kwargs = fake_stub.List.call_args
+    assert args[0].tenant_id == "tenant-abc"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+    assert [p.id for p in profiles] == ["p1", "p2"]
+
+
+def test_list_device_profiles_wraps_rpc_error(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.List.side_effect = _FakeRpcError()
+    monkeypatch.setattr(
+        api, "DeviceProfileServiceStub", lambda channel: fake_stub
+    )
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    with pytest.raises(ExternalServiceError) as exc_info:
+        client.list_device_profiles("tenant-abc")
+
+    error = exc_info.value
+    assert error.service == "chirpstack"
+    assert error.operation == "list_device_profiles"
+    assert error.message == "device already exists"
+    assert isinstance(error.original_error, grpc.RpcError)
+
+
+def test_list_device_profiles_grows_limit_until_complete(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+
+    def items(count: int) -> list[api.DeviceProfileListItem]:
+        return [
+            api.DeviceProfileListItem(id=f"p{index}", name=f"p{index}")
+            for index in range(count)
+        ]
+
+    fake_stub.List.side_effect = [
+        api.ListDeviceProfilesResponse(result=items(100), total_count=150),
+        api.ListDeviceProfilesResponse(result=items(150), total_count=150),
+    ]
+    monkeypatch.setattr(
+        api, "DeviceProfileServiceStub", lambda channel: fake_stub
+    )
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    profiles = client.list_device_profiles("tenant-abc")
+
+    assert len(profiles) == 150
+    assert fake_stub.List.call_count == 2
+    first_request = fake_stub.List.call_args_list[0].args[0]
+    second_request = fake_stub.List.call_args_list[1].args[0]
+    assert first_request.limit == 100
+    assert second_request.limit == 200
+    assert second_request.offset == 0
+
+
 def test_close_closes_channel():
     fake_channel = MagicMock()
 
@@ -179,3 +255,136 @@ def test_tls_reads_ca_cert_file(monkeypatch, tmp_path):
         root_certificates=b"CERT"
     )
     grpc.secure_channel.assert_called_once_with("chirpstack:8080", credentials)
+
+
+def test_create_tenant_returns_id_and_propagates(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.Create.return_value = api.Tenant(id="tenant-id-1")
+    monkeypatch.setattr(api, "TenantServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    tenant_id = client.create_tenant("Meu Tenant", "desc")
+
+    assert tenant_id == "tenant-id-1"
+    args, kwargs = fake_stub.Create.call_args
+    assert args[0].tenant.name == "Meu Tenant"
+    assert args[0].tenant.description == "desc"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+
+
+def test_create_tenant_wraps_rpc_error(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.Create.side_effect = _FakeRpcError()
+    monkeypatch.setattr(api, "TenantServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    with pytest.raises(ExternalServiceError) as exc_info:
+        client.create_tenant("Meu Tenant", "desc")
+
+    assert exc_info.value.operation == "create_tenant"
+    assert exc_info.value.message == "device already exists"
+
+
+def test_update_tenant_propagates_id_and_fields(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    monkeypatch.setattr(api, "TenantServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    client.update_tenant("tenant-id-1", "Nome Novo", "nova desc")
+
+    args, kwargs = fake_stub.Update.call_args
+    assert args[0].tenant.id == "tenant-id-1"
+    assert args[0].tenant.name == "Nome Novo"
+    assert args[0].tenant.description == "nova desc"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+
+
+def test_delete_tenant_propagates_id(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    monkeypatch.setattr(api, "TenantServiceStub", lambda channel: fake_stub)
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    client.delete_tenant("tenant-id-1")
+
+    args, kwargs = fake_stub.Delete.call_args
+    assert args[0].id == "tenant-id-1"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+
+
+def test_create_application_returns_id_and_propagates(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.Create.return_value = api.Application(id="app-id-1")
+    monkeypatch.setattr(
+        api, "ApplicationServiceStub", lambda channel: fake_stub
+    )
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    application_id = client.create_application("tenant-id-1", "Fazenda", "d")
+
+    assert application_id == "app-id-1"
+    args, kwargs = fake_stub.Create.call_args
+    assert args[0].application.tenant_id == "tenant-id-1"
+    assert args[0].application.name == "Fazenda"
+    assert args[0].application.description == "d"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+
+
+def test_create_application_wraps_rpc_error(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    fake_stub.Create.side_effect = _FakeRpcError()
+    monkeypatch.setattr(
+        api, "ApplicationServiceStub", lambda channel: fake_stub
+    )
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    with pytest.raises(ExternalServiceError) as exc_info:
+        client.create_application("tenant-id-1", "Fazenda", "d")
+
+    assert exc_info.value.operation == "create_application"
+    assert exc_info.value.message == "device already exists"
+
+
+def test_update_application_propagates_id_and_fields(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    monkeypatch.setattr(
+        api, "ApplicationServiceStub", lambda channel: fake_stub
+    )
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    client.update_application("app-id-1", "Fazenda Nova", "nova desc")
+
+    args, kwargs = fake_stub.Update.call_args
+    assert args[0].application.id == "app-id-1"
+    assert args[0].application.name == "Fazenda Nova"
+    assert args[0].application.description == "nova desc"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+
+
+def test_delete_application_propagates_id(monkeypatch):
+    fake_channel = MagicMock()
+    fake_stub = MagicMock()
+    monkeypatch.setattr(
+        api, "ApplicationServiceStub", lambda channel: fake_stub
+    )
+
+    client = ChirpStackClient("localhost:8080", "tok", channel=fake_channel)
+
+    client.delete_application("app-id-1")
+
+    args, kwargs = fake_stub.Delete.call_args
+    assert args[0].id == "app-id-1"
+    assert kwargs["metadata"] == [("authorization", "Bearer tok")]

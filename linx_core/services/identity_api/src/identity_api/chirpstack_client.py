@@ -74,5 +74,138 @@ class ChirpStackClient:
                 original_error=exc,
             ) from exc
 
+    def list_device_profiles(
+        self, tenant_id: str
+    ) -> list[api.DeviceProfileListItem]:
+        stub = api.DeviceProfileServiceStub(self._channel)
+
+        try:
+            # A ordenação do List não é estável, então paginar por offset
+            # pode duplicar/omitir itens. Buscamos numa única request com
+            # limit crescente até obter o total.
+            limit = 100
+            while True:
+                request = api.ListDeviceProfilesRequest(
+                    tenant_id=tenant_id, limit=limit
+                )
+
+                response = stub.List(request, metadata=self._metadata())
+
+                if (
+                    not response.result
+                    or len(response.result) >= response.total_count
+                ):
+                    return response.result
+
+                new_limit = max(response.total_count, limit * 2)
+                if new_limit == limit:
+                    return response.result
+                limit = new_limit
+        except grpc.RpcError as grpce:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="list_device_profiles",
+                message=str(grpce.details() or grpce),
+                original_error=grpce,
+            ) from grpce
+
+    def create_tenant(self, name: str, description: str) -> str:
+        stub = api.TenantServiceStub(self._channel)
+        request = api.CreateTenantRequest(
+            tenant=api.Tenant(name=name, description=description)
+        )
+        try:
+            response = stub.Create(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="create_tenant",
+                message=str(exc.details() or exc),
+                original_error=exc,
+            ) from exc
+        return response.id
+
+    def update_tenant(
+        self, tenant_id: str, name: str, description: str
+    ) -> None:
+        stub = api.TenantServiceStub(self._channel)
+        request = api.UpdateTenantRequest(
+            tenant=api.Tenant(id=tenant_id, name=name, description=description)
+        )
+        try:
+            stub.Update(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="update_tenant",
+                message=str(exc.details() or exc),
+                original_error=exc,
+            ) from exc
+
+    def delete_tenant(self, tenant_id: str) -> None:
+        stub = api.TenantServiceStub(self._channel)
+        request = api.DeleteTenantRequest(id=tenant_id)
+        try:
+            stub.Delete(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="delete_tenant",
+                message=str(exc.details() or exc),
+                original_error=exc,
+            ) from exc
+
+    def create_application(
+        self, tenant_id: str, name: str, description: str
+    ) -> str:
+        stub = api.ApplicationServiceStub(self._channel)
+        request = api.CreateApplicationRequest(
+            application=api.Application(
+                tenant_id=tenant_id, name=name, description=description
+            )
+        )
+        try:
+            response = stub.Create(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="create_application",
+                message=str(exc.details() or exc),
+                original_error=exc,
+            ) from exc
+        return response.id
+
+    def update_application(
+        self, application_id: str, name: str, description: str
+    ) -> None:
+        stub = api.ApplicationServiceStub(self._channel)
+        request = api.UpdateApplicationRequest(
+            application=api.Application(
+                id=application_id, name=name, description=description
+            )
+        )
+        try:
+            stub.Update(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="update_application",
+                message=str(exc.details() or exc),
+                original_error=exc,
+            ) from exc
+
+    def delete_application(self, application_id: str) -> None:
+        stub = api.ApplicationServiceStub(self._channel)
+        request = api.DeleteApplicationRequest(id=application_id)
+        try:
+            stub.Delete(request, metadata=self._metadata())
+        except grpc.RpcError as exc:
+            raise ExternalServiceError(
+                service="chirpstack",
+                operation="delete_application",
+                message=str(exc.details() or exc),
+                original_error=exc,
+            ) from exc
+
     def close(self) -> None:
         self._channel.close()
