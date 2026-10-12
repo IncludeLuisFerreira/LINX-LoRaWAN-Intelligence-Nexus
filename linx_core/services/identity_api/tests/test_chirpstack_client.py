@@ -139,13 +139,19 @@ def test_create_device_keys_wraps_rpc_error(monkeypatch):
 def test_list_device_profiles_sends_tenant_id_and_returns_items(monkeypatch):
     fake_channel = MagicMock()
     fake_stub = MagicMock()
-    fake_stub.List.return_value = api.ListDeviceProfilesResponse(
-        result=[
-            api.DeviceProfileListItem(id="p1", name="profile-1"),
-            api.DeviceProfileListItem(id="p2", name="profile-2"),
-        ],
-        total_count=2,
-    )
+    fake_stub.List.side_effect = [
+        api.ListDeviceProfilesResponse(
+            result=[api.DeviceProfileListItem(id="p1", name="profile-1")],
+            total_count=2,
+        ),
+        api.ListDeviceProfilesResponse(
+            result=[
+                api.DeviceProfileListItem(id="p1", name="profile-1"),
+                api.DeviceProfileListItem(id="p2", name="profile-2"),
+            ],
+            total_count=2,
+        ),
+    ]
     monkeypatch.setattr(
         api, "DeviceProfileServiceStub", lambda channel: fake_stub
     )
@@ -154,10 +160,11 @@ def test_list_device_profiles_sends_tenant_id_and_returns_items(monkeypatch):
 
     profiles = client.list_device_profiles("tenant-abc")
 
-    fake_stub.List.assert_called_once()
-    args, kwargs = fake_stub.List.call_args
-    assert args[0].tenant_id == "tenant-abc"
-    assert kwargs["metadata"] == [("authorization", "Bearer tok")]
+    assert fake_stub.List.call_count == 2
+    first_call_args, first_call_kwargs = fake_stub.List.call_args_list[0]
+    assert first_call_args[0].tenant_id == "tenant-abc"
+    assert first_call_args[0].limit == 1
+    assert first_call_kwargs["metadata"] == [("authorization", "Bearer tok")]
     assert [p.id for p in profiles] == ["p1", "p2"]
 
 
@@ -192,7 +199,7 @@ def test_list_device_profiles_grows_limit_until_complete(monkeypatch):
         ]
 
     fake_stub.List.side_effect = [
-        api.ListDeviceProfilesResponse(result=items(100), total_count=150),
+        api.ListDeviceProfilesResponse(result=items(1), total_count=150),
         api.ListDeviceProfilesResponse(result=items(150), total_count=150),
     ]
     monkeypatch.setattr(
@@ -207,9 +214,8 @@ def test_list_device_profiles_grows_limit_until_complete(monkeypatch):
     assert fake_stub.List.call_count == 2
     first_request = fake_stub.List.call_args_list[0].args[0]
     second_request = fake_stub.List.call_args_list[1].args[0]
-    assert first_request.limit == 100
-    assert second_request.limit == 200
-    assert second_request.offset == 0
+    assert first_request.limit == 1
+    assert second_request.limit == 150
 
 
 def test_close_closes_channel():

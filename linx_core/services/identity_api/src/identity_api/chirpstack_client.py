@@ -78,29 +78,21 @@ class ChirpStackClient:
         self, tenant_id: str
     ) -> list[api.DeviceProfileListItem]:
         stub = api.DeviceProfileServiceStub(self._channel)
-
         try:
-            # A ordenação do List não é estável, então paginar por offset
-            # pode duplicar/omitir itens. Buscamos numa única request com
-            # limit crescente até obter o total.
-            limit = 100
-            while True:
-                request = api.ListDeviceProfilesRequest(
-                    tenant_id=tenant_id, limit=limit
-                )
-
-                response = stub.List(request, metadata=self._metadata())
-
-                if (
-                    not response.result
-                    or len(response.result) >= response.total_count
-                ):
-                    return response.result
-
-                new_limit = max(response.total_count, limit * 2)
-                if new_limit == limit:
-                    return response.result
-                limit = new_limit
+            first = stub.List(
+                api.ListDeviceProfilesRequest(tenant_id=tenant_id, limit=1),
+                metadata=self._metadata(),
+            )
+            total = first.total_count
+            if total == 0:
+                return []
+            response = stub.List(
+                api.ListDeviceProfilesRequest(
+                    tenant_id=tenant_id, limit=total
+                ),
+                metadata=self._metadata(),
+            )
+            return list(response.result)
         except grpc.RpcError as grpce:
             raise ExternalServiceError(
                 service="chirpstack",

@@ -59,6 +59,7 @@ export function DeviceCreateModal({
     reset,
     setError,
     setValue,
+    getValues,
     control,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
@@ -97,7 +98,9 @@ export function DeviceCreateModal({
         if (!active) return;
         setProfiles(data);
         setProfilesError('');
-        setValue('device_profile_id', data[0]?.id ?? '');
+        if (!getValues('device_profile_id')) {
+          setValue('device_profile_id', data[0]?.id ?? '');
+        }
       })
       .catch((err: unknown) => {
         if (active) setProfilesError(getErrorMessage(err));

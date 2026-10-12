@@ -133,3 +133,18 @@ def test_list_device_profiles_non_existent_app_returns_404(chirpstack):
     assert response.status_code == 404
     assert response.json() == {"detail": "Application not found!"}
     assert chirpstack.list_calls == []
+
+
+def test_list_device_profiles_chirpstack_failure_returns_502(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    chirpstack.chirpstack.error = ExternalServiceError(
+        "chirpstack", "list_device_profiles", "grpc down"
+    )
+
+    response = client.get("/api/v1/device-profile/", params={"app_id": app_id})
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to list device profiles: grpc down"
+    }

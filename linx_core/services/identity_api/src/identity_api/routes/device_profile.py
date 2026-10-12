@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.db.base import get_db
 from linx_shared.models.application import Application
 from linx_shared.schemas.device_profile import DeviceProfileResponse
@@ -29,4 +30,10 @@ def list_device_profiles(
             detail="Application not found!",
         )
 
-    return chirpstack_client.list_device_profiles(str(application.tenant_id))
+    try:
+        return chirpstack_client.list_device_profiles(str(application.tenant_id))
+    except ExternalServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to list device profiles: {exc.message}",
+        ) from exc

@@ -22,8 +22,13 @@ def upgrade() -> None:
     """Upgrade schema."""
     op.add_column(
         "devices",
-        sa.Column("device_profile_id", sa.UUID(), nullable=False),
+        sa.Column("device_profile_id", sa.UUID(), nullable=True),
     )
+    op.execute(
+        "UPDATE devices SET device_profile_id = gen_random_uuid() "
+        "WHERE device_profile_id IS NULL"
+    )
+    op.alter_column("devices", "device_profile_id", nullable=False)
 
 
 def downgrade() -> None:
