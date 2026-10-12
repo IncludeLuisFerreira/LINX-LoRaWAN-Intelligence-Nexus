@@ -174,7 +174,9 @@ export function generateAppKey(): string {
       .join('')
       .toUpperCase();
   } else {
-    // Fallback para ambientes sem crypto (jsdom, Node antigo)
+    // Fallback NÃO criptográfico: apenas para ambientes sem Web Crypto
+    // (jsdom/Node antigo, testes). Em produção o browser sempre expõe
+    // crypto.getRandomValues; esta ramificação não gera chave segura.
     for (let i = 0; i < 32; i++) {
       result += HEX_CHARS[Math.floor(Math.random() * 16)];
     }

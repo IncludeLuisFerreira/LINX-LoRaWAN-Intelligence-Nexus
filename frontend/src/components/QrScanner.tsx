@@ -71,9 +71,10 @@ export function QrScanner({ onDecoded, onClose }: QrScannerProps) {
         },
       );
 
-      // Desmontou durante o prompt de permissão: desliga a câmera e sai.
+      // Desmontou durante o prompt de permissão: desliga a câmera e libera.
       if (cancelledRef.current) {
         await scanner.stop().catch(() => {});
+        scanner.clear();
         return;
       }
 

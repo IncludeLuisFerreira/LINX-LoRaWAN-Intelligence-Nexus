@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
 import { cn } from '../../utils/cn';
-import { Building, Device } from '../ui/icons';
+import { Building, Cpu, Device } from '../ui/icons';
 
 const navItems = [
   { label: 'Tenants', path: '/tenants', icon: Building },
   { label: 'Devices', path: '/devices', icon: Device },
+  { label: 'Onboarding', path: '/onboarding', icon: Cpu },
 ];
 
 interface SidebarProps {

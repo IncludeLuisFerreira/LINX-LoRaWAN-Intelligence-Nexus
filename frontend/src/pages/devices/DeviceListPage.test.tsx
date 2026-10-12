@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { handlers } from '../../mocks/handlers';
@@ -46,8 +46,11 @@ async function createDevice(appId: string, devEui: string) {
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <DeviceListPage />
+    <MemoryRouter initialEntries={['/devices']}>
+      <Routes>
+        <Route path="/devices" element={<DeviceListPage />} />
+        <Route path="/onboarding" element={<div>wizard-page</div>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -112,28 +115,15 @@ describe('DeviceListPage', () => {
     expect(await screen.findByText('delete forbidden')).toBeInTheDocument();
   });
 
-  it('creates a device through the global modal', async () => {
+  it('navigates to the onboarding wizard from the Novo Device button', async () => {
     const { appId } = await firstTenantAndApp();
+    await createDevice(appId, 'aabbccddeeff0505');
 
     renderPage();
-    await screen.findByRole('button', { name: /novo device/i });
+    await screen.findByText('aabbccddeeff0505');
 
-    await userEvent.click(
-      screen.getAllByRole('button', { name: /novo device/i })[0],
-    );
-    await userEvent.selectOptions(screen.getByLabelText('Aplicação'), appId);
-    await screen.findByRole('option', { name: 'Perfil Teste' });
-    await userEvent.type(screen.getByLabelText('DevEUI'), 'AABBCCDDEEFF0303');
-    await userEvent.type(
-      screen.getByLabelText('JoinEUI'),
-      '1122334455667788',
-    );
-    await userEvent.type(
-      screen.getByLabelText('AppKey'),
-      '00112233445566778899aabbccddeeff',
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Criar' }));
+    await userEvent.click(screen.getByRole('button', { name: /novo device/i }));
 
-    expect(await screen.findByText('aabbccddeeff0303')).toBeInTheDocument();
+    expect(await screen.findByText('wizard-page')).toBeInTheDocument();
   });
 });

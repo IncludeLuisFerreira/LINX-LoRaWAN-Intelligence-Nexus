@@ -9,6 +9,9 @@ const ApplicationDetailPage = lazy(
   () => import('./pages/applications/ApplicationDetailPage'),
 );
 const DeviceListPage = lazy(() => import('./pages/devices/DeviceListPage'));
+const OnboardingWizard = lazy(
+  () => import('./pages/onboarding/OnboardingWizard'),
+);
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 export function AppRoutes() {
@@ -31,6 +34,7 @@ export function AppRoutes() {
             element={<ApplicationDetailPage />}
           />
           <Route path="/devices" element={<DeviceListPage />} />
+          <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
