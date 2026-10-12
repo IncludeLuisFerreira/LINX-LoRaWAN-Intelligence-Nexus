@@ -7,10 +7,9 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Alert } from '../../components/ui/Alert';
-import {
-  deviceService,
-  type DeviceOutput,
-} from '../../services/device';
+import { QrScanner } from '../../components/QrScanner';
+import { generateAppKey, type Tr005Data } from '../../utils/tr005';
+import { deviceService, type DeviceOutput } from '../../services/device';
 import {
   deviceProfileService,
   type DeviceProfileOutput,
@@ -53,6 +52,8 @@ export function DeviceCreateModal({
 }: DeviceCreateModalProps) {
   const [profiles, setProfiles] = useState<DeviceProfileOutput[]>([]);
   const [profilesError, setProfilesError] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [appKeyGenerated, setAppKeyGenerated] = useState(false);
   const {
     register,
     handleSubmit,
@@ -76,6 +77,8 @@ export function DeviceCreateModal({
 
   useEffect(() => {
     if (!open) return;
+    setScanning(false);
+    setAppKeyGenerated(false);
     reset({
       app_id: '',
       dev_eui: '',
@@ -84,6 +87,12 @@ export function DeviceCreateModal({
       device_profile_id: '',
     });
   }, [open, reset]);
+
+  function handleClose() {
+    setScanning(false);
+    setAppKeyGenerated(false);
+    onClose();
+  }
 
   useEffect(() => {
     if (!open || !appId) {
@@ -112,11 +121,19 @@ export function DeviceCreateModal({
     label: profile.name,
   }));
 
+  function handleQrDecoded(data: Tr005Data) {
+    setValue('dev_eui', data.devEUI);
+    setValue('join_eui', data.joinEUI);
+    setValue('app_key', generateAppKey());
+    setAppKeyGenerated(true);
+    setScanning(false);
+  }
+
   async function submit(values: FormData) {
     try {
       const device = await deviceService.create(values);
       onCreated(device);
-      onClose();
+      handleClose();
     } catch (err) {
       setError('root', { message: getErrorMessage(err) });
     }
@@ -125,19 +142,44 @@ export function DeviceCreateModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title="Novo Device"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+          <Button
+            variant="secondary"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
             Cancelar
           </Button>
-          <Button type="submit" form="global-device-form" loading={isSubmitting}>
+          <Button
+            type="submit"
+            form="global-device-form"
+            loading={isSubmitting}
+          >
             Criar
           </Button>
         </>
       }
     >
+      <div className="mb-4">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setScanning((visible) => !visible)}
+        >
+          {scanning ? 'Fechar scanner' : 'Escanear QR Code TR005'}
+        </Button>
+        {scanning && (
+          <div className="mt-3">
+            <QrScanner
+              onDecoded={handleQrDecoded}
+              onClose={() => setScanning(false)}
+            />
+          </div>
+        )}
+      </div>
       <form
         id="global-device-form"
         onSubmit={handleSubmit(submit)}
@@ -169,6 +211,12 @@ export function DeviceCreateModal({
           error={errors.app_key?.message}
           {...register('app_key')}
         />
+        {appKeyGenerated && (
+          <p className="-mt-2 text-xs text-gray-500">
+            AppKey gerada a partir do QR. Programe este mesmo valor no
+            dispositivo antes do join (OTAA).
+          </p>
+        )}
         <Select
           label="Device Profile"
           placeholder="Selecione um perfil"
