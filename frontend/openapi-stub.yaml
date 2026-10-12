@@ -208,6 +208,75 @@ paths:
         '404':
           description: Aplicação ou tenant não encontrado
 
+  /telemetry:
+    get:
+      summary: Histórico de telemetria
+      operationId: getTelemetry
+      description: >
+        Retorna o histórico de telemetria da aplicação, filtrado opcionalmente
+        por `dev_eui`, com paginação cursor-based via `before`.
+      parameters:
+        - name: dev_eui
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: before
+          in: query
+          required: false
+          description: Cursor opaco (`{time}|{dev_eui}|{event_type}`) para paginação.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Página de telemetria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryHistory'
+        '422':
+          description: Parâmetros inválidos
+        '503':
+          description: Banco de dados indisponível
+
+  /devices/{device_id}:
+    parameters:
+      - name: device_id
+        in: path
+        required: true
+        description: Identificador do device
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Atualizar nickname do device
+      operationId: updateDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: Device atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '404':
+          description: Device não encontrado
+        '422':
+          description: Dados inválidos
+
 components:
   securitySchemes:
     BearerAuth:
@@ -332,3 +401,87 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    TelemetryItem:
+      type: object
+      required:
+        - time
+        - dev_eui
+        - payload
+        - event_type
+      properties:
+        time:
+          type: string
+          format: date-time
+        dev_eui:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        rssi:
+          type: integer
+          nullable: true
+        snr:
+          type: number
+          format: float
+          nullable: true
+        app_id:
+          type: string
+          nullable: true
+        event_type:
+          type: string
+
+    TelemetryHistory:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TelemetryItem'
+        next_cursor:
+          type: string
+          nullable: true
+
+    DeviceResponse:
+      type: object
+      required:
+        - id
+        - dev_eui
+        - app_id
+        - join_eui
+        - device_profile_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        dev_eui:
+          type: string
+        app_id:
+          type: string
+          format: uuid
+        join_eui:
+          type: string
+        device_profile_id:
+          type: string
+          format: uuid
+        nickname:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DeviceUpdate:
+      type: object
+      properties:
+        nickname:
+          type: string
+          maxLength: 50
+          nullable: true

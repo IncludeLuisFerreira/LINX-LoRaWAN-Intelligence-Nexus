@@ -47,6 +47,19 @@ def test_openapi_schemas_have_id_uuid_and_name():
         assert "name" in properties
 
 
+def test_openapi_exposes_device_nickname_and_patch():
+    spec = _openapi()
+    paths = spec["paths"]
+
+    assert {"get", "post"} <= set(paths["/api/v1/devices"])
+    assert "patch" in paths["/api/v1/devices/{device_id}"]
+
+    schemas = spec["components"]["schemas"]
+    assert "nickname" in schemas["DeviceCreate"]["properties"]
+    assert "nickname" in schemas["DeviceResponse"]["properties"]
+    assert set(schemas["DeviceUpdate"]["properties"]) == {"nickname"}
+
+
 def test_openapi_stub_file_matches_live_spec():
     stub = json.loads(STUB_PATH.read_text())
 

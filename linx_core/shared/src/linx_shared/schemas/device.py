@@ -13,11 +13,22 @@ class DeviceCreate(BaseModel):
     join_eui: str = Field(pattern=_HEX16)
     app_key: str = Field(pattern=_HEX32)
     device_profile_id: UUID
+    nickname: str | None = Field(default=None, max_length=50)
 
     @field_validator("dev_eui", "join_eui", "app_key")
     @classmethod
     def _normalize_hex(cls, value: str) -> str:
         return value.lower()
+
+    @field_validator("nickname", mode="before")
+    @classmethod
+    def _normalize_nickname(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned or None
+        return value
 
 
 class DeviceResponse(BaseModel):
@@ -28,5 +39,20 @@ class DeviceResponse(BaseModel):
     app_id: UUID
     join_eui: str
     device_profile_id: UUID
+    nickname: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class DeviceUpdate(BaseModel):
+    nickname: str | None = Field(default=None, max_length=50)
+
+    @field_validator("nickname", mode="before")
+    @classmethod
+    def _normalize_nickname(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned or None
+        return value

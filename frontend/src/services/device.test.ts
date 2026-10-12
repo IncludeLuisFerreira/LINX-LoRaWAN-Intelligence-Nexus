@@ -51,4 +51,14 @@ describe('deviceService', () => {
 
     expect(mocked.delete).toHaveBeenCalledWith('/devices/d1');
   });
+
+  it('updates a device nickname with PATCH /devices/{id}', async () => {
+    mocked.patch.mockResolvedValue({ data: { id: 'd1', nickname: 'Bomba 1' } });
+
+    await deviceService.update('d1', { nickname: 'Bomba 1' });
+
+    expect(mocked.patch).toHaveBeenCalledWith('/devices/d1', {
+      nickname: 'Bomba 1',
+    });
+  });
 });

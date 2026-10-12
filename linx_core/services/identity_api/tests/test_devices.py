@@ -151,14 +151,49 @@ def _create_application(tenant_id: str, name: str = "Fazenda") -> str:
     return response.json()["id"]
 
 
-def _payload(app_id: str, dev_eui: str = "1122334455667788") -> dict:
+def _payload(app_id: str, dev_eui: str = "1122334455667788", **extra) -> dict:
     return {
         "dev_eui": dev_eui,
         "app_id": app_id,
         "join_eui": "0011223344556677",
         "app_key": "00112233445566778899aabbccddeeff",
         "device_profile_id": PROFILE_ID,
+        **extra,
     }
+
+
+def test_create_device_with_nickname(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="Sensor Galpão")
+    )
+
+    assert response.status_code == 201
+    assert response.json()["nickname"] == "Sensor Galpão"
+
+
+def test_create_device_without_nickname_is_null(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.post("/api/v1/devices", json=_payload(app_id))
+
+    assert response.status_code == 201
+    assert response.json()["nickname"] is None
+
+
+def test_create_device_blank_nickname_becomes_null(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="   ")
+    )
+
+    assert response.status_code == 201
+    assert response.json()["nickname"] is None
 
 
 def test_create_device_returns_201_with_full_body(chirpstack):
@@ -491,3 +526,78 @@ def test_delete_device_removes_local_even_when_chirpstack_fails(chirpstack):
     assert response.status_code == 204
     assert chirpstack.count_devices(UUID(app_id)) == 0
     assert chirpstack.deleted == []
+
+
+def test_update_device_nickname(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post("/api/v1/devices", json=_payload(app_id)).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": "Bomba 1"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] == "Bomba 1"
+
+
+def test_update_device_clears_nickname_with_null(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="Bomba 1")
+    ).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": None}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] is None
+
+
+def test_update_device_without_nickname_leaves_it_unchanged(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="Bomba 1")
+    ).json()
+
+    response = client.patch(f"/api/v1/devices/{created['id']}", json={})
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] == "Bomba 1"
+
+
+def test_update_device_not_found_returns_404(chirpstack):
+    response = client.patch(
+        f"/api/v1/devices/{uuid4()}", json={"nickname": "x"}
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Device not found!"}
+
+
+def test_update_device_nickname_too_long_returns_422(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post("/api/v1/devices", json=_payload(app_id)).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": "a" * 51}
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_device_nickname_strips_before_length_check(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post("/api/v1/devices", json=_payload(app_id)).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": "  " + "a" * 50}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] == "a" * 50

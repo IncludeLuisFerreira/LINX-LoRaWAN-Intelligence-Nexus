@@ -55,6 +55,7 @@ interface MockDevice {
   app_id: string;
   join_eui: string;
   device_profile_id: string;
+  nickname: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -273,6 +274,7 @@ export const handlers = [
       join_eui: string;
       app_key: string;
       device_profile_id: string;
+      nickname?: string | null;
     };
 
     if (
@@ -296,6 +298,7 @@ export const handlers = [
       app_id: body.app_id,
       join_eui: body.join_eui.toLowerCase(),
       device_profile_id: body.device_profile_id,
+      nickname: body.nickname?.trim() ? body.nickname.trim() : null,
       created_at: now(),
       updated_at: now(),
     };
@@ -315,5 +318,57 @@ export const handlers = [
     }
     mockDevices.splice(index, 1);
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.patch('*/api/v1/devices/:device_id', async ({ params, request }) => {
+    const index = mockDevices.findIndex(
+      (device) => device.id === String(params.device_id),
+    );
+    if (index === -1) {
+      return HttpResponse.json(
+        { detail: 'Device not found!' },
+        { status: 404 },
+      );
+    }
+    const body = (await request.json()) as { nickname?: string | null };
+    if ('nickname' in body) {
+      mockDevices[index].nickname = body.nickname?.trim()
+        ? body.nickname.trim()
+        : null;
+    }
+    mockDevices[index].updated_at = now();
+    return HttpResponse.json(mockDevices[index]);
+  }),
+
+  // --- TELEMETRY ---
+  http.get('*/api/v1/telemetry', ({ request }) => {
+    const params = new URL(request.url).searchParams;
+    const devEui = params.get('dev_eui');
+    if (!devEui) return validationError('dev_eui is required');
+
+    const requested = Number(params.get('limit') ?? '100');
+    const limit = Number.isFinite(requested)
+      ? Math.min(Math.max(1, requested), 200)
+      : 100;
+    const base = Date.now();
+
+    const items = Array.from({ length: limit }, (_, index) => ({
+      time: new Date(base - (limit - 1 - index) * 60000).toISOString(),
+      dev_eui: devEui,
+      payload: {
+        temperature: 20 + (index % 8),
+        humidity: 45 + (index % 12),
+      },
+      rssi: -70 - (index % 5),
+      snr: 6 + (index % 4) / 2,
+      app_id: 'mock-app',
+      event_type: 'up',
+    }));
+
+    const last = items[items.length - 1];
+    return HttpResponse.json({
+      items,
+      next_cursor: last ? `${last.time}|${devEui}|up` : null,
+    });
   }),
 ];

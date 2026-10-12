@@ -158,3 +158,64 @@ describe('device handlers', () => {
     ).toBe(true);
   });
 });
+
+describe('device nickname handlers', () => {
+  it('stores nickname on create and returns it', async () => {
+    const appId = await firstAppId();
+    const res = await post(`${base}/devices`, {
+      ...validDevice(appId, 'aabbccddeeff1001'),
+      nickname: 'Sensor A',
+    });
+    const body = (await res.json()) as { nickname: string | null };
+
+    expect(body.nickname).toBe('Sensor A');
+  });
+
+  it('updates nickname via PATCH and returns the device', async () => {
+    const appId = await firstAppId();
+    const created = (await (
+      await post(`${base}/devices`, validDevice(appId, 'aabbccddeeff1002'))
+    ).json()) as { id: string };
+
+    const res = await fetch(`${base}/devices/${created.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Novo' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).nickname).toBe('Novo');
+  });
+
+  it('returns 404 when patching an unknown device', async () => {
+    const res = await fetch(`${base}/devices/${crypto.randomUUID()}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'x' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('telemetry handlers', () => {
+  it('returns a paginated history envelope for a dev_eui', async () => {
+    const res = await fetch(`${base}/telemetry?dev_eui=aabbccddeeff0004&limit=5`);
+    const body = (await res.json()) as {
+      items: { time: string; dev_eui: string; payload: Record<string, unknown> }[];
+      next_cursor: string | null;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.items).toHaveLength(5);
+    expect(body.items[0].dev_eui).toBe('aabbccddeeff0004');
+    expect(typeof body.items[0].payload.temperature).toBe('number');
+    expect(body.next_cursor).toContain('aabbccddeeff0004');
+  });
+
+  it('rejects a missing dev_eui with 422', async () => {
+    const res = await fetch(`${base}/telemetry`);
+
+    expect(res.status).toBe(422);
+  });
+});

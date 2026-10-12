@@ -594,6 +594,57 @@
       }
     },
     "/api/v1/devices/{device_id}": {
+      "patch": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Update Device",
+        "operationId": "update_device_api_v1_devices__device_id__patch",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Device Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Device"
@@ -1151,6 +1202,18 @@
             "type": "string",
             "format": "uuid",
             "title": "Device Profile Id"
+          },
+          "nickname": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nickname"
           }
         },
         "type": "object",
@@ -1207,6 +1270,17 @@
             "format": "uuid",
             "title": "Device Profile Id"
           },
+          "nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nickname"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -1225,10 +1299,29 @@
           "app_id",
           "join_eui",
           "device_profile_id",
+          "nickname",
           "created_at",
           "updated_at"
         ],
         "title": "DeviceResponse"
+      },
+      "DeviceUpdate": {
+        "properties": {
+          "nickname": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nickname"
+          }
+        },
+        "type": "object",
+        "title": "DeviceUpdate"
       },
       "HTTPValidationError": {
         "properties": {

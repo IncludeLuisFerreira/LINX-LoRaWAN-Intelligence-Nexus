@@ -18,7 +18,8 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { Edit, Plus, Trash } from '../../components/ui/icons';
+import { Edit, Layers, Plus, Trash } from '../../components/ui/icons';
+import { DeviceNicknameModal } from '../devices/DeviceNicknameModal';
 import {
   ApplicationFormModal,
   type ApplicationFormData,
@@ -55,6 +56,7 @@ export default function ApplicationDetailPage() {
   const [deletingDevice, setDeletingDevice] = useState<DeviceOutput | null>(
     null,
   );
+  const [editingDevice, setEditingDevice] = useState<DeviceOutput | null>(null);
   const [deletingApp, setDeletingApp] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
@@ -142,6 +144,11 @@ export default function ApplicationDetailPage() {
       ),
     },
     {
+      key: 'nickname',
+      header: 'Nickname',
+      render: (device) => device.nickname ?? '—',
+    },
+    {
       key: 'created_at',
       header: 'Criado em',
       render: (device) => formatDate(device.created_at),
@@ -151,13 +158,22 @@ export default function ApplicationDetailPage() {
       header: '',
       className: 'text-right',
       render: (device) => (
-        <Button
-          variant="ghost"
-          aria-label={`Excluir device ${device.dev_eui}`}
-          onClick={() => setDeletingDevice(device)}
-        >
-          <Trash className="h-4 w-4 text-red-500" />
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            aria-label={`Editar nickname ${device.dev_eui}`}
+            onClick={() => setEditingDevice(device)}
+          >
+            <Edit className="h-4 w-4 text-slate-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            aria-label={`Excluir device ${device.dev_eui}`}
+            onClick={() => setDeletingDevice(device)}
+          >
+            <Trash className="h-4 w-4 text-red-500" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -177,10 +193,23 @@ export default function ApplicationDetailPage() {
           />
         }
         actions={
-          <Button variant="secondary" onClick={() => setEditingApp(true)}>
-            <Edit className="h-4 w-4" />
-            Editar
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                navigate(`/dashboard/${appId}`, {
+                  state: { appName: app.name },
+                })
+              }
+            >
+              <Layers className="h-4 w-4" />
+              Ver dashboard
+            </Button>
+            <Button variant="secondary" onClick={() => setEditingApp(true)}>
+              <Edit className="h-4 w-4" />
+              Editar
+            </Button>
+          </>
         }
       />
 
@@ -280,6 +309,16 @@ export default function ApplicationDetailPage() {
         loading={busy}
         onConfirm={deleteApp}
         onCancel={() => setDeletingApp(false)}
+      />
+
+      <DeviceNicknameModal
+        open={editingDevice !== null}
+        device={editingDevice}
+        onClose={() => setEditingDevice(null)}
+        onSaved={() => {
+          setEditingDevice(null);
+          reload();
+        }}
       />
     </div>
   );
