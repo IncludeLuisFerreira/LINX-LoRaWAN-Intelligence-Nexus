@@ -6,11 +6,13 @@ import { useAsyncData } from './useAsyncData';
 function Probe({
   fn,
   showReload = false,
+  dep = 0,
 }: {
   fn: () => Promise<string>;
   showReload?: boolean;
+  dep?: number;
 }) {
-  const { data, error, loading, reload } = useAsyncData(fn, []);
+  const { data, error, loading, reload } = useAsyncData(fn, [dep]);
   return (
     <div>
       <span data-testid="state">
@@ -54,6 +56,32 @@ describe('useAsyncData', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('state')).toHaveTextContent('second'),
+    );
+  });
+
+  it('ignores a stale response that resolves after a newer one', async () => {
+    let resolveFirst: (value: string) => void = () => {};
+    let resolveSecond: (value: string) => void = () => {};
+    let call = 0;
+    const fn = () => {
+      call += 1;
+      return new Promise<string>((resolve) => {
+        if (call === 1) resolveFirst = resolve;
+        else resolveSecond = resolve;
+      });
+    };
+
+    const { rerender } = render(<Probe fn={fn} dep={1} />);
+    rerender(<Probe fn={fn} dep={2} />);
+
+    resolveSecond('new');
+    await waitFor(() =>
+      expect(screen.getByTestId('state')).toHaveTextContent('new'),
+    );
+
+    resolveFirst('old');
+    await waitFor(() =>
+      expect(screen.getByTestId('state')).toHaveTextContent('new'),
     );
   });
 });

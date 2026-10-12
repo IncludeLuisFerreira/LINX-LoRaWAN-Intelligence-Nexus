@@ -377,4 +377,19 @@ describe('OnboardingWizard', () => {
     const device = devices.find((d) => d.dev_eui === 'aabbccddeeff2001');
     expect(device?.nickname).toBe('Sensor Galpão');
   });
+
+  it('blocks step 2 advance when the nickname is too long', async () => {
+    await decodeToStep2();
+
+    await userEvent.type(
+      screen.getByLabelText('Nickname (opcional)'),
+      'a'.repeat(51),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+
+    expect(
+      await screen.findByText('Máximo de 50 caracteres'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Passo 3 de 3/i)).not.toBeInTheDocument();
+  });
 });

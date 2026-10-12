@@ -137,7 +137,7 @@ export default function OnboardingWizard() {
   }
 
   async function goToStep3() {
-    const valid = await trigger(['dev_eui', 'join_eui', 'app_key']);
+    const valid = await trigger(['dev_eui', 'join_eui', 'app_key', 'nickname']);
     if (valid) setStep(3);
   }
 
