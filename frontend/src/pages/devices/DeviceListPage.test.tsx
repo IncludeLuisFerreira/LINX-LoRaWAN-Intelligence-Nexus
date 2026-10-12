@@ -39,6 +39,7 @@ async function createDevice(appId: string, devEui: string) {
       app_id: appId,
       join_eui: '1122334455667788',
       app_key: '00112233445566778899aabbccddeeff',
+      device_profile_id: 'profile-test',
     }),
   });
 }
@@ -121,6 +122,7 @@ describe('DeviceListPage', () => {
       screen.getAllByRole('button', { name: /novo device/i })[0],
     );
     await userEvent.selectOptions(screen.getByLabelText('Aplicação'), appId);
+    await screen.findByRole('option', { name: 'Perfil Teste' });
     await userEvent.type(screen.getByLabelText('DevEUI'), 'AABBCCDDEEFF0303');
     await userEvent.type(
       screen.getByLabelText('JoinEUI'),

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Modal } from '../../components/ui/Modal';
@@ -11,6 +11,10 @@ import {
   deviceService,
   type DeviceOutput,
 } from '../../services/device';
+import {
+  deviceProfileService,
+  type DeviceProfileOutput,
+} from '../../services/deviceProfile';
 import { getErrorMessage } from '../../services/api';
 
 const schema = z.object({
@@ -24,6 +28,7 @@ const schema = z.object({
   app_key: z
     .string()
     .regex(/^[0-9a-fA-F]{32}$/, 'Deve ter 32 caracteres hexadecimais'),
+  device_profile_id: z.string().min(1, 'Selecione um device profile'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -46,11 +51,15 @@ export function DeviceCreateModal({
   onClose,
   onCreated,
 }: DeviceCreateModalProps) {
+  const [profiles, setProfiles] = useState<DeviceProfileOutput[]>([]);
+  const [profilesError, setProfilesError] = useState('');
   const {
     register,
     handleSubmit,
     reset,
     setError,
+    setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -59,14 +68,49 @@ export function DeviceCreateModal({
       dev_eui: '',
       join_eui: '',
       app_key: '',
+      device_profile_id: '',
     },
   });
 
+  const appId = useWatch({ control, name: 'app_id' });
+
   useEffect(() => {
-    if (open) {
-      reset({ app_id: '', dev_eui: '', join_eui: '', app_key: '' });
-    }
+    if (!open) return;
+    reset({
+      app_id: '',
+      dev_eui: '',
+      join_eui: '',
+      app_key: '',
+      device_profile_id: '',
+    });
   }, [open, reset]);
+
+  useEffect(() => {
+    if (!open || !appId) {
+      setProfiles([]);
+      return;
+    }
+    let active = true;
+    deviceProfileService
+      .listByApp(appId)
+      .then((data) => {
+        if (!active) return;
+        setProfiles(data);
+        setProfilesError('');
+        setValue('device_profile_id', data[0]?.id ?? '');
+      })
+      .catch((err: unknown) => {
+        if (active) setProfilesError(getErrorMessage(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, appId, setValue]);
+
+  const profileOptions = profiles.map((profile) => ({
+    value: profile.id,
+    label: profile.name,
+  }));
 
   async function submit(values: FormData) {
     try {
@@ -125,6 +169,14 @@ export function DeviceCreateModal({
           error={errors.app_key?.message}
           {...register('app_key')}
         />
+        <Select
+          label="Device Profile"
+          placeholder="Selecione um perfil"
+          options={profileOptions}
+          error={errors.device_profile_id?.message}
+          {...register('device_profile_id')}
+        />
+        {profilesError && <Alert variant="error">{profilesError}</Alert>}
       </form>
     </Modal>
   );

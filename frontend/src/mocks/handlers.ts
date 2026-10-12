@@ -54,11 +54,16 @@ interface MockDevice {
   dev_eui: string;
   app_id: string;
   join_eui: string;
+  device_profile_id: string;
   created_at: string;
   updated_at: string;
 }
 
 const mockDevices: MockDevice[] = [];
+
+const mockDeviceProfiles = [
+  { id: crypto.randomUUID(), name: 'Perfil Teste' },
+];
 
 function findTenant(tenantId: string): MockTenant | undefined {
   return mockTenants.find((tenant) => tenant.id === tenantId);
@@ -245,6 +250,13 @@ export const handlers = [
     },
   ),
 
+  // --- DEVICE PROFILES ---
+  http.get('*/api/v1/device-profile/', ({ request }) => {
+    const appId = new URL(request.url).searchParams.get('app_id');
+    if (!appId) return validationError('app_id is required');
+    return HttpResponse.json(mockDeviceProfiles);
+  }),
+
   // --- DEVICES ---
   http.get('*/api/v1/devices', ({ request }) => {
     const appId = new URL(request.url).searchParams.get('app_id');
@@ -260,6 +272,7 @@ export const handlers = [
       app_id: string;
       join_eui: string;
       app_key: string;
+      device_profile_id: string;
     };
 
     if (
@@ -282,6 +295,7 @@ export const handlers = [
       dev_eui: body.dev_eui.toLowerCase(),
       app_id: body.app_id,
       join_eui: body.join_eui.toLowerCase(),
+      device_profile_id: body.device_profile_id,
       created_at: now(),
       updated_at: now(),
     };

@@ -36,6 +36,7 @@ describe('deviceService', () => {
       app_id: 'app-1',
       join_eui: '1122334455667788',
       app_key: '00112233445566778899aabbccddeeff',
+      device_profile_id: 'profile-1',
     };
 
     await deviceService.create(payload);

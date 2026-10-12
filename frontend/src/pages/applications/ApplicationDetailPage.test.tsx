@@ -50,6 +50,7 @@ async function fillDevice(
   joinEui = '1122334455667788',
   appKey = '00112233445566778899aabbccddeeff',
 ) {
+  await screen.findByRole('option', { name: 'Perfil Teste' });
   await userEvent.type(screen.getByLabelText('DevEUI'), devEui);
   await userEvent.type(screen.getByLabelText('JoinEUI'), joinEui);
   await userEvent.type(screen.getByLabelText('AppKey'), appKey);

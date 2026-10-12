@@ -5,6 +5,7 @@ export interface DeviceOutput {
   dev_eui: string;
   app_id: string;
   join_eui: string;
+  device_profile_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -14,6 +15,7 @@ export interface CreateDeviceInput {
   app_id: string;
   join_eui: string;
   app_key: string;
+  device_profile_id: string;
 }
 
 export const deviceService = {
