@@ -18,6 +18,7 @@ import { deviceService } from '../../services/device';
 import {
   deviceProfileService,
   matchProfileId,
+  profileFallbackWarning,
   type DeviceProfileOutput,
 } from '../../services/deviceProfile';
 import { useAsyncData } from '../../hooks/useAsyncData';
@@ -58,10 +59,10 @@ export default function OnboardingWizard() {
   const lockedAppId = searchParams.get('app');
   const [step, setStep] = useState(1);
   const [scanned, setScanned] = useState<Tr005Data | null>(null);
-  const [appLocked, setAppLocked] = useState(false);
   const [profiles, setProfiles] = useState<DeviceProfileOutput[]>([]);
   const [profilesError, setProfilesError] = useState('');
   const [profilesLoading, setProfilesLoading] = useState(false);
+  const [profileWarning, setProfileWarning] = useState('');
 
   const {
     register,
@@ -90,12 +91,12 @@ export default function OnboardingWizard() {
   const apps = appData ?? [];
 
   const lockedAppLabel = appData?.find((app) => app.id === lockedAppId)?.label;
+  const appLocked = Boolean(lockedAppId && lockedAppLabel);
 
   useEffect(() => {
-    if (!lockedAppId || !lockedAppLabel) return;
+    if (!appLocked || !lockedAppId) return;
     setValue('app_id', lockedAppId);
-    setAppLocked(true);
-  }, [lockedAppId, lockedAppLabel, setValue]);
+  }, [appLocked, lockedAppId, setValue]);
 
   const appId = useWatch({ control, name: 'app_id' });
 
@@ -103,6 +104,7 @@ export default function OnboardingWizard() {
     if (!appId) {
       setProfiles([]);
       setProfilesError('');
+      setProfileWarning('');
       return;
     }
     let active = true;
@@ -114,6 +116,7 @@ export default function OnboardingWizard() {
         setProfiles(data);
         setProfilesError('');
         setValue('device_profile_id', matchProfileId(data, scanned?.profileId));
+        setProfileWarning(profileFallbackWarning(data, scanned?.profileId));
       })
       .catch((err: unknown) => {
         if (active) setProfilesError(getErrorMessage(err));
@@ -310,6 +313,9 @@ export default function OnboardingWizard() {
                 error={errors.device_profile_id?.message}
                 {...register('device_profile_id')}
               />
+            )}
+            {appId && !profilesLoading && profileWarning && (
+              <Alert variant="info">{profileWarning}</Alert>
             )}
             {appId && !profilesLoading && profilesError && (
               <Alert variant="error">{profilesError}</Alert>

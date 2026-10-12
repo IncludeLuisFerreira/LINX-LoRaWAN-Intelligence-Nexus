@@ -127,6 +127,20 @@ describe('OnboardingWizard', () => {
     expect(screen.queryByText(/Passo 3 de 3/i)).not.toBeInTheDocument();
   });
 
+  it('blocks step 2 advance when the AppKey is edited to an invalid value', async () => {
+    await decodeToStep2();
+
+    const appKey = screen.getByLabelText('AppKey');
+    await userEvent.clear(appKey);
+    await userEvent.type(appKey, 'abc');
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+
+    expect(
+      await screen.findByText('Deve ter 32 caracteres hexadecimais'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Passo 3 de 3/i)).not.toBeInTheDocument();
+  });
+
   it('loads apps and device profiles on step 3', async () => {
     const appId = await firstAppId();
     await decodeToStep2();
@@ -162,6 +176,24 @@ describe('OnboardingWizard', () => {
 
     await screen.findByRole('option', { name: 'AABB1122' });
     expect(screen.getByLabelText('Device Profile')).toHaveValue('uuid-match');
+    expect(
+      screen.queryByText(/não corresponde a nenhum perfil/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('warns when the QR ProfileID does not match any profile (fallback)', async () => {
+    const appId = await firstAppId();
+
+    await decodeToStep2();
+    await goToStep3();
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Aplicação'),
+      appId,
+    );
+
+    expect(
+      await screen.findByText(/não corresponde a nenhum perfil/i),
+    ).toBeInTheDocument();
   });
 
   it('submits the device with the real contract and redirects', async () => {
