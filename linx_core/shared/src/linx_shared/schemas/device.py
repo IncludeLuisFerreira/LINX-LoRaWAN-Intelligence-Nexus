@@ -40,3 +40,15 @@ class DeviceResponse(BaseModel):
     nickname: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class DeviceUpdate(BaseModel):
+    nickname: str | None = Field(default=None, max_length=50)
+
+    @field_validator("nickname")
+    @classmethod
+    def _normalize_nickname(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None

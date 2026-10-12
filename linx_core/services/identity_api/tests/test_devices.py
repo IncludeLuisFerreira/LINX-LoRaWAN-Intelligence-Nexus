@@ -526,3 +526,65 @@ def test_delete_device_removes_local_even_when_chirpstack_fails(chirpstack):
     assert response.status_code == 204
     assert chirpstack.count_devices(UUID(app_id)) == 0
     assert chirpstack.deleted == []
+
+
+def test_update_device_nickname(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post("/api/v1/devices", json=_payload(app_id)).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": "Bomba 1"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] == "Bomba 1"
+
+
+def test_update_device_clears_nickname_with_null(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="Bomba 1")
+    ).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": None}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] is None
+
+
+def test_update_device_without_nickname_leaves_it_unchanged(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="Bomba 1")
+    ).json()
+
+    response = client.patch(f"/api/v1/devices/{created['id']}", json={})
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] == "Bomba 1"
+
+
+def test_update_device_not_found_returns_404(chirpstack):
+    response = client.patch(
+        f"/api/v1/devices/{uuid4()}", json={"nickname": "x"}
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Device not found!"}
+
+
+def test_update_device_nickname_too_long_returns_422(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post("/api/v1/devices", json=_payload(app_id)).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": "a" * 51}
+    )
+
+    assert response.status_code == 422

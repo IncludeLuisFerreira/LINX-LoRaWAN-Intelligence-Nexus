@@ -7,7 +7,11 @@ from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.db.base import get_db
 from linx_shared.models.application import Application
 from linx_shared.models.device import Device
-from linx_shared.schemas.device import DeviceCreate, DeviceResponse
+from linx_shared.schemas.device import (
+    DeviceCreate,
+    DeviceResponse,
+    DeviceUpdate,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -131,6 +135,30 @@ def create_device(
         ) from None
     db.refresh(new_device)
     return new_device
+
+
+@router.patch(
+    "/devices/{device_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=DeviceResponse,
+)
+def update_device(
+    device_id: UUID,
+    payload: DeviceUpdate,
+    db: Session = Depends(get_db),
+):
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found!",
+        )
+    data = payload.model_dump(exclude_unset=True)
+    if "nickname" in data:
+        device.nickname = data["nickname"]
+    db.commit()
+    db.refresh(device)
+    return device
 
 
 @router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
