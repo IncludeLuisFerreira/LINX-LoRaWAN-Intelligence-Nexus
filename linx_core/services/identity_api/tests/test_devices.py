@@ -151,14 +151,49 @@ def _create_application(tenant_id: str, name: str = "Fazenda") -> str:
     return response.json()["id"]
 
 
-def _payload(app_id: str, dev_eui: str = "1122334455667788") -> dict:
+def _payload(app_id: str, dev_eui: str = "1122334455667788", **extra) -> dict:
     return {
         "dev_eui": dev_eui,
         "app_id": app_id,
         "join_eui": "0011223344556677",
         "app_key": "00112233445566778899aabbccddeeff",
         "device_profile_id": PROFILE_ID,
+        **extra,
     }
+
+
+def test_create_device_with_nickname(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="Sensor Galpão")
+    )
+
+    assert response.status_code == 201
+    assert response.json()["nickname"] == "Sensor Galpão"
+
+
+def test_create_device_without_nickname_is_null(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.post("/api/v1/devices", json=_payload(app_id))
+
+    assert response.status_code == 201
+    assert response.json()["nickname"] is None
+
+
+def test_create_device_blank_nickname_becomes_null(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.post(
+        "/api/v1/devices", json=_payload(app_id, nickname="   ")
+    )
+
+    assert response.status_code == 201
+    assert response.json()["nickname"] is None
 
 
 def test_create_device_returns_201_with_full_body(chirpstack):

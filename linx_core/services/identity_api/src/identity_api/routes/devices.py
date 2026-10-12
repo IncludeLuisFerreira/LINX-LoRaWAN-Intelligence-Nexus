@@ -118,6 +118,7 @@ def create_device(
         join_eui=payload.join_eui,
         app_key=payload.app_key,
         device_profile_id=payload.device_profile_id,
+        nickname=payload.nickname,
     )
     db.add(new_device)
     try:
