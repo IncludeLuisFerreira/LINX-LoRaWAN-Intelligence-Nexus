@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
@@ -6,6 +14,36 @@ import { setupServer } from 'msw/node';
 import { handlers } from '../../mocks/handlers';
 import { DeviceCreateModal, type AppOption } from './DeviceCreateModal';
 import type { DeviceOutput } from '../../services/device';
+import type { Tr005Data } from '../../utils/tr005';
+
+vi.mock('../../components/QrScanner', () => ({
+  QrScanner: ({
+    onDecoded,
+    onClose,
+  }: {
+    onDecoded: (data: Tr005Data) => void;
+    onClose: () => void;
+  }) => (
+    <div data-testid="qr-scanner-stub">
+      <button
+        type="button"
+        onClick={() =>
+          onDecoded({
+            schemaId: 'D0',
+            joinEUI: '1122334455667788',
+            devEUI: 'aabbccddeeff0011',
+            profileId: 'AABB1122',
+          })
+        }
+      >
+        simular-decode
+      </button>
+      <button type="button" onClick={onClose}>
+        cancelar-scanner
+      </button>
+    </div>
+  ),
+}));
 
 const server = setupServer(...handlers);
 const base = 'http://localhost:8000/api/v1';
@@ -76,7 +114,9 @@ describe('DeviceCreateModal', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Criar' }));
 
-    const errors = await screen.findAllByText('Deve ter 16 caracteres hexadecimais');
+    const errors = await screen.findAllByText(
+      'Deve ter 16 caracteres hexadecimais',
+    );
     expect(errors.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -94,5 +134,42 @@ describe('DeviceCreateModal', () => {
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledOnce());
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('opens and closes the TR005 scanner from the device form', async () => {
+    const app = await firstApp();
+    renderModal(app);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Escanear QR Code TR005' }),
+    );
+    expect(await screen.findByTestId('qr-scanner-stub')).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'cancelar-scanner' }),
+    );
+    expect(screen.queryByTestId('qr-scanner-stub')).not.toBeInTheDocument();
+  });
+
+  it('prefills DevEUI, JoinEUI and generated AppKey after QR decode', async () => {
+    const app = await firstApp();
+    renderModal(app);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Escanear QR Code TR005' }),
+    );
+    await screen.findByTestId('qr-scanner-stub');
+    await userEvent.click(
+      screen.getByRole('button', { name: 'simular-decode' }),
+    );
+
+    expect(screen.queryByTestId('qr-scanner-stub')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('DevEUI')).toHaveValue('aabbccddeeff0011');
+    expect(screen.getByLabelText('JoinEUI')).toHaveValue('1122334455667788');
+    const appKey = screen.getByLabelText<HTMLInputElement>('AppKey');
+    expect(appKey.value).toMatch(/^[0-9A-F]{32}$/);
+    expect(
+      screen.getByText(/Programe este mesmo valor no dispositivo/i),
+    ).toBeInTheDocument();
   });
 });
