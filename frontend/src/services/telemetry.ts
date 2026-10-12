@@ -67,3 +67,30 @@ export function buildSeries(
     )
     .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 }
+
+export interface SeriesInput {
+  key: string;
+  label: string;
+  data: TelemetryPoint[];
+}
+
+/**
+ * Mescla várias séries em linhas indexadas por `time`, com uma chave por série.
+ * Pontos de séries diferentes no mesmo instante ocupam a mesma linha.
+ */
+export function mergeSeries(
+  series: SeriesInput[],
+): Record<string, number | string>[] {
+  const rows = new Map<string, Record<string, number | string>>();
+  for (const entry of series) {
+    for (const point of entry.data) {
+      const row = rows.get(point.time) ?? { time: point.time };
+      row[entry.key] = point.value;
+      rows.set(point.time, row);
+    }
+  }
+  return [...rows.values()].sort(
+    (a, b) =>
+      new Date(String(a.time)).getTime() - new Date(String(b.time)).getTime(),
+  );
+}

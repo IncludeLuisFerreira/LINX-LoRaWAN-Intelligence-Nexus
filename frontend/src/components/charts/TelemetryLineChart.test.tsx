@@ -2,22 +2,46 @@ import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { TelemetryLineChart } from './TelemetryLineChart';
 
-const data = [
-  { time: '2026-01-01T00:00:00Z', value: 20 },
-  { time: '2026-01-01T00:01:00Z', value: 22 },
+const series = [
+  {
+    key: 'a',
+    label: 'A',
+    data: [
+      { time: '2026-01-01T00:00:00Z', value: 20 },
+      { time: '2026-01-01T00:01:00Z', value: 21 },
+    ],
+  },
+  {
+    key: 'b',
+    label: 'B',
+    data: [
+      { time: '2026-01-01T00:00:00Z', value: 22 },
+      { time: '2026-01-01T00:01:00Z', value: 23 },
+    ],
+  },
 ];
 
 describe('TelemetryLineChart', () => {
-  it('renders a line path for the provided series', () => {
+  it('renders one line per series', () => {
     const { container } = render(
-      <TelemetryLineChart data={data} label="temperature" width={800} />,
+      <TelemetryLineChart series={series} width={800} />,
     );
 
-    expect(container.querySelector('.recharts-line-curve')).not.toBeNull();
+    expect(container.querySelectorAll('.recharts-line-curve')).toHaveLength(2);
   });
 
-  it('does not throw when data is empty', () => {
-    const { container } = render(<TelemetryLineChart data={[]} width={800} />);
+  it('renders a single line for a single series', () => {
+    const { container } = render(
+      <TelemetryLineChart series={[series[0]]} width={800} />,
+    );
+
+    expect(container.querySelectorAll('.recharts-line-curve')).toHaveLength(1);
+  });
+
+  it('does not throw when the series is empty', () => {
+    const { container } = render(
+      <TelemetryLineChart series={[]} width={800} />,
+    );
 
     expect(container.querySelector('svg')).not.toBeNull();
   });

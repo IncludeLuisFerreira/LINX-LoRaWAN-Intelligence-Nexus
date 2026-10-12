@@ -105,6 +105,115 @@ describe('Dashboard', () => {
     ).toBeInTheDocument();
   });
 
+  it('overlays all devices when "Todos os devices" is selected', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff0707');
+    await createDevice(appId, 'aabbccddeeff0808');
+
+    const requested: (string | null)[] = [];
+    server.use(
+      http.get('*/api/v1/telemetry', ({ request }) => {
+        const devEui = new URL(request.url).searchParams.get('dev_eui');
+        requested.push(devEui);
+        return HttpResponse.json({
+          items: [
+            {
+              time: '2026-01-01T00:00:00Z',
+              dev_eui: devEui,
+              payload: { temperature: 20 },
+              rssi: -70,
+              snr: 7,
+              app_id: 'mock-app',
+              event_type: 'up',
+            },
+          ],
+          next_cursor: null,
+        });
+      }),
+    );
+
+    renderDashboard(appId);
+    await screen.findByLabelText('Device');
+
+    await userEvent.selectOptions(
+      screen.getByLabelText('Device'),
+      'Todos os devices',
+    );
+
+    await waitFor(() => {
+      expect(requested).toContain('aabbccddeeff0707');
+      expect(requested).toContain('aabbccddeeff0808');
+    });
+    expect(screen.getByTestId('telemetry-chart')).toBeInTheDocument();
+  });
+
+  it('shows the nickname as the device option label and dev_eui as fallback', async () => {
+    const appId = await firstAppId();
+    const create = (devEui: string, nickname?: string) =>
+      fetch(`${base}/devices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dev_eui: devEui,
+          app_id: appId,
+          join_eui: '1122334455667788',
+          app_key: '00112233445566778899aabbccddeeff',
+          device_profile_id: 'profile-test',
+          nickname,
+        }),
+      });
+    await create('aabbccddeeff0909', 'Sensor Sul');
+    await create('aabbccddeeff0c0c');
+
+    renderDashboard(appId);
+
+    expect(
+      await screen.findByRole('option', { name: 'Sensor Sul' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'aabbccddeeff0c0c' }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps other series when one device history fails', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff0a0a');
+    await createDevice(appId, 'aabbccddeeff0b0b');
+
+    server.use(
+      http.get('*/api/v1/telemetry', ({ request }) => {
+        const devEui = new URL(request.url).searchParams.get('dev_eui');
+        if (devEui === 'aabbccddeeff0a0a') {
+          return HttpResponse.json({ detail: 'boom' }, { status: 500 });
+        }
+        return HttpResponse.json({
+          items: [
+            {
+              time: '2026-01-01T00:00:00Z',
+              dev_eui: devEui,
+              payload: { temperature: 20 },
+              rssi: -70,
+              snr: 7,
+              app_id: 'mock-app',
+              event_type: 'up',
+            },
+          ],
+          next_cursor: null,
+        });
+      }),
+    );
+
+    renderDashboard(appId);
+    await screen.findByLabelText('Device');
+    await userEvent.selectOptions(
+      screen.getByLabelText('Device'),
+      'Todos os devices',
+    );
+
+    expect(await screen.findByTestId('telemetry-chart')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when the application has no devices', async () => {
     const tenants = (await (await fetch(`${base}/tenant`)).json()) as {
       id: string;

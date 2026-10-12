@@ -1,4 +1,5 @@
 import {
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -6,17 +7,26 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { TelemetryPoint } from '../../services/telemetry';
+import { mergeSeries, type SeriesInput } from '../../services/telemetry';
 import { formatDate } from '../../utils/format';
 
 interface TelemetryLineChartProps {
-  data: TelemetryPoint[];
-  label?: string;
+  series: SeriesInput[];
   height?: number;
   width?: number;
 }
 
 const AXIS_COLOR = '#64748b';
+const COLORS = [
+  '#8884d8',
+  '#82ca9d',
+  '#ffc658',
+  '#ff7300',
+  '#00c49f',
+  '#d0ed57',
+  '#a4de6c',
+  '#8dd1e1',
+];
 
 function formatTick(value: string): string {
   const date = new Date(value);
@@ -28,14 +38,15 @@ function formatTick(value: string): string {
 }
 
 export function TelemetryLineChart({
-  data,
-  label = 'Valor',
+  series,
   height = 320,
   width,
 }: TelemetryLineChartProps) {
+  const rows = mergeSeries(series);
+
   const chart = (
     <LineChart
-      data={data}
+      data={rows}
       height={height}
       width={width}
       margin={{ top: 8, right: 16, bottom: 8, left: 0 }}
@@ -49,15 +60,20 @@ export function TelemetryLineChart({
       />
       <YAxis stroke={AXIS_COLOR} fontSize={12} width={48} />
       <Tooltip labelFormatter={(value) => formatDate(String(value))} />
-      <Line
-        type="monotone"
-        dataKey="value"
-        name={label}
-        stroke="#8884d8"
-        strokeWidth={2}
-        dot={false}
-        isAnimationActive={false}
-      />
+      <Legend />
+      {series.map((entry, index) => (
+        <Line
+          key={entry.key}
+          type="monotone"
+          dataKey={entry.key}
+          name={entry.label}
+          stroke={COLORS[index % COLORS.length]}
+          strokeWidth={2}
+          dot={false}
+          connectNulls
+          isAnimationActive={false}
+        />
+      ))}
     </LineChart>
   );
 

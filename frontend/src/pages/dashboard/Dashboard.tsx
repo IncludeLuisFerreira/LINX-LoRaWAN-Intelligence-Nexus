@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
-import { deviceService } from '../../services/device';
+import { deviceService, type DeviceOutput } from '../../services/device';
 import {
   telemetryService,
   numericMetrics,
   buildSeries,
   type TelemetryHistory,
+  type SeriesInput,
 } from '../../services/telemetry';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { formatDate } from '../../utils/format';
@@ -18,7 +19,22 @@ import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { TelemetryLineChart } from '../../components/charts/TelemetryLineChart';
 
+const ALL_DEVICES = '__all__';
 const EMPTY_HISTORY: TelemetryHistory = { items: [], next_cursor: null };
+
+async function loadHistories(
+  devices: DeviceOutput[],
+): Promise<TelemetryHistory[]> {
+  const results = await Promise.allSettled(
+    devices.map((device) => telemetryService.history(device.dev_eui)),
+  );
+  if (results.length > 0 && results.every((result) => result.status === 'rejected')) {
+    throw (results[0] as PromiseRejectedResult).reason;
+  }
+  return results.map((result) =>
+    result.status === 'fulfilled' ? result.value : EMPTY_HISTORY,
+  );
+}
 
 export default function Dashboard() {
   const { appId = '' } = useParams();
@@ -36,11 +52,12 @@ export default function Dashboard() {
   const [selectedDevEui, setSelectedDevEui] = useState('');
   const [metric, setMetric] = useState('');
 
-  const activeDevEui = devices.some(
-    (device) => device.dev_eui === selectedDevEui,
-  )
-    ? selectedDevEui
-    : (devices[0]?.dev_eui ?? '');
+  const activeDevEui =
+    selectedDevEui === ALL_DEVICES
+      ? ALL_DEVICES
+      : devices.some((device) => device.dev_eui === selectedDevEui)
+        ? selectedDevEui
+        : (devices[0]?.dev_eui ?? '');
 
   const {
     data: history,
@@ -48,17 +65,37 @@ export default function Dashboard() {
     loading: historyLoading,
     reload: reloadHistory,
   } = useAsyncData(
-    () =>
-      activeDevEui
-        ? telemetryService.history(activeDevEui)
-        : Promise.resolve(EMPTY_HISTORY),
-    [appId, activeDevEui],
+    () => {
+      if (activeDevEui === ALL_DEVICES) return loadHistories(devices);
+      if (activeDevEui)
+        return telemetryService.history(activeDevEui).then((result) => [result]);
+      return Promise.resolve([] as TelemetryHistory[]);
+    },
+    [appId, activeDevEui, devices.length],
   );
 
-  const items = history?.items ?? [];
+  const histories = history ?? [];
+  const items = histories.flatMap((entry) => entry.items);
   const metrics = numericMetrics(items);
   const activeMetric = metrics.includes(metric) ? metric : (metrics[0] ?? '');
-  const series = activeMetric ? buildSeries(items, activeMetric) : [];
+
+  const chartSeries: SeriesInput[] =
+    activeDevEui === ALL_DEVICES
+      ? devices.map((device, index) => ({
+          key: device.dev_eui,
+          label: device.nickname ?? device.dev_eui,
+          data: buildSeries(histories[index]?.items ?? [], activeMetric),
+        }))
+      : [
+          {
+            key: activeDevEui,
+            label:
+              devices.find((device) => device.dev_eui === activeDevEui)
+                ?.nickname ?? activeDevEui,
+            data: buildSeries(items, activeMetric),
+          },
+        ];
+  const hasData = chartSeries.some((entry) => entry.data.length > 0);
 
   return (
     <div>
@@ -102,10 +139,13 @@ export default function Dashboard() {
               name="dev_eui"
               value={activeDevEui}
               onChange={(event) => setSelectedDevEui(event.target.value)}
-              options={devices.map((device) => ({
-                value: device.dev_eui,
-                label: device.dev_eui,
-              }))}
+              options={[
+                ...devices.map((device) => ({
+                  value: device.dev_eui,
+                  label: device.nickname ?? device.dev_eui,
+                })),
+                { value: ALL_DEVICES, label: 'Todos os devices' },
+              ]}
             />
             <Select
               label="Métrica"
@@ -139,15 +179,15 @@ export default function Dashboard() {
               </Alert>
             )}
 
-            {!historyLoading && !historyError && series.length === 0 && (
+            {!historyLoading && !historyError && !hasData && (
               <EmptyState
                 title="Sem telemetria"
                 description="Nenhuma leitura disponível para o device selecionado."
               />
             )}
 
-            {!historyLoading && !historyError && series.length > 0 && (
-              <TelemetryLineChart data={series} label={activeMetric} />
+            {!historyLoading && !historyError && hasData && (
+              <TelemetryLineChart series={chartSeries} />
             )}
           </Card>
         </div>

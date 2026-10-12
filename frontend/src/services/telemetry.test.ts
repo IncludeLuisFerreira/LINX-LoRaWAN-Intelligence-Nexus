@@ -4,6 +4,7 @@ import {
   telemetryService,
   numericMetrics,
   buildSeries,
+  mergeSeries,
   type TelemetryItem,
 } from './telemetry';
 
@@ -120,5 +121,26 @@ describe('buildSeries', () => {
     );
 
     expect(series).toHaveLength(1);
+  });
+});
+
+describe('mergeSeries', () => {
+  it('merges points by time with one key per series', () => {
+    const rows = mergeSeries([
+      { key: 'a', label: 'A', data: [{ time: 't1', value: 1 }] },
+      {
+        key: 'b',
+        label: 'B',
+        data: [
+          { time: 't1', value: 2 },
+          { time: 't2', value: 3 },
+        ],
+      },
+    ]);
+
+    expect(rows).toEqual([
+      { time: 't1', a: 1, b: 2 },
+      { time: 't2', b: 3 },
+    ]);
   });
 });
