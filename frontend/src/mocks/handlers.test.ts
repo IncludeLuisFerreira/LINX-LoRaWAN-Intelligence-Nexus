@@ -25,6 +25,20 @@ async function firstTenantId(): Promise<string> {
   return tenants[0].id;
 }
 
+async function firstAppId(): Promise<string> {
+  const tenantId = await firstTenantId();
+  const res = await fetch(`${base}/tenant/${tenantId}/applications`);
+  const apps = (await res.json()) as { id: string }[];
+  return apps[0].id;
+}
+
+const validDevice = (appId: string, devEui: string) => ({
+  dev_eui: devEui,
+  app_id: appId,
+  join_eui: '1122334455667788',
+  app_key: '00112233445566778899aabbccddeeff',
+});
+
 describe('tenant handlers', () => {
   it('serves GET /tenant and returns UUID ids', async () => {
     const res = await fetch(`${base}/tenant`);
@@ -94,5 +108,53 @@ describe('application handlers', () => {
     );
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('device handlers', () => {
+  it('creates a device and lowercases the euis', async () => {
+    const appId = await firstAppId();
+    const res = await post(
+      `${base}/devices`,
+      validDevice(appId, 'AABBCCDDEEFF0001'),
+    );
+    const body = (await res.json()) as { dev_eui: string; id: string };
+
+    expect(res.status).toBe(201);
+    expect(body.id).toMatch(UUID_RE);
+    expect(body.dev_eui).toBe('aabbccddeeff0001');
+  });
+
+  it('rejects an invalid DevEUI with 422', async () => {
+    const appId = await firstAppId();
+    const res = await post(
+      `${base}/devices`,
+      validDevice(appId, 'abc'),
+    );
+
+    expect(res.status).toBe(422);
+  });
+
+  it('returns 409 on a duplicate DevEUI', async () => {
+    const appId = await firstAppId();
+    const payload = validDevice(appId, 'aabbccddeeff0002');
+    await post(`${base}/devices`, payload);
+
+    const res = await post(`${base}/devices`, payload);
+
+    expect(res.status).toBe(409);
+  });
+
+  it('lists devices filtered by app_id', async () => {
+    const appId = await firstAppId();
+    await post(`${base}/devices`, validDevice(appId, 'aabbccddeeff0003'));
+
+    const res = await fetch(`${base}/devices?app_id=${appId}`);
+    const devices = (await res.json()) as { dev_eui: string }[];
+
+    expect(res.status).toBe(200);
+    expect(
+      devices.some((device) => device.dev_eui === 'aabbccddeeff0003'),
+    ).toBe(true);
   });
 });

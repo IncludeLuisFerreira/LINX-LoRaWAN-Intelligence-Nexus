@@ -982,6 +982,53 @@
           }
         }
       }
+    },
+    "/api/v1/device-profile/": {
+      "get": {
+        "tags": [
+          "device profile"
+        ],
+        "summary": "List Device Profiles",
+        "operationId": "list_device_profiles_api_v1_device_profile__get",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "App Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceProfileResponse"
+                  },
+                  "title": "Response List Device Profiles Api V1 Device Profile  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1099,6 +1146,11 @@
             "type": "string",
             "pattern": "^[0-9a-fA-F]{32}$",
             "title": "App Key"
+          },
+          "device_profile_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Device Profile Id"
           }
         },
         "type": "object",
@@ -1106,9 +1158,29 @@
           "dev_eui",
           "app_id",
           "join_eui",
-          "app_key"
+          "app_key",
+          "device_profile_id"
         ],
         "title": "DeviceCreate"
+      },
+      "DeviceProfileResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "id"
+        ],
+        "title": "DeviceProfileResponse"
       },
       "DeviceResponse": {
         "properties": {
@@ -1130,6 +1202,11 @@
             "type": "string",
             "title": "Join Eui"
           },
+          "device_profile_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Device Profile Id"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -1147,6 +1224,7 @@
           "dev_eui",
           "app_id",
           "join_eui",
+          "device_profile_id",
           "created_at",
           "updated_at"
         ],

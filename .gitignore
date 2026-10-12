@@ -256,6 +256,9 @@ redisdata/
 data/
 lorawan-devices/
 
+# Clone local do repositório de device profiles (usado por infra/Makefile)
+infra/chirpstack-device-profiles/
+
 # Certificados TLS gerados localmente (self-signed)
 deploy/certs/
 

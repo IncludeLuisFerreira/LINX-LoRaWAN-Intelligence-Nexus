@@ -3,8 +3,8 @@ from linx_shared.core.config import settings
 from linx_shared.db.base import get_db
 from sqlalchemy.exc import SQLAlchemyError
 
+from identity_api import dependencies as deps_module
 from identity_api.main import app
-from identity_api.routes import devices as devices_module
 
 client = TestClient(app)
 
@@ -63,7 +63,7 @@ def test_health_reports_real_database_as_up():
 
 
 def test_lifespan_closes_cached_chirpstack_client(monkeypatch):
-    devices_module._build_chirpstack_client.cache_clear()
+    deps_module._build_chirpstack_client.cache_clear()
     closed: list[bool] = []
     monkeypatch.setattr(
         settings, "service_token", "test-service-token-0123456789abcdef"
@@ -76,16 +76,14 @@ def test_lifespan_closes_cached_chirpstack_client(monkeypatch):
         def close(self) -> None:
             closed.append(True)
 
-    monkeypatch.setattr(devices_module, "ChirpStackClient", _FakeClient)
+    monkeypatch.setattr(deps_module, "ChirpStackClient", _FakeClient)
     try:
-        devices_module.get_chirpstack_client()
+        deps_module.get_chirpstack_client()
 
         with TestClient(app):
             pass
 
         assert closed == [True]
-        assert (
-            devices_module._build_chirpstack_client.cache_info().currsize == 0
-        )
+        assert deps_module._build_chirpstack_client.cache_info().currsize == 0
     finally:
-        devices_module._build_chirpstack_client.cache_clear()
+        deps_module._build_chirpstack_client.cache_clear()

@@ -12,6 +12,7 @@ class DeviceCreate(BaseModel):
     app_id: UUID
     join_eui: str = Field(pattern=_HEX16)
     app_key: str = Field(pattern=_HEX32)
+    device_profile_id: UUID
 
     @field_validator("dev_eui", "join_eui", "app_key")
     @classmethod
@@ -26,5 +27,6 @@ class DeviceResponse(BaseModel):
     dev_eui: str
     app_id: UUID
     join_eui: str
+    device_profile_id: UUID
     created_at: datetime
     updated_at: datetime

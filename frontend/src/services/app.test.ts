@@ -1,6 +1,21 @@
-import { describe, expect, it } from 'vitest';
-import { loadApplicationsByTenant } from './app';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { api } from './api';
+import { applicationService, loadApplicationsByTenant } from './app';
 import type { TenantOutput } from './tenant';
+
+vi.mock('./api', () => ({
+  api: {
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
+
+const mocked = api as unknown as Record<
+  'get' | 'post' | 'patch' | 'delete',
+  Mock
+>;
 
 const tenant = (id: string, name = id): TenantOutput => ({
   id,
@@ -8,6 +23,54 @@ const tenant = (id: string, name = id): TenantOutput => ({
   description: '',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+});
+
+describe('applicationService', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('creates an application under a tenant with POST', async () => {
+    mocked.post.mockResolvedValue({ data: { id: 'a1' } });
+
+    await applicationService.create('t1', { name: 'App' });
+
+    expect(mocked.post).toHaveBeenCalledWith('/tenant/t1/applications', {
+      name: 'App',
+    });
+  });
+
+  it('lists applications of a tenant with GET', async () => {
+    mocked.get.mockResolvedValue({ data: [] });
+
+    await applicationService.listByTenant('t1');
+
+    expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications');
+  });
+
+  it('gets a single application', async () => {
+    mocked.get.mockResolvedValue({ data: { id: 'a1' } });
+
+    await applicationService.get('t1', 'a1');
+
+    expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications/a1');
+  });
+
+  it('updates an application with PATCH', async () => {
+    mocked.patch.mockResolvedValue({ data: { id: 'a1' } });
+
+    await applicationService.update('t1', 'a1', { name: 'Novo' });
+
+    expect(mocked.patch).toHaveBeenCalledWith('/tenant/t1/applications/a1', {
+      name: 'Novo',
+    });
+  });
+
+  it('removes an application with DELETE', async () => {
+    mocked.delete.mockResolvedValue({ data: null });
+
+    await applicationService.remove('t1', 'a1');
+
+    expect(mocked.delete).toHaveBeenCalledWith('/tenant/t1/applications/a1');
+  });
 });
 
 describe('loadApplicationsByTenant', () => {

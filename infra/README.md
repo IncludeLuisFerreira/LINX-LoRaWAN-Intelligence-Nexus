@@ -73,8 +73,10 @@ repository (optional step), run the following command:
 make import-device-profiles
 ```
 
-This will clone the `chirpstack-device-profiles` repository and execute the import command of ChirpStack.
-Please note that for this step you need to have the `make` command installed.
+This imports the device-profiles repository located in the local
+`chirpstack-device-profiles` directory (override with `DEVICE_PROFILES_DIR=<path>`)
+by executing the ChirpStack import command. Please note that for this step you
+need to have the `make` command installed.
 
 ## Usage
 

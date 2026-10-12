@@ -14,6 +14,11 @@ export interface CreateApplicationInput {
   description?: string;
 }
 
+export interface UpdateApplicationInput {
+  name?: string;
+  description?: string;
+}
+
 export const applicationService = {
   create: async (
     tenantId: string,
@@ -31,6 +36,32 @@ export const applicationService = {
       `/tenant/${tenantId}/applications`,
     );
     return response.data;
+  },
+
+  get: async (
+    tenantId: string,
+    applicationId: string,
+  ): Promise<ApplicationOutput> => {
+    const response = await api.get<ApplicationOutput>(
+      `/tenant/${tenantId}/applications/${applicationId}`,
+    );
+    return response.data;
+  },
+
+  update: async (
+    tenantId: string,
+    applicationId: string,
+    data: UpdateApplicationInput,
+  ): Promise<ApplicationOutput> => {
+    const response = await api.patch<ApplicationOutput>(
+      `/tenant/${tenantId}/applications/${applicationId}`,
+      data,
+    );
+    return response.data;
+  },
+
+  remove: async (tenantId: string, applicationId: string): Promise<void> => {
+    await api.delete(`/tenant/${tenantId}/applications/${applicationId}`);
   },
 };
 

@@ -1,5 +1,4 @@
 import logging
-from functools import lru_cache
 from uuid import UUID
 
 from chirpstack_api import api
@@ -13,31 +12,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from identity_api.chirpstack_client import ChirpStackClient
-from identity_api.config import settings
+from identity_api.dependencies import get_chirpstack_client
 
 router = APIRouter(prefix="/api/v1", tags=["Device"])
 
 logger = logging.getLogger(__name__)
-
-
-@lru_cache
-def _build_chirpstack_client() -> ChirpStackClient:
-    return ChirpStackClient(
-        settings.chirpstack_host,
-        settings.chirpstack_api_token,
-        use_tls=settings.chirpstack_use_tls,
-        ca_cert=settings.chirpstack_ca_cert,
-    )
-
-
-def get_chirpstack_client() -> ChirpStackClient:
-    return _build_chirpstack_client()
-
-
-def close_chirpstack_client() -> None:
-    if _build_chirpstack_client.cache_info().currsize:
-        _build_chirpstack_client().close()
-        _build_chirpstack_client.cache_clear()
 
 
 def _delete_device_best_effort(
@@ -78,17 +57,30 @@ def create_device(
     db: Session = Depends(get_db),
     chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
 ):
-    if not settings.chirpstack_device_profile_id:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="ChirpStack device profile is not configured!",
-        )
-
     application = db.get(Application, payload.app_id)
     if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found!",
+        )
+
+    try:
+        profiles = chirpstack.list_device_profiles(str(application.tenant_id))
+    except ExternalServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "Failed to validate device profile in ChirpStack: "
+                f"{exc.message}"
+            ),
+        ) from exc
+
+    if str(payload.device_profile_id) not in {
+        profile.id for profile in profiles
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Device profile not found for this tenant!",
         )
 
     existing = (
@@ -104,7 +96,7 @@ def create_device(
         dev_eui=payload.dev_eui,
         name=f"device-{payload.dev_eui}",
         application_id=str(payload.app_id),
-        device_profile_id=settings.chirpstack_device_profile_id,
+        device_profile_id=str(payload.device_profile_id),
         join_eui=payload.join_eui,
     )
     created = False
@@ -125,6 +117,7 @@ def create_device(
         app_id=payload.app_id,
         join_eui=payload.join_eui,
         app_key=payload.app_key,
+        device_profile_id=payload.device_profile_id,
     )
     db.add(new_device)
     try:

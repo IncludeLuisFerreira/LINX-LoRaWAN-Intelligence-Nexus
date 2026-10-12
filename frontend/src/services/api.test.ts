@@ -40,6 +40,19 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage(new Error('boom'))).toBe('boom');
   });
 
+  it('joins FastAPI 422 detail array messages', () => {
+    const error = axiosErrorWithData({
+      detail: [
+        { msg: 'description must not be empty', loc: ['body', 'description'] },
+        { msg: 'name too short', loc: ['body', 'name'] },
+      ],
+    });
+
+    expect(getErrorMessage(error)).toBe(
+      'description must not be empty; name too short',
+    );
+  });
+
   it('returns the fallback for unknown values', () => {
     expect(getErrorMessage('nope')).toBe('Ocorreu um erro inesperado.');
 

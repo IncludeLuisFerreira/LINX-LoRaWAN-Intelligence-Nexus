@@ -5,9 +5,9 @@ import App from './App';
 import './index.css';
 
 async function prepareApp() {
-  // Permite ativar o MSW se estiver em DEV ou se a flag VITE_ENABLE_MOCKS for 'true'
-  const shouldEnableMocks =
-    import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCKS === 'true';
+  // MSW é opt-in: ligue com VITE_ENABLE_MOCKS=true para demos sem backend.
+  // Em dev, o proxy do Vite encaminha /api para o identity_api real.
+  const shouldEnableMocks = import.meta.env.VITE_ENABLE_MOCKS === 'true';
 
   if (shouldEnableMocks) {
     const { worker } = await import('./mocks/browser');
@@ -15,12 +15,16 @@ async function prepareApp() {
   }
 }
 
-prepareApp().then(() => {
-  ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </React.StrictMode>,
-  );
-});
+prepareApp()
+  .catch((error: unknown) => {
+    console.error('Falha ao inicializar os mocks:', error);
+  })
+  .finally(() => {
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </React.StrictMode>,
+    );
+  });

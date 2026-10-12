@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from dataclasses import dataclass
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from chirpstack_api import api
@@ -15,42 +15,17 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from identity_api.config import settings
+from identity_api import dependencies as deps_module
 from identity_api.main import app
-from identity_api.routes import devices as devices_module
 from identity_api.routes.devices import (
     create_device,
     get_chirpstack_client,
 )
+from tests.fakes import FakeChirpStackClient
 
 client = TestClient(app)
 
-
-class FakeChirpStackClient:
-    def __init__(self) -> None:
-        self.created: list[api.Device] = []
-        self.deleted: list[str] = []
-        self.created_keys: list[tuple[str, str]] = []
-        self.error: ExternalServiceError | None = None
-        self.create_error: ExternalServiceError | None = None
-        self.keys_error: ExternalServiceError | None = None
-
-    def create_device(self, device: api.Device) -> None:
-        if self.create_error is not None:
-            raise self.create_error
-        if self.error is not None:
-            raise self.error
-        self.created.append(device)
-
-    def create_device_keys(self, dev_eui: str, app_key: str) -> None:
-        if self.keys_error is not None:
-            raise self.keys_error
-        self.created_keys.append((dev_eui, app_key))
-
-    def delete_device(self, dev_eui: str) -> None:
-        if self.error is not None:
-            raise self.error
-        self.deleted.append(dev_eui)
+PROFILE_ID = "11111111-1111-1111-1111-111111111111"
 
 
 @dataclass
@@ -94,13 +69,36 @@ class DeviceContext:
     def keys_error(self, value: ExternalServiceError | None) -> None:
         self.chirpstack.keys_error = value
 
-    def count_devices(self) -> int:
+    @property
+    def profile_calls(self) -> list[str]:
+        return self.chirpstack.profile_calls
+
+    @property
+    def profiles(self) -> list[api.DeviceProfileListItem]:
+        return self.chirpstack.profiles
+
+    @profiles.setter
+    def profiles(self, value: list[api.DeviceProfileListItem]) -> None:
+        self.chirpstack.profiles = value
+
+    @property
+    def profile_error(self) -> ExternalServiceError | None:
+        return self.chirpstack.profile_error
+
+    @profile_error.setter
+    def profile_error(self, value: ExternalServiceError | None) -> None:
+        self.chirpstack.profile_error = value
+
+    def count_devices(self, app_id: UUID | None = None) -> int:
         session = Session(
             bind=self.connection,
             join_transaction_mode="create_savepoint",
         )
         try:
-            return session.query(Device).count()
+            query = session.query(Device)
+            if app_id is not None:
+                query = query.filter(Device.app_id == app_id)
+            return query.count()
         finally:
             session.close()
 
@@ -108,11 +106,6 @@ class DeviceContext:
 @pytest.fixture(autouse=True)
 def chirpstack(monkeypatch) -> Generator[DeviceContext, None, None]:
     """Isola o banco em uma transação revertida e mocka o ChirpStack."""
-    monkeypatch.setattr(
-        settings,
-        "chirpstack_device_profile_id",
-        "11111111-1111-1111-1111-111111111111",
-    )
     connection = engine.connect()
     transaction = connection.begin()
 
@@ -127,6 +120,7 @@ def chirpstack(monkeypatch) -> Generator[DeviceContext, None, None]:
             session.close()
 
     fake = FakeChirpStackClient()
+    fake.profiles = [api.DeviceProfileListItem(id=PROFILE_ID, name="perfil")]
 
     def override_chirpstack() -> FakeChirpStackClient:
         return fake
@@ -163,6 +157,7 @@ def _payload(app_id: str, dev_eui: str = "1122334455667788") -> dict:
         "app_id": app_id,
         "join_eui": "0011223344556677",
         "app_key": "00112233445566778899aabbccddeeff",
+        "device_profile_id": PROFILE_ID,
     }
 
 
@@ -177,6 +172,7 @@ def test_create_device_returns_201_with_full_body(chirpstack):
     assert data["dev_eui"] == "1122334455667788"
     assert data["app_id"] == app_id
     assert data["join_eui"] == "0011223344556677"
+    assert data["device_profile_id"] == PROFILE_ID
     assert data["id"] is not None
     assert data["created_at"] is not None
     assert data["updated_at"] is not None
@@ -194,7 +190,9 @@ def test_create_device_provisions_in_chirpstack(chirpstack):
     assert device.dev_eui == "1122334455667788"
     assert device.application_id == app_id
     assert device.join_eui == "0011223344556677"
+    assert device.device_profile_id == PROFILE_ID
     assert device.name == "device-1122334455667788"
+    assert chirpstack.profile_calls == [tenant_id]
 
 
 def test_create_device_normalizes_hex_to_lowercase(chirpstack):
@@ -262,7 +260,7 @@ def test_create_device_chirpstack_failure_returns_502_and_does_not_save(
     assert response.json() == {
         "detail": "Failed to provision device in ChirpStack: boom"
     }
-    assert chirpstack.count_devices() == 0
+    assert chirpstack.count_devices(UUID(app_id)) == 0
 
 
 def test_create_device_create_failure_does_not_delete(chirpstack):
@@ -279,13 +277,14 @@ def test_create_device_create_failure_does_not_delete(chirpstack):
         "detail": "Failed to provision device in ChirpStack: boom"
     }
     assert chirpstack.deleted == []
-    assert chirpstack.count_devices() == 0
+    assert chirpstack.count_devices(UUID(app_id)) == 0
 
 
 def test_create_device_commit_integrity_error_returns_409_without_delete():
     fake = FakeChirpStackClient()
+    fake.profiles = [api.DeviceProfileListItem(id=PROFILE_ID, name="perfil")]
     app_id = uuid4()
-    application = SimpleNamespace(id=app_id)
+    application = SimpleNamespace(id=app_id, tenant_id=uuid4())
 
     class _StubQuery:
         def filter(self, *args, **kwargs):
@@ -319,6 +318,7 @@ def test_create_device_commit_integrity_error_returns_409_without_delete():
         app_id=app_id,
         join_eui="0011223344556677",
         app_key="00112233445566778899aabbccddeeff",
+        device_profile_id=UUID(PROFILE_ID),
     )
 
     with pytest.raises(HTTPException) as exc_info:
@@ -331,7 +331,7 @@ def test_create_device_commit_integrity_error_returns_409_without_delete():
 
 
 def test_get_chirpstack_client_returns_singleton(monkeypatch):
-    devices_module._build_chirpstack_client.cache_clear()
+    deps_module._build_chirpstack_client.cache_clear()
     constructed: list[tuple] = []
 
     class _FakeClient:
@@ -341,15 +341,15 @@ def test_get_chirpstack_client_returns_singleton(monkeypatch):
         def close(self) -> None:
             return None
 
-    monkeypatch.setattr(devices_module, "ChirpStackClient", _FakeClient)
+    monkeypatch.setattr(deps_module, "ChirpStackClient", _FakeClient)
     try:
-        first = devices_module.get_chirpstack_client()
-        second = devices_module.get_chirpstack_client()
+        first = deps_module.get_chirpstack_client()
+        second = deps_module.get_chirpstack_client()
 
         assert first is second
         assert len(constructed) == 1
     finally:
-        devices_module._build_chirpstack_client.cache_clear()
+        deps_module._build_chirpstack_client.cache_clear()
 
 
 def test_create_device_provisions_keys_in_chirpstack(chirpstack):
@@ -377,24 +377,39 @@ def test_create_device_keys_failure_compensates_and_returns_502(chirpstack):
         "detail": "Failed to provision device in ChirpStack: boom"
     }
     assert chirpstack.deleted == ["1122334455667788"]
-    assert chirpstack.count_devices() == 0
+    assert chirpstack.count_devices(UUID(app_id)) == 0
 
 
-def test_create_device_missing_device_profile_returns_500(
-    chirpstack, monkeypatch
-):
+def test_create_device_unknown_device_profile_returns_400(chirpstack):
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)
-    monkeypatch.setattr(settings, "chirpstack_device_profile_id", "")
+    chirpstack.profiles = []
 
     response = client.post("/api/v1/devices", json=_payload(app_id))
 
-    assert response.status_code == 500
+    assert response.status_code == 400
     assert response.json() == {
-        "detail": "ChirpStack device profile is not configured!"
+        "detail": "Device profile not found for this tenant!"
     }
     assert chirpstack.created == []
-    assert chirpstack.count_devices() == 0
+    assert chirpstack.count_devices(UUID(app_id)) == 0
+
+
+def test_create_device_profile_lookup_failure_returns_502(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    chirpstack.profile_error = ExternalServiceError(
+        "chirpstack", "list_device_profiles", "boom"
+    )
+
+    response = client.post("/api/v1/devices", json=_payload(app_id))
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to validate device profile in ChirpStack: boom"
+    }
+    assert chirpstack.created == []
+    assert chirpstack.count_devices(UUID(app_id)) == 0
 
 
 def test_list_devices_returns_only_devices_of_app(chirpstack):
@@ -474,5 +489,5 @@ def test_delete_device_removes_local_even_when_chirpstack_fails(chirpstack):
     response = client.delete(f"/api/v1/devices/{created['id']}")
 
     assert response.status_code == 204
-    assert chirpstack.count_devices() == 0
+    assert chirpstack.count_devices(UUID(app_id)) == 0
     assert chirpstack.deleted == []

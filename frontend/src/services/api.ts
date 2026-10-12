@@ -1,35 +1,8 @@
 import axios from 'axios';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1',
+  baseURL: import.meta.env.VITE_API_URL ?? '/api/v1',
 });
-
-// Interceptor de Requisição: Injeta o token Bearer no Header se existir no localStorage
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Interceptor de Resposta: Trata o erro 401 (Não Autorizado)
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Limpa dados de sessão expirados
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('user');
-
-      // Redireciona para o login caso não esteja na tela de login
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error);
-  },
-);
 
 export function getErrorMessage(
   error: unknown,
@@ -40,6 +13,16 @@ export function getErrorMessage(
       | { detail?: unknown; message?: unknown }
       | undefined;
     if (typeof data?.detail === 'string' && data.detail) return data.detail;
+    if (Array.isArray(data?.detail)) {
+      const messages = data.detail
+        .map((item) =>
+          item && typeof item === 'object' && 'msg' in item
+            ? String((item as { msg: unknown }).msg)
+            : '',
+        )
+        .filter(Boolean);
+      if (messages.length > 0) return messages.join('; ');
+    }
     if (typeof data?.message === 'string' && data.message) return data.message;
     return error.message || fallbackMessage;
   }
