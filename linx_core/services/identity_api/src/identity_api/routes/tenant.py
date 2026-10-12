@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import (
@@ -8,6 +9,7 @@ from fastapi import (
     Response,
     status,
 )
+from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.db.base import get_db
 from linx_shared.models.tenant import Tenant
 from linx_shared.schemas.tenant import (
@@ -15,9 +17,26 @@ from linx_shared.schemas.tenant import (
     TenantResponse,
     TenantUpdate,
 )
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from identity_api.chirpstack_client import ChirpStackClient
+from identity_api.dependencies import get_chirpstack_client
+
 router = APIRouter(prefix="/api/v1/tenant", tags=["Tenant"])
+
+logger = logging.getLogger(__name__)
+
+
+def _delete_tenant_best_effort(
+    chirpstack: ChirpStackClient, tenant_id: str
+) -> None:
+    try:
+        chirpstack.delete_tenant(tenant_id)
+    except ExternalServiceError:
+        logger.warning(
+            "Failed to delete tenant %s in ChirpStack; continuing", tenant_id
+        )
 
 
 # --- Dependência Reutilizável ---
@@ -41,13 +60,36 @@ def create_tenant(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
+    chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
 ):
-    new_tenant = Tenant(name=payload.name, description=payload.description)
+    try:
+        chirpstack_tenant_id = chirpstack.create_tenant(
+            payload.name, payload.description
+        )
+    except ExternalServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to create tenant in ChirpStack: {exc.message}",
+        ) from exc
+
+    new_tenant = Tenant(
+        id=UUID(chirpstack_tenant_id),
+        name=payload.name,
+        description=payload.description,
+    )
 
     # Dica: Se o nome precisar ser único, envolva db.commit()
     # em um try/except capturando sqlalchemy.exc.IntegrityError
     db.add(new_tenant)
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        _delete_tenant_best_effort(chirpstack, chirpstack_tenant_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to persist tenant!",
+        ) from None
     db.refresh(new_tenant)
 
     # Gera a URL de forma dinâmica e independente do prefixo
@@ -87,8 +129,20 @@ def update_tenant(
     payload: TenantUpdate,
     tenant: Tenant = Depends(get_tenant_or_404),
     db: Session = Depends(get_db),
+    chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
 ):
     update_data = payload.model_dump(exclude_unset=True)
+
+    name = update_data.get("name", tenant.name)
+    description = update_data.get("description", tenant.description)
+
+    try:
+        chirpstack.update_tenant(str(tenant.id), name, description)
+    except ExternalServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to update tenant in ChirpStack: {exc.message}",
+        ) from exc
 
     for key, value in update_data.items():
         setattr(tenant, key, value)
@@ -100,8 +154,18 @@ def update_tenant(
 
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tenant(
-    tenant: Tenant = Depends(get_tenant_or_404), db: Session = Depends(get_db)
+    tenant: Tenant = Depends(get_tenant_or_404),
+    db: Session = Depends(get_db),
+    chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
 ):
+    try:
+        chirpstack.delete_tenant(str(tenant.id))
+    except ExternalServiceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to delete tenant in ChirpStack: {exc.message}",
+        ) from exc
+
     db.delete(tenant)
     db.commit()
     return None

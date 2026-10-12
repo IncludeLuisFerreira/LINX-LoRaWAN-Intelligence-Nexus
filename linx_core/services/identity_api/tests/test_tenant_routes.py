@@ -4,23 +4,25 @@ from time import sleep
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
+from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.db.base import engine, get_db
+from linx_shared.schemas.tenant import TenantCreate
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from identity_api.dependencies import get_chirpstack_client
 from identity_api.main import app
+from identity_api.routes.tenant import create_tenant
+from tests.fakes import FakeChirpStackClient
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def _rollback_db_transactions() -> Generator[None, None, None]:
-    """Isola cada teste em uma transação revertida ao final.
-
-    As requisições passam a usar uma sessão ligada a uma transação externa
-    (via savepoint). Ao fim do teste a transação é revertida, então nenhum
-    registro é persistido no banco real.
-    """
+def chirpstack() -> Generator[FakeChirpStackClient, None, None]:
+    """Isola cada teste em uma transação revertida e mocka o ChirpStack."""
     connection = engine.connect()
     transaction = connection.begin()
 
@@ -34,9 +36,16 @@ def _rollback_db_transactions() -> Generator[None, None, None]:
         finally:
             session.close()
 
+    fake = FakeChirpStackClient()
+
+    def override_chirpstack() -> FakeChirpStackClient:
+        return fake
+
     app.dependency_overrides[get_db] = override_get_db
-    yield
+    app.dependency_overrides[get_chirpstack_client] = override_chirpstack
+    yield fake
     app.dependency_overrides.pop(get_db, None)
+    app.dependency_overrides.pop(get_chirpstack_client, None)
     transaction.rollback()
     connection.close()
 
@@ -211,3 +220,110 @@ def test_delete_non_existent_tenant_return_404():
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Tenant not found!"}
+
+
+def test_create_tenant_provisions_in_chirpstack_and_uses_returned_id(
+    chirpstack,
+):
+    response = client.post(
+        "/api/v1/tenant/",
+        json={"name": "Tenant Provisionado", "description": "desc"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert len(chirpstack.tenants) == 1
+    created = chirpstack.tenants[0]
+    assert created["name"] == "Tenant Provisionado"
+    assert created["description"] == "desc"
+    assert data["id"] == created["id"]
+
+
+def test_update_tenant_propagates_to_chirpstack(chirpstack):
+    created = client.post("/api/v1/tenant/", json={"name": "Tenant"}).json()
+
+    response = client.patch(
+        f"/api/v1/tenant/{created['id']}", json={"name": "Tenant Novo"}
+    )
+
+    assert response.status_code == 200
+    assert chirpstack.updated_tenants == [(created["id"], "Tenant Novo", "")]
+
+
+def test_delete_tenant_propagates_to_chirpstack(chirpstack):
+    created = client.post("/api/v1/tenant/", json={"name": "Tenant"}).json()
+
+    response = client.delete(f"/api/v1/tenant/{created['id']}")
+
+    assert response.status_code == 204
+    assert chirpstack.deleted_tenants == [created["id"]]
+
+
+def test_create_tenant_chirpstack_failure_returns_502(chirpstack):
+    chirpstack.tenant_error = ExternalServiceError(
+        "chirpstack", "create_tenant", "boom"
+    )
+
+    response = client.post("/api/v1/tenant/", json={"name": "Tenant"})
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to create tenant in ChirpStack: boom"
+    }
+
+
+def test_update_tenant_chirpstack_failure_returns_502(chirpstack):
+    created = client.post("/api/v1/tenant/", json={"name": "Tenant"}).json()
+    chirpstack.tenant_error = ExternalServiceError(
+        "chirpstack", "update_tenant", "boom"
+    )
+
+    response = client.patch(
+        f"/api/v1/tenant/{created['id']}", json={"name": "Tenant Novo"}
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to update tenant in ChirpStack: boom"
+    }
+
+
+def test_delete_tenant_chirpstack_failure_returns_502(chirpstack):
+    created = client.post("/api/v1/tenant/", json={"name": "Tenant"}).json()
+    chirpstack.tenant_error = ExternalServiceError(
+        "chirpstack", "delete_tenant", "boom"
+    )
+
+    response = client.delete(f"/api/v1/tenant/{created['id']}")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to delete tenant in ChirpStack: boom"
+    }
+    assert client.get(f"/api/v1/tenant/{created['id']}").status_code == 200
+
+
+def test_create_tenant_persist_failure_compensates_in_chirpstack(chirpstack):
+    class _StubDb:
+        def add(self, obj) -> None:
+            return None
+
+        def commit(self) -> None:
+            raise SQLAlchemyError("boom")
+
+        def rollback(self) -> None:
+            return None
+
+    payload = TenantCreate(name="Tenant", description="")
+
+    with pytest.raises(HTTPException) as exc_info:
+        create_tenant(
+            payload=payload,
+            request=None,
+            response=Response(),
+            db=_StubDb(),
+            chirpstack=chirpstack,
+        )
+
+    assert exc_info.value.status_code == 500
+    assert chirpstack.deleted_tenants == [chirpstack.tenants[0]["id"]]
