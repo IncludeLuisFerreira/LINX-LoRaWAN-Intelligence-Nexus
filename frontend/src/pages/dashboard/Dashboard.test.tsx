@@ -214,6 +214,30 @@ describe('Dashboard', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('shows a retryable error when every device history fails in Todos mode', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff0d0d');
+    await createDevice(appId, 'aabbccddeeff0e0e');
+
+    server.use(
+      http.get('*/api/v1/telemetry', () =>
+        HttpResponse.json({ detail: 'telemetry down' }, { status: 500 }),
+      ),
+    );
+
+    renderDashboard(appId);
+    await screen.findByLabelText('Device');
+    await userEvent.selectOptions(
+      screen.getByLabelText('Device'),
+      'Todos os devices',
+    );
+
+    expect(await screen.findByText('telemetry down')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /tentar novamente/i }),
+    ).toBeInTheDocument();
+  });
+
   it('shows an empty state when the application has no devices', async () => {
     const tenants = (await (await fetch(`${base}/tenant`)).json()) as {
       id: string;
