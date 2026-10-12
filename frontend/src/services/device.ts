@@ -6,6 +6,7 @@ export interface DeviceOutput {
   app_id: string;
   join_eui: string;
   device_profile_id: string;
+  nickname: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -16,6 +17,7 @@ export interface CreateDeviceInput {
   join_eui: string;
   app_key: string;
   device_profile_id: string;
+  nickname?: string | null;
 }
 
 export const deviceService = {
@@ -28,6 +30,14 @@ export const deviceService = {
 
   create: async (payload: CreateDeviceInput): Promise<DeviceOutput> => {
     const response = await api.post<DeviceOutput>('/devices', payload);
+    return response.data;
+  },
+
+  update: async (
+    id: string,
+    data: { nickname: string | null },
+  ): Promise<DeviceOutput> => {
+    const response = await api.patch<DeviceOutput>(`/devices/${id}`, data);
     return response.data;
   },
 

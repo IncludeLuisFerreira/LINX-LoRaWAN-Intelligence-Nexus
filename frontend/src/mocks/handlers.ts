@@ -55,6 +55,7 @@ interface MockDevice {
   app_id: string;
   join_eui: string;
   device_profile_id: string;
+  nickname: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -273,6 +274,7 @@ export const handlers = [
       join_eui: string;
       app_key: string;
       device_profile_id: string;
+      nickname?: string | null;
     };
 
     if (
@@ -296,6 +298,7 @@ export const handlers = [
       app_id: body.app_id,
       join_eui: body.join_eui.toLowerCase(),
       device_profile_id: body.device_profile_id,
+      nickname: body.nickname?.trim() ? body.nickname.trim() : null,
       created_at: now(),
       updated_at: now(),
     };
@@ -315,6 +318,26 @@ export const handlers = [
     }
     mockDevices.splice(index, 1);
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.patch('*/api/v1/devices/:device_id', async ({ params, request }) => {
+    const index = mockDevices.findIndex(
+      (device) => device.id === String(params.device_id),
+    );
+    if (index === -1) {
+      return HttpResponse.json(
+        { detail: 'Device not found!' },
+        { status: 404 },
+      );
+    }
+    const body = (await request.json()) as { nickname?: string | null };
+    if ('nickname' in body) {
+      mockDevices[index].nickname = body.nickname?.trim()
+        ? body.nickname.trim()
+        : null;
+    }
+    mockDevices[index].updated_at = now();
+    return HttpResponse.json(mockDevices[index]);
   }),
 
   // --- TELEMETRY ---
