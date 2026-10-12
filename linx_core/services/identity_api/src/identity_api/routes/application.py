@@ -60,7 +60,9 @@ def create_application(
     except ExternalServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to create application in ChirpStack: {exc.message}",
+            detail=(
+                "Failed to create application in ChirpStack: " f"{exc.message}"
+            ),
         ) from exc
 
     try:
@@ -68,7 +70,10 @@ def create_application(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"ChirpStack returned invalid application ID: {chirpstack_application_id}",
+            detail=(
+                "ChirpStack returned invalid application ID: "
+                f"{chirpstack_application_id}"
+            ),
         )
 
     new_application = Application(
@@ -212,7 +217,9 @@ def delete_application(
     except ExternalServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to delete application in ChirpStack: {exc.message}",
+            detail=(
+                "Failed to delete application in ChirpStack: " f"{exc.message}"
+            ),
         ) from exc
 
     db.delete(application)

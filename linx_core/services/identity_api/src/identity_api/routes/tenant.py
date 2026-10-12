@@ -77,7 +77,10 @@ def create_tenant(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"ChirpStack returned invalid tenant ID: {chirpstack_tenant_id}",
+            detail=(
+                "ChirpStack returned invalid tenant ID: "
+                f"{chirpstack_tenant_id}"
+            ),
         )
 
     new_tenant = Tenant(
