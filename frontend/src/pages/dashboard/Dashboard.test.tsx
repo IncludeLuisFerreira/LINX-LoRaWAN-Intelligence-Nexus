@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { handlers } from '../../mocks/handlers';
+import { formatDate } from '../../utils/format';
 import Dashboard from './Dashboard';
 
 const server = setupServer(...handlers);
@@ -255,5 +256,37 @@ describe('Dashboard', () => {
     expect(
       await screen.findByText('Nenhum device nesta aplicação'),
     ).toBeInTheDocument();
+  });
+
+  it('shows the latest reading time, not the first item', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff1f1f');
+    const reading = (time: string, temperature: number) => ({
+      time,
+      dev_eui: 'aabbccddeeff1f1f',
+      payload: { temperature },
+      rssi: -70,
+      snr: 7,
+      app_id: 'mock-app',
+      event_type: 'up',
+    });
+
+    server.use(
+      http.get('*/api/v1/telemetry', () =>
+        HttpResponse.json({
+          items: [
+            reading('2026-01-01T00:00:00Z', 18),
+            reading('2026-01-03T00:00:00Z', 21),
+            reading('2026-01-02T00:00:00Z', 19),
+          ],
+          next_cursor: null,
+        }),
+      ),
+    );
+
+    renderDashboard(appId);
+
+    const expected = `Última leitura: ${formatDate('2026-01-03T00:00:00Z')}`;
+    expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 });

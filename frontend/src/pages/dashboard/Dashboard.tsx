@@ -22,18 +22,28 @@ import { TelemetryLineChart } from '../../components/charts/TelemetryLineChart';
 const ALL_DEVICES = '__all__';
 const EMPTY_HISTORY: TelemetryHistory = { items: [], next_cursor: null };
 
+interface DeviceHistory {
+  devEui: string;
+  history: TelemetryHistory;
+}
+
 async function loadHistories(
   devices: DeviceOutput[],
-): Promise<TelemetryHistory[]> {
+): Promise<DeviceHistory[]> {
   const results = await Promise.allSettled(
     devices.map((device) => telemetryService.history(device.dev_eui)),
   );
   if (results.length > 0 && results.every((result) => result.status === 'rejected')) {
     throw (results[0] as PromiseRejectedResult).reason;
   }
-  return results.map((result) =>
-    result.status === 'fulfilled' ? result.value : EMPTY_HISTORY,
-  );
+  return devices.map((device, index) => {
+    const result = results[index];
+    return {
+      devEui: device.dev_eui,
+      history:
+        result.status === 'fulfilled' ? result.value : EMPTY_HISTORY,
+    };
+  });
 }
 
 export default function Dashboard() {
@@ -68,30 +78,43 @@ export default function Dashboard() {
     () => {
       if (activeDevEui === ALL_DEVICES) return loadHistories(devices);
       if (activeDevEui)
-        return telemetryService.history(activeDevEui).then((result) => [result]);
-      return Promise.resolve([] as TelemetryHistory[]);
+        return telemetryService
+          .history(activeDevEui)
+          .then((result) => [{ devEui: activeDevEui, history: result }]);
+      return Promise.resolve([] as DeviceHistory[]);
     },
     [appId, activeDevEui, devices.length],
   );
 
-  const histories = history ?? [];
-  const items = histories.flatMap((entry) => entry.items);
+  const entries = history ?? [];
+  const items = entries.flatMap((entry) => entry.history.items);
   const metrics = numericMetrics(items);
   const activeMetric = metrics.includes(metric) ? metric : (metrics[0] ?? '');
 
+  const labelFor = (devEui: string) =>
+    devices.find((device) => device.dev_eui === devEui)?.nickname ?? devEui;
+
+  let lastReadingTime: string | null = null;
+  let latestMs = Number.NEGATIVE_INFINITY;
+  for (const item of items) {
+    const ms = Date.parse(item.time);
+    if (!Number.isNaN(ms) && ms > latestMs) {
+      latestMs = ms;
+      lastReadingTime = item.time;
+    }
+  }
+
   const chartSeries: SeriesInput[] =
     activeDevEui === ALL_DEVICES
-      ? devices.map((device, index) => ({
-          key: device.dev_eui,
-          label: device.nickname ?? device.dev_eui,
-          data: buildSeries(histories[index]?.items ?? [], activeMetric),
+      ? entries.map((entry) => ({
+          key: entry.devEui,
+          label: labelFor(entry.devEui),
+          data: buildSeries(entry.history.items, activeMetric),
         }))
       : [
           {
             key: activeDevEui,
-            label:
-              devices.find((device) => device.dev_eui === activeDevEui)
-                ?.nickname ?? activeDevEui,
+            label: labelFor(activeDevEui),
             data: buildSeries(items, activeMetric),
           },
         ];
@@ -160,9 +183,9 @@ export default function Dashboard() {
           <Card
             title={`Telemetria — ${activeMetric || 'sem métricas'}`}
             action={
-              items.length > 0 ? (
+              lastReadingTime ? (
                 <span className="text-xs text-muted">
-                  Última leitura: {formatDate(items[0].time)}
+                  Última leitura: {formatDate(lastReadingTime)}
                 </span>
               ) : undefined
             }

@@ -588,3 +588,16 @@ def test_update_device_nickname_too_long_returns_422(chirpstack):
     )
 
     assert response.status_code == 422
+
+
+def test_update_device_nickname_strips_before_length_check(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+    created = client.post("/api/v1/devices", json=_payload(app_id)).json()
+
+    response = client.patch(
+        f"/api/v1/devices/{created['id']}", json={"nickname": "  " + "a" * 50}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nickname"] == "a" * 50
