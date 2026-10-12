@@ -12,6 +12,10 @@ const DeviceListPage = lazy(() => import('./pages/devices/DeviceListPage'));
 const OnboardingWizard = lazy(
   () => import('./pages/onboarding/OnboardingWizard'),
 );
+const DashboardSelectPage = lazy(
+  () => import('./pages/dashboard/DashboardSelectPage'),
+);
+const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 export function AppRoutes() {
@@ -34,6 +38,8 @@ export function AppRoutes() {
             element={<ApplicationDetailPage />}
           />
           <Route path="/devices" element={<DeviceListPage />} />
+          <Route path="/dashboard" element={<DashboardSelectPage />} />
+          <Route path="/dashboard/:appId" element={<Dashboard />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="*" element={<NotFound />} />
         </Route>

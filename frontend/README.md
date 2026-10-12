@@ -12,6 +12,8 @@ Não há autenticação nesta versão — o acesso é direto.
   tema claro (fundo `slate-50`, superfícies brancas, acento azul).
 - **[React Router](https://reactrouter.com/)** — roteamento SPA com `lazy`.
 - **[Axios](https://axios-http.com/)** — cliente HTTP com `baseURL` `/api/v1`.
+- **[Recharts](https://recharts.org/)** — gráfico de linha do dashboard de
+  telemetria.
 - **[React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)** —
   formulários em modais com validação tipada.
 - **[Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/)**
@@ -30,8 +32,13 @@ Drill-down hierárquico com breadcrumbs:
 /tenants/:tenantId                           → workspace (Applications | Configurações)
 /tenants/:tenantId/applications/:appId       → workspace (Devices | Configurações)
 /devices                                     → lista global de devices
+/dashboard                                   → menu de aplicações para escolher o dashboard
+/dashboard/:appId                            → dashboard de telemetria (gráfico de linha)
 /onboarding                                  → wizard de cadastro de device (3 passos; aceita `?app=<id>` para pré-selecionar a aplicação)
 ```
+
+O dashboard é acessível pelo item **Dashboard** da sidebar (que abre o menu
+de aplicações) ou pelo botão **Ver dashboard** na página da aplicação.
 
 ## Estrutura
 
@@ -42,6 +49,7 @@ frontend/
 ├── src/
 │   ├── components/
 │   │   ├── QrScanner.tsx    # leitura de QR Code TR005 (câmera + manual)
+│   │   ├── charts/          # TelemetryLineChart (Recharts)
 │   │   ├── layout/          # AppShell, Sidebar, Topbar, PageHeader
 │   │   └── ui/              # design system (Button, Card, Table, Modal, ...)
 │   │       └── icons/       # ícones SVG inline
@@ -52,6 +60,7 @@ frontend/
 │   │   ├── tenants/         # TenantListPage, TenantDetailPage, TenantFormModal
 │   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal
 │   │   ├── devices/         # DeviceListPage
+│   │   ├── dashboard/       # DashboardSelectPage, Dashboard (telemetria)
 │   │   ├── onboarding/      # OnboardingWizard (scan → confirm → select app)
 │   │   └── NotFound.tsx
 │   ├── services/            # api, tenant, app, device
@@ -72,8 +81,21 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 | Tenant | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}` |
 | Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}` |
 | Device | `GET /devices?app_id=`, `POST /devices`, `DELETE /devices/{id}` |
+| Telemetry | `GET /telemetry?dev_eui=&limit=&before=` |
 
 > Device não possui edição (o backend não expõe `PATCH`).
+
+## Dashboard de Telemetria
+
+A rota `/dashboard/:appId` busca o histórico via
+`GET /telemetry?dev_eui=<dev_eui>&limit=100`, que responde
+`{ items, next_cursor }`, onde cada item é
+`{ time, dev_eui, payload, rssi, snr, app_id, event_type }`. O gráfico plota
+uma métrica numérica do `payload` (o usuário escolhe entre as chaves numéricas
+disponíveis) em função do tempo, com `recharts`.
+
+O componente se recarrega ao trocar de device ou de aplicação. Em
+desenvolvimento sem backend, o MSW serve uma série sintética (`VITE_ENABLE_MOCKS=true`).
 
 ## Leitura de QR Code (TR005)
 

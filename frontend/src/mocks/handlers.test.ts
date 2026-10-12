@@ -158,3 +158,25 @@ describe('device handlers', () => {
     ).toBe(true);
   });
 });
+
+describe('telemetry handlers', () => {
+  it('returns a paginated history envelope for a dev_eui', async () => {
+    const res = await fetch(`${base}/telemetry?dev_eui=aabbccddeeff0004&limit=5`);
+    const body = (await res.json()) as {
+      items: { time: string; dev_eui: string; payload: Record<string, unknown> }[];
+      next_cursor: string | null;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.items).toHaveLength(5);
+    expect(body.items[0].dev_eui).toBe('aabbccddeeff0004');
+    expect(typeof body.items[0].payload.temperature).toBe('number');
+    expect(body.next_cursor).toContain('aabbccddeeff0004');
+  });
+
+  it('rejects a missing dev_eui with 422', async () => {
+    const res = await fetch(`${base}/telemetry`);
+
+    expect(res.status).toBe(422);
+  });
+});

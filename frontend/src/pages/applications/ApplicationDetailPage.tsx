@@ -18,7 +18,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import { Edit, Plus, Trash } from '../../components/ui/icons';
+import { Edit, Layers, Plus, Trash } from '../../components/ui/icons';
 import {
   ApplicationFormModal,
   type ApplicationFormData,
@@ -177,10 +177,23 @@ export default function ApplicationDetailPage() {
           />
         }
         actions={
-          <Button variant="secondary" onClick={() => setEditingApp(true)}>
-            <Edit className="h-4 w-4" />
-            Editar
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                navigate(`/dashboard/${appId}`, {
+                  state: { appName: app.name },
+                })
+              }
+            >
+              <Layers className="h-4 w-4" />
+              Ver dashboard
+            </Button>
+            <Button variant="secondary" onClick={() => setEditingApp(true)}>
+              <Edit className="h-4 w-4" />
+              Editar
+            </Button>
+          </>
         }
       />
 

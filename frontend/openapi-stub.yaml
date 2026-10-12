@@ -208,6 +208,45 @@ paths:
         '404':
           description: Aplicação ou tenant não encontrado
 
+  /telemetry:
+    get:
+      summary: Histórico de telemetria
+      operationId: getTelemetry
+      description: >
+        Retorna o histórico de telemetria da aplicação, filtrado opcionalmente
+        por `dev_eui`, com paginação cursor-based via `before`.
+      parameters:
+        - name: dev_eui
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: before
+          in: query
+          required: false
+          description: Cursor opaco (`{time}|{dev_eui}|{event_type}`) para paginação.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Página de telemetria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryHistory'
+        '422':
+          description: Parâmetros inválidos
+        '503':
+          description: Banco de dados indisponível
+
 components:
   securitySchemes:
     BearerAuth:
@@ -332,3 +371,45 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    TelemetryItem:
+      type: object
+      required:
+        - time
+        - dev_eui
+        - payload
+        - event_type
+      properties:
+        time:
+          type: string
+          format: date-time
+        dev_eui:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        rssi:
+          type: integer
+          nullable: true
+        snr:
+          type: number
+          format: float
+          nullable: true
+        app_id:
+          type: string
+          nullable: true
+        event_type:
+          type: string
+
+    TelemetryHistory:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TelemetryItem'
+        next_cursor:
+          type: string
+          nullable: true

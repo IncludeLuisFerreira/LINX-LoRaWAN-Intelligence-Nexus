@@ -316,4 +316,36 @@ export const handlers = [
     mockDevices.splice(index, 1);
     return new HttpResponse(null, { status: 204 });
   }),
+
+  // --- TELEMETRY ---
+  http.get('*/api/v1/telemetry', ({ request }) => {
+    const params = new URL(request.url).searchParams;
+    const devEui = params.get('dev_eui');
+    if (!devEui) return validationError('dev_eui is required');
+
+    const requested = Number(params.get('limit') ?? '100');
+    const limit = Number.isFinite(requested)
+      ? Math.min(Math.max(1, requested), 200)
+      : 100;
+    const base = Date.now();
+
+    const items = Array.from({ length: limit }, (_, index) => ({
+      time: new Date(base - (limit - 1 - index) * 60000).toISOString(),
+      dev_eui: devEui,
+      payload: {
+        temperature: 20 + (index % 8),
+        humidity: 45 + (index % 12),
+      },
+      rssi: -70 - (index % 5),
+      snr: 6 + (index % 4) / 2,
+      app_id: 'mock-app',
+      event_type: 'up',
+    }));
+
+    const last = items[items.length - 1];
+    return HttpResponse.json({
+      items,
+      next_cursor: last ? `${last.time}|${devEui}|up` : null,
+    });
+  }),
 ];
