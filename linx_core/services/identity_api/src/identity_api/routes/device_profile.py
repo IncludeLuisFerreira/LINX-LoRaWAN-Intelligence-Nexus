@@ -31,7 +31,9 @@ def list_device_profiles(
         )
 
     try:
-        return chirpstack_client.list_device_profiles(str(application.tenant_id))
+        return chirpstack_client.list_device_profiles(
+            str(application.tenant_id)
+        )
     except ExternalServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
