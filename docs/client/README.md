@@ -1,18 +1,20 @@
-# Client — Telemetry Consumer
+# Client — Ambiente Isolado (Dashboard + Telemetry Consumer)
 
-Ambiente isolado por aplicação no lado do cliente: um consumidor de
-telemetria que **ingere via AMQP** e expõe **leitura REST/WebSocket** sobre
-o TimescaleDB do tenant. O serviço fica em
+Ambiente isolado por aplicação no lado do cliente: o **dashboard web**
+(React + Vite) que consome telemetria via REST/WebSocket, e um **consumidor
+de telemetria** que **ingere via AMQP** e expõe **leitura REST/WebSocket**
+sobre o TimescaleDB do tenant. O serviço fica em
 `services/telemetry_consumer/` e substitui o antigo `tenant_app`.
 
-O `client/` contém apenas:
+O `client/` contém:
 
-| Caminho                       | Responsabilidade                                        |
-| ----------------------------- | ------------------------------------------------------- |
+| Caminho                        | Responsabilidade                                        |
+| ------------------------------ | ------------------------------------------------------- |
+| `frontend/`                    | Dashboard web React (REST + WebSocket).                 |
 | `services/telemetry_consumer/` | Serviço FastAPI (ingestão AMQP + leitura REST/WS).     |
-| `db/schema.sql`               | Schema TimescaleDB (hypertable `telemetry`).            |
-| `docker-compose.yml`          | Compose local: TimescaleDB + `telemetry_consumer`.      |
-| `README.md`                   | Este documento.                                         |
+| `db/schema.sql`                | Schema TimescaleDB (hypertable `telemetry`).            |
+| `docker-compose.yml`           | Compose local: TimescaleDB + `telemetry_consumer` + `frontend`. |
+| `README.md`                    | Este documento.                                         |
 
 A topologia completa (MySQL/Postgres, RabbitMQ, Mosquitto, routing,
 `client_agent`) sobe pelo `deploy/docker-compose.yml` na raiz do repositório.
@@ -64,10 +66,24 @@ Há um índice composto `(dev_eui, time DESC)` para queries de série temporal
 por dispositivo e um índice único `(dev_eui, time, event_type)` que
 desduplica eventos.
 
+## 🖥️ Frontend (dashboard)
+
+O dashboard fica em `frontend/` (React 19 + Vite + TypeScript + TailwindCSS).
+Consome o histórico via `GET /telemetry` (REST) e a telemetria em tempo real
+via `WS /ws/telemetry/{app_id}`. Detalhes de telas, rotas e variáveis em
+`frontend/README.md`.
+
+```bash
+# a partir de client/frontend/
+npm install
+npm run dev     # dev server (proxy /api)
+```
+
 ## 📁 Estrutura
 
 | Arquivo                                        | Responsabilidade                                     |
 | ---------------------------------------------- | ---------------------------------------------------- |
+| `frontend/`                                    | Dashboard web (React + Vite).                       |
 | `services/telemetry_consumer/pyproject.toml`   | Dependências e tasks de dev (poetry).               |
 | `services/telemetry_consumer/src/.../app.py`   | App FastAPI, lifespan (pool + consumer) e `/health`. |
 | `services/telemetry_consumer/src/.../config.py`| `ConsumerSettings` (AMQP, DB, HTTP) via env.         |
@@ -123,8 +139,10 @@ task lint   # black + isort + mypy + flake8
 
 ### Ambiente local (`client/docker-compose.yml`)
 
-Sobe `timescaledb` + `telemetry_consumer`. O schema é montado no container
-do banco e o serviço só inicia após o healthcheck do TimescaleDB.
+Sobe `timescaledb` + `telemetry_consumer` + `frontend`. O schema é montado no
+container do banco, o serviço só inicia após o healthcheck do TimescaleDB e o
+dashboard é servido por nginx na porta `8080`, com proxy `/api` para
+`BACKEND_URL`.
 
 ```bash
 # a partir de client/

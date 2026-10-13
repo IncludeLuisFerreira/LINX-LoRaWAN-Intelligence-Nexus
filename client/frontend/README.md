@@ -1,6 +1,7 @@
 # Frontend - React + TypeScript + Tailwind CSS
 
-Console de gestão da plataforma LINX. Permite administrar **Tenants**,
+Dashboard web do ambiente isolado do cliente (`client/frontend/`). Console de
+gestão da plataforma LINX. Permite administrar **Tenants**,
 **Applications** e **Devices** consumindo o `identity_api` do `linx_core`.
 Não há autenticação nesta versão — o acesso é direto.
 

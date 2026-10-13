@@ -15,8 +15,7 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 
 - `linx_core/` — Microsserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`) e `services/` com `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
 - `middleware/` — Middleware de segurança e roteamento: `services/client_agent/` valida JWT e direciona requisições ao contêiner isolado correto; `services/routing/` roteia uplinks MQTT.
-- `client/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
-- `frontend/` — Dashboard React consumindo dados via `middleware` e WebSocket.
+- `client/` — Ambiente isolado do cliente: dashboard (`frontend/`), consumidor de telemetria (`services/telemetry_consumer/`) e TimescaleDB (`db/`).
 - `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
 - `proto/` — Contrato gRPC compartilhado (`linx_agent.proto`) entre Linx Core e Client Agent.
 
@@ -37,8 +36,10 @@ LINX/
 │   └── services/
 │       ├── client_agent/   #   Client Agent (REST + gRPC client)
 │       └── routing/        #   Roteamento de uplinks MQTT
-├── client/                 # Template do Docker Cliente (motor de regras + TimescaleDB)
-├── frontend/               # Dashboard web (React + Vite + TailwindCSS)
+├── client/                 # Ambiente isolado do cliente (Docker)
+│   ├── frontend/           #   Dashboard web (React + Vite + TailwindCSS)
+│   ├── services/           #   telemetry_consumer (ingestão AMQP + REST/WS)
+│   └── db/                 #   Schema TimescaleDB
 ├── infra/                  # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
 │   ├── docker-compose.yml         # Stack completa ChirpStack v4
 │   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
