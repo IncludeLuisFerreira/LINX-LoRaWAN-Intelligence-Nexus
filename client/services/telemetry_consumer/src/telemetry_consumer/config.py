@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ConsumerSettings(BaseSettings):
     app_id: str = "app-abc123"
     rabbit_url: str = "amqp://guest:guest@localhost:5672/%2f"
-    rabbit_exchange: str = "linx.telemetry"
     rabbit_prefetch_count: int = 10
     rabbit_connect_max_attempts: int = 5
     rabbit_connect_backoff_seconds: float = 1.0
@@ -24,12 +23,20 @@ class ConsumerSettings(BaseSettings):
     )
 
     @property
+    def rabbit_exchange(self) -> str:
+        return f"linx.telemetry.{self.app_id}"
+
+    @property
     def queue_name(self) -> str:
         return f"linx.telemetry.{self.app_id}"
 
     @property
     def dead_letter_queue_name(self) -> str:
         return f"linx.telemetry.{self.app_id}.dlq"
+
+    @property
+    def dead_letter_exchange_name(self) -> str:
+        return f"linx.telemetry.{self.app_id}.dlx"
 
     @property
     def binding_key(self) -> str:

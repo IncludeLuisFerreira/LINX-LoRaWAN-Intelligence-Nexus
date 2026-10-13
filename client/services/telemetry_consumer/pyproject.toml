@@ -41,6 +41,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+markers = [
+    "integration: requer um broker RabbitMQ real (pulado sem env)",
+]
 
 [tool.black]
 line-length = 79

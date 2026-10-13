@@ -40,7 +40,7 @@ class IngestService:
         )
         self.publisher = RabbitPublisher(
             settings.rabbit_url,
-            settings.rabbit_exchange,
+            settings.rabbit_exchange_prefix,
             settings.rabbit_connect_max_attempts,
             settings.rabbit_connect_backoff_seconds,
             audit_queue=settings.rabbit_audit_queue,

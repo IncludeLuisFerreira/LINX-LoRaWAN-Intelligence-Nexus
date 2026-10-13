@@ -10,7 +10,7 @@ class RoutingSettings(Settings):
     mqtt_connect_max_attempts: int = 5
     mqtt_connect_backoff_seconds: float = 1.0
     rabbit_url: str = "amqp://guest:guest@localhost:5672/%2f"
-    rabbit_exchange: str = "linx.telemetry"
+    rabbit_exchange_prefix: str = "linx.telemetry"
     rabbit_audit_queue: str = "linx.telemetry.audit"
     max_payload_bytes: int = 65536
     rabbit_connect_max_attempts: int = 5

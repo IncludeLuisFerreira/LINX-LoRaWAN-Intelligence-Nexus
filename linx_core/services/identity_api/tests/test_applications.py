@@ -8,11 +8,17 @@ import pytest
 from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 from linx_shared.core.exceptions import ExternalServiceError
+from linx_shared.core.rabbitmq import (
+    derive_tenant_password,
+    tenant_namespace_regex,
+    tenant_user,
+)
 from linx_shared.db.base import engine, get_db
 from linx_shared.schemas.application import ApplicationCreate
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from identity_api.config import settings
 from identity_api.dependencies import get_chirpstack_client
 from identity_api.main import app
 from identity_api.routes.application import create_application
@@ -383,7 +389,7 @@ def test_delete_application_chirpstack_failure_returns_502(chirpstack):
 
 
 def test_create_application_persist_failure_compensates_in_chirpstack(
-    chirpstack,
+    chirpstack, rabbitmq
 ):
     class _StubDb:
         def get(self, model, pk):
@@ -408,9 +414,62 @@ def test_create_application_persist_failure_compensates_in_chirpstack(
             response=Response(),
             db=_StubDb(),
             chirpstack=chirpstack,
+            rabbitmq=rabbitmq,
         )
 
     assert exc_info.value.status_code == 500
     assert chirpstack.deleted_applications == [
         chirpstack.applications[0]["id"]
     ]
+    assert rabbitmq.deleted_users == [
+        f"tenant.{chirpstack.applications[0]['id']}"
+    ]
+
+
+def test_create_application_provisions_rabbitmq_tenant(rabbitmq):
+    tenant_id = _create_tenant()
+
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+
+    app_id = created["id"]
+    user = tenant_user(app_id)
+    assert user in rabbitmq.users
+    assert rabbitmq.users[user] == derive_tenant_password(
+        app_id, settings.rabbitmq_tenant_secret
+    )
+    assert rabbitmq.permissions[user] == tenant_namespace_regex(app_id)
+
+
+def test_create_application_rabbitmq_failure_returns_502_and_compensates(
+    chirpstack, rabbitmq
+):
+    tenant_id = _create_tenant()
+    rabbitmq.error = ExternalServiceError("rabbitmq", "put_user", "boom")
+
+    response = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to provision RabbitMQ tenant: boom"
+    }
+    assert len(chirpstack.applications) == 1
+    assert chirpstack.deleted_applications == [
+        chirpstack.applications[0]["id"]
+    ]
+    assert client.get(_applications_url(tenant_id)).json() == []
+
+
+def test_delete_application_removes_rabbitmq_user(rabbitmq):
+    tenant_id = _create_tenant()
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+
+    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+
+    assert response.status_code == 204
+    assert rabbitmq.deleted_users == [tenant_user(created["id"])]

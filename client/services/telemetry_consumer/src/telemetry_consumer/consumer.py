@@ -46,6 +46,7 @@ class RabbitConsumer:
         self._connection: Any = None
         self._exchange: Any = None
         self._queue: Any = None
+        self._dlx: Any = None
         self._dlq: Any = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -107,6 +108,13 @@ class RabbitConsumer:
         self._queue.bind(
             self._exchange, routing_key=self._settings.binding_key
         )
+        self._dlx = rabbitpy.Exchange(
+            self._channel,
+            self._settings.dead_letter_exchange_name,
+            exchange_type="direct",
+            durable=True,
+        )
+        self._dlx.declare()
         self._dlq = rabbitpy.Queue(
             self._channel,
             self._settings.dead_letter_queue_name,
@@ -114,6 +122,10 @@ class RabbitConsumer:
             auto_delete=False,
         )
         self._dlq.declare()
+        self._dlq.bind(
+            self._dlx,
+            routing_key=self._settings.dead_letter_queue_name,
+        )
         self._channel.enable_publisher_confirms()
 
     def _is_connected(self) -> bool:
@@ -125,6 +137,14 @@ class RabbitConsumer:
             return False
         return True
 
+    @staticmethod
+    def _is_access_refused(exc: Exception) -> bool:
+        """Detecta falha de credencial/permissão (AMQP ACCESS_REFUSED)."""
+        if getattr(exc, "reply_code", None) == 403:
+            return True
+        message = str(exc).lower()
+        return "access_refused" in message or "access refused" in message
+
     def connect(self) -> bool:
         max_attempts = self._settings.rabbit_connect_max_attempts
         for attempt in range(1, max_attempts + 1):
@@ -132,12 +152,21 @@ class RabbitConsumer:
                 self._open()
                 return True
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "falha ao conectar ao RabbitMQ (tentativa %d/%d): %s",
-                    attempt,
-                    max_attempts,
-                    exc,
-                )
+                if self._is_access_refused(exc):
+                    logger.error(
+                        "acesso negado ao RabbitMQ "
+                        "(credencial/permissão do tenant %s): %s",
+                        self._settings.app_id,
+                        exc,
+                    )
+                    self._set_error(f"acesso negado: {exc}")
+                else:
+                    logger.warning(
+                        "falha ao conectar ao RabbitMQ (tentativa %d/%d): %s",
+                        attempt,
+                        max_attempts,
+                        exc,
+                    )
                 self.close()
                 if attempt < max_attempts:
                     if self._stop_event.wait(
@@ -160,6 +189,7 @@ class RabbitConsumer:
             self._connection = None
             self._exchange = None
             self._queue = None
+            self._dlx = None
             self._dlq = None
 
     def _run(self) -> None:
@@ -268,9 +298,10 @@ class RabbitConsumer:
             self._set_error(f"DLQ indisponível: {reason}")
             return False
         routing_key = self._settings.dead_letter_queue_name
+        dlx = self._settings.dead_letter_exchange_name
         try:
             if hasattr(channel, "basic_publish"):
-                result = channel.basic_publish(raw_body, "", routing_key)
+                result = channel.basic_publish(raw_body, dlx, routing_key)
             else:
                 message = rabbitpy.Message(
                     channel,
@@ -280,7 +311,7 @@ class RabbitConsumer:
                         "delivery_mode": 2,
                     },
                 )
-                result = message.publish("", routing_key)
+                result = message.publish(dlx, routing_key)
         except Exception as exc:  # noqa: BLE001
             logger.error("falha ao publicar na DLQ: %s", exc)
             self._set_error(str(exc))

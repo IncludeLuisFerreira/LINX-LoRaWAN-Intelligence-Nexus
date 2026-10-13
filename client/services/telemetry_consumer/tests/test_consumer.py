@@ -199,6 +199,41 @@ def test_connect_retries_then_fails():
     assert consumer.connect() is False
 
 
+class FakeAccessRefused(Exception):
+    def __init__(self, reply_code=403):
+        super().__init__("ACCESS_REFUSED - login was refused")
+        self.reply_code = reply_code
+
+
+def test_connect_logs_error_on_access_refused(caplog):
+    settings = ConsumerSettings(
+        app_id="app-1",
+        rabbit_connect_max_attempts=1,
+        rabbit_connect_backoff_seconds=0.0,
+    )
+    consumer = RabbitConsumer(settings, None, _ok)
+
+    def boom():
+        raise FakeAccessRefused()
+
+    consumer._open = boom
+    with caplog.at_level("ERROR"):
+        assert consumer.connect() is False
+
+    assert "acesso negado" in caplog.text
+    assert consumer.health()["last_error"] is not None
+
+
+def test_is_access_refused_detects_code_and_message():
+    consumer = RabbitConsumer(ConsumerSettings(app_id="app-1"), None, _ok)
+    assert consumer._is_access_refused(FakeAccessRefused()) is True
+    assert (
+        consumer._is_access_refused(Exception("ACCESS_REFUSED boom")) is True
+    )
+    assert consumer._is_access_refused(Exception("permission denied")) is False
+    assert consumer._is_access_refused(Exception("offline")) is False
+
+
 def test_connect_succeeds(monkeypatch):
     monkeypatch.setattr(consumer_module.rabbitpy, "Connection", FakeConnection)
     monkeypatch.setattr(consumer_module.rabbitpy, "Exchange", FakeExchange)
@@ -381,3 +416,29 @@ def test_handler_timeout_triggers_retry_and_dlq():
         loop.call_soon_threadsafe(loop.stop)
         thread.join(timeout=5)
         loop.close()
+
+
+def test_dead_letter_publishes_to_tenant_dlx_not_default_exchange():
+    channel = FakeChannel()
+    settings = ConsumerSettings(app_id="app-1")
+    consumer = RabbitConsumer(settings, None, _ok, channel=channel)
+    message = FakeMessage(b"not-json")
+    consumer._handle_message(message)
+    # Publish na DLQ precisa ir para a DLX nomeada do tenant (casa o regex de
+    # permissao). Publicar no default exchange ("") e negado pelo broker
+    # (write em amq.default) e causa loop de redelivery.
+    assert channel.published[0][1] == "linx.telemetry.app-1.dlx"
+    assert channel.published[0][2] == "linx.telemetry.app-1.dlq"
+
+
+def test_open_declares_dlx_and_binds_dlq(monkeypatch):
+    monkeypatch.setattr(consumer_module.rabbitpy, "Connection", FakeConnection)
+    monkeypatch.setattr(consumer_module.rabbitpy, "Exchange", FakeExchange)
+    monkeypatch.setattr(consumer_module.rabbitpy, "Queue", FakeQueue)
+    settings = ConsumerSettings(app_id="app-1")
+    consumer = RabbitConsumer(settings, None, _ok)
+    consumer._open()
+    assert consumer._dlx.declared is True
+    assert consumer._dlx.name == "linx.telemetry.app-1.dlx"
+    assert consumer._dlq.bound is not None
+    assert consumer._dlq.bound[0].name == "linx.telemetry.app-1.dlx"

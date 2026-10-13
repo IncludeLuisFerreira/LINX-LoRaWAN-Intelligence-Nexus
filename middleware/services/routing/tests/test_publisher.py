@@ -12,8 +12,7 @@ class _FakeRabbit:
     def __init__(self):
         self.connection_calls = []
         self.last_message = None
-        self.published = []
-        self.exchange = None
+        self.exchanges = []
         self.queues = []
 
     def Connection(self, url):
@@ -36,11 +35,17 @@ class _FakeRabbit:
         auto_delete=False,
         arguments=None,
     ):
-        self.exchange = SimpleNamespace(
-            name=name, exchange_type=exchange_type, durable=durable
+        exchange = SimpleNamespace(
+            name=name,
+            exchange_type=exchange_type,
+            durable=durable,
+            declared=False,
         )
-        self.exchange.declare = MagicMock()
-        return self.exchange
+        exchange.declare = MagicMock(
+            side_effect=lambda: setattr(exchange, "declared", True)
+        )
+        self.exchanges.append(exchange)
+        return exchange
 
     def Queue(
         self,
@@ -82,18 +87,15 @@ def fake_rabbit(monkeypatch):
     return fake
 
 
-def test_connect_declares_durable_topic_exchange(fake_rabbit):
+def test_connect_opens_connection_and_enables_confirms(fake_rabbit):
     pub = RabbitPublisher("amqp://h", "linx.telemetry")
 
     assert pub.connect() is True
     assert fake_rabbit.connection_calls == ["amqp://h"]
-    assert fake_rabbit.exchange.name == "linx.telemetry"
-    assert fake_rabbit.exchange.exchange_type == "topic"
-    assert fake_rabbit.exchange.durable is True
     assert fake_rabbit.channel.enable_publisher_confirms.called
 
 
-def test_connect_declares_durable_audit_queue_bound(fake_rabbit):
+def test_connect_declares_durable_audit_queue(fake_rabbit):
     pub = RabbitPublisher(
         "amqp://h", "linx.telemetry", audit_queue="linx.telemetry.audit"
     )
@@ -105,9 +107,6 @@ def test_connect_declares_durable_audit_queue_bound(fake_rabbit):
     assert queue.durable is True
     assert queue.auto_delete is False
     queue.declare.assert_called_once()
-    call = queue.bind.call_args
-    assert call.args[0] is fake_rabbit.exchange
-    assert call.kwargs["routing_key"] == "#"
 
 
 def test_connect_without_audit_queue_declares_no_queue(fake_rabbit):
@@ -168,6 +167,60 @@ def test_connect_closes_partial_connection_on_failure(
         conn.close.assert_called()
 
 
+def test_publish_declares_tenant_topic_exchange(fake_rabbit):
+    pub = RabbitPublisher("amqp://h", "linx.telemetry")
+    pub.connect()
+
+    assert pub.publish("application.app1.device.devA.up", {"a": 1}) is True
+
+    assert [ex.name for ex in fake_rabbit.exchanges] == ["linx.telemetry.app1"]
+    exchange = fake_rabbit.exchanges[0]
+    assert exchange.exchange_type == "topic"
+    assert exchange.durable is True
+    assert exchange.declared is True
+
+
+def test_publish_binds_audit_queue_to_tenant_exchange(fake_rabbit):
+    pub = RabbitPublisher(
+        "amqp://h", "linx.telemetry", audit_queue="linx.telemetry.audit"
+    )
+    pub.connect()
+
+    pub.publish("application.app1.device.devA.up", {"a": 1})
+
+    audit = fake_rabbit.queues[0]
+    audit.bind.assert_called_once()
+    call = audit.bind.call_args
+    assert call.args[0] is fake_rabbit.exchanges[0]
+    assert call.kwargs["routing_key"] == "#"
+
+
+def test_publish_reuses_namespace_within_app(fake_rabbit):
+    pub = RabbitPublisher(
+        "amqp://h", "linx.telemetry", audit_queue="linx.telemetry.audit"
+    )
+    pub.connect()
+
+    pub.publish("application.app1.device.devA.up", {"a": 1})
+    pub.publish("application.app1.device.devB.up", {"a": 2})
+
+    assert len(fake_rabbit.exchanges) == 1
+    assert fake_rabbit.queues[0].bind.call_count == 1
+
+
+def test_publish_uses_distinct_exchange_per_app(fake_rabbit):
+    pub = RabbitPublisher("amqp://h", "linx.telemetry")
+    pub.connect()
+
+    pub.publish("application.app1.device.devA.up", {"a": 1})
+    pub.publish("application.app2.device.devA.up", {"a": 2})
+
+    assert [ex.name for ex in fake_rabbit.exchanges] == [
+        "linx.telemetry.app1",
+        "linx.telemetry.app2",
+    ]
+
+
 def test_publish_sends_persistent_json(fake_rabbit):
     pub = RabbitPublisher("amqp://h", "linx.telemetry")
     pub.connect()
@@ -178,9 +231,17 @@ def test_publish_sends_persistent_json(fake_rabbit):
     assert json.loads(msg.body) == {"a": 1}
     assert msg.properties["content_type"] == "application/json"
     assert msg.properties["delivery_mode"] == 2
-    msg.publish.assert_called_once_with(
-        fake_rabbit.exchange, "application.app1.device.devA.up"
-    )
+    exchange_arg = msg.publish.call_args.args[0]
+    assert exchange_arg.name == "linx.telemetry.app1"
+    assert msg.publish.call_args.args[1] == ("application.app1.device.devA.up")
+
+
+def test_publish_raises_on_invalid_routing_key(fake_rabbit):
+    pub = RabbitPublisher("amqp://h", "linx.telemetry")
+    pub.connect()
+
+    with pytest.raises(ValueError):
+        pub.publish("rk", {"a": 1})
 
 
 def test_publish_returns_false_when_broker_rejects(
@@ -196,7 +257,9 @@ def test_publish_returns_false_when_broker_rejects(
     )
 
     with caplog.at_level("ERROR"):
-        assert pub.publish("rk", {"a": 1}) is False
+        assert pub.publish("application.app1.device.devA.up", {"a": 1}) is (
+            False
+        )
 
 
 def test_publish_retries_after_nack_then_discards(
@@ -214,7 +277,9 @@ def test_publish_retries_after_nack_then_discards(
     fake_rabbit.Message = nack
 
     with caplog.at_level("ERROR"):
-        assert pub.publish("rk", {"a": 1}) is False
+        assert pub.publish("application.app1.device.devA.up", {"a": 1}) is (
+            False
+        )
 
     assert attempts["n"] == 3
     assert "não foi possível publicar" in caplog.text
@@ -225,8 +290,8 @@ def test_publish_reconnects_when_connection_dropped(monkeypatch, fake_rabbit):
     pub = RabbitPublisher("amqp://h", "linx.telemetry")
     pub.connect()
     pub._channel = None
-    pub._exchange = None
+    pub._connection = None
     before = len(fake_rabbit.connection_calls)
 
-    assert pub.publish("rk", {"a": 1}) is True
+    assert pub.publish("application.app1.device.devA.up", {"a": 1}) is True
     assert len(fake_rabbit.connection_calls) == before + 1
