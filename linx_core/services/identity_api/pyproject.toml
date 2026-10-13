@@ -25,6 +25,7 @@ alembic = ">=1.19.1,<2.0.0"
 pydantic = {extras = ["email"], version = ">=2.13.5,<3.0.0"}
 chirpstack-api = "^4.19.0"
 argon2-cffi = "^25.1.0"
+httpx = ">=0.28.0,<1.0.0"
 
 [dependency-groups]
 dev = [
@@ -35,7 +36,6 @@ dev = [
     "pytest-cov (>=7.1.0,<8.0.0)",
     "taskipy (>=1.14.1,<2.0.0)",
     "isort (>=9.0.1,<10.0.0)",
-    "httpx2 (>=2.13.0,<3.0.0)"
 ]
 
 [tool.pytest.ini_options]

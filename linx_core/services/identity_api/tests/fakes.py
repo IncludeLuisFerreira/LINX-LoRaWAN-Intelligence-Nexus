@@ -4,6 +4,27 @@ from chirpstack_api import api
 from linx_shared.core.exceptions import ExternalServiceError
 
 
+class FakeRabbitMQClient:
+    def __init__(self) -> None:
+        self.users: dict[str, str] = {}
+        self.permissions: dict[str, str] = {}
+        self.deleted_users: list[str] = []
+        self.error: ExternalServiceError | None = None
+
+    def put_user(self, user: str, password: str) -> None:
+        if self.error is not None:
+            raise self.error
+        self.users[user] = password
+
+    def set_permissions(self, user: str, regex: str) -> None:
+        if self.error is not None:
+            raise self.error
+        self.permissions[user] = regex
+
+    def delete_user(self, user: str) -> None:
+        self.deleted_users.append(user)
+
+
 class FakeChirpStackClient:
     def __init__(self) -> None:
         self.tenants: list[dict] = []
