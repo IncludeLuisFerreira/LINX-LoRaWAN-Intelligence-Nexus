@@ -1,4 +1,5 @@
 site_name: LINX — LoRaWAN Intelligence Nexus
+site_url: https://includeluisferreira.github.io/LINX-LoRaWAN-Intelligence-Nexus/
 theme:
   name: material
   palette:
