@@ -54,7 +54,7 @@ cp .env.example .env        # ajuste POSTGRES_PASSWORD e CHIRPSTACK_API_TOKEN
 poetry run task run
 
 # 4. Dashboard web (opcional, em outro terminal)
-cd ../frontend
+cd ../client/frontend
 npm install
 npm run dev
 ```
@@ -67,8 +67,7 @@ npm run dev
 LINX/
 ├── linx_core/     # Plano de controle (REST FastAPI + gRPC AgentBridge)
 ├── middleware/    # Client Agent (JWT + roteamento) e roteamento MQTT
-├── client/        # Template do ambiente isolado (motor de regras + TimescaleDB)
-├── frontend/      # Dashboard React
+├── client/        # Ambiente isolado do cliente (frontend + telemetry_consumer + TimescaleDB)
 ├── infra/         # Stack ChirpStack v4 (gateway bridge, MQTT, PostgreSQL)
 ├── deploy/        # Compose full-stack (nginx, TLS, todos os serviços)
 ├── proto/         # Contrato gRPC compartilhado (linx_agent.proto)
