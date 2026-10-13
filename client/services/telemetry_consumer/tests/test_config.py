@@ -8,9 +8,13 @@ def test_queue_names_for_app_id():
     assert settings.binding_key == "application.app-1.#"
 
 
+def test_exchange_name_is_derived_from_app_id():
+    settings = ConsumerSettings(app_id="app-1")
+    assert settings.rabbit_exchange == "linx.telemetry.app-1"
+
+
 def test_defaults():
     settings = ConsumerSettings()
-    assert settings.rabbit_exchange == "linx.telemetry"
     assert settings.rabbit_prefetch_count == 10
     assert settings.consumer_max_retries == 3
 
@@ -21,3 +25,4 @@ def test_env_override(monkeypatch):
     settings = ConsumerSettings()
     assert settings.app_id == "tenant-9"
     assert settings.consumer_max_retries == 7
+    assert settings.rabbit_exchange == "linx.telemetry.tenant-9"

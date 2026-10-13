@@ -199,6 +199,41 @@ def test_connect_retries_then_fails():
     assert consumer.connect() is False
 
 
+class FakeAccessRefused(Exception):
+    def __init__(self, reply_code=403):
+        super().__init__("ACCESS_REFUSED - login was refused")
+        self.reply_code = reply_code
+
+
+def test_connect_logs_error_on_access_refused(caplog):
+    settings = ConsumerSettings(
+        app_id="app-1",
+        rabbit_connect_max_attempts=1,
+        rabbit_connect_backoff_seconds=0.0,
+    )
+    consumer = RabbitConsumer(settings, None, _ok)
+
+    def boom():
+        raise FakeAccessRefused()
+
+    consumer._open = boom
+    with caplog.at_level("ERROR"):
+        assert consumer.connect() is False
+
+    assert "acesso negado" in caplog.text
+    assert consumer.health()["last_error"] is not None
+
+
+def test_is_access_refused_detects_code_and_message():
+    consumer = RabbitConsumer(ConsumerSettings(app_id="app-1"), None, _ok)
+    assert consumer._is_access_refused(FakeAccessRefused()) is True
+    assert (
+        consumer._is_access_refused(Exception("ACCESS_REFUSED boom")) is True
+    )
+    assert consumer._is_access_refused(Exception("permission denied")) is False
+    assert consumer._is_access_refused(Exception("offline")) is False
+
+
 def test_connect_succeeds(monkeypatch):
     monkeypatch.setattr(consumer_module.rabbitpy, "Connection", FakeConnection)
     monkeypatch.setattr(consumer_module.rabbitpy, "Exchange", FakeExchange)

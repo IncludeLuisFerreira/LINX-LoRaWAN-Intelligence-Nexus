@@ -125,6 +125,14 @@ class RabbitConsumer:
             return False
         return True
 
+    @staticmethod
+    def _is_access_refused(exc: Exception) -> bool:
+        """Detecta falha de credencial/permissão (AMQP ACCESS_REFUSED)."""
+        if getattr(exc, "reply_code", None) == 403:
+            return True
+        message = str(exc).lower()
+        return "access_refused" in message or "access refused" in message
+
     def connect(self) -> bool:
         max_attempts = self._settings.rabbit_connect_max_attempts
         for attempt in range(1, max_attempts + 1):
@@ -132,12 +140,21 @@ class RabbitConsumer:
                 self._open()
                 return True
             except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "falha ao conectar ao RabbitMQ (tentativa %d/%d): %s",
-                    attempt,
-                    max_attempts,
-                    exc,
-                )
+                if self._is_access_refused(exc):
+                    logger.error(
+                        "acesso negado ao RabbitMQ "
+                        "(credencial/permissão do tenant %s): %s",
+                        self._settings.app_id,
+                        exc,
+                    )
+                    self._set_error(f"acesso negado: {exc}")
+                else:
+                    logger.warning(
+                        "falha ao conectar ao RabbitMQ (tentativa %d/%d): %s",
+                        attempt,
+                        max_attempts,
+                        exc,
+                    )
                 self.close()
                 if attempt < max_attempts:
                     if self._stop_event.wait(
