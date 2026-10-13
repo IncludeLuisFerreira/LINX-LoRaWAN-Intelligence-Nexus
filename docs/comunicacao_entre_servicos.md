@@ -32,8 +32,8 @@ Quatro protocolos sustentam a comunicação:
 | `agent_bridge`    | gRPC (`grpcio`)       | `50051`         | **Servidor** do contrato `AgentBridge` — responde `GetAppConfig`.                   |
 | `client_agent`    | FastAPI               | `8001`          | Middleware compartilhado: cliente gRPC (`GetAppConfig`) e `GET /health`.            |
 | `routing`         | Python (paho-mqtt + rabbitpy) | —        | Ingestão: consome uplinks MQTT, valida e publica envelopes no RabbitMQ.            |
-| `rabbitmq`        | RabbitMQ 3 (AMQP)     | `5672`/`15672`  | Exchange `topic` durável `linx.telemetry`; distribui telemetria aos consumidores.  |
-| `telemetry_consumer` | FastAPI            | `8000` (interna, não publicada) | Ambiente isolado por aplicação: consome a fila AMQP, persiste no TimescaleDB e serve `GET /telemetry`/WebSocket. Acessível apenas pela rede do Compose. |
+| `rabbitmq`        | RabbitMQ 3 (AMQP)     | `5672`/`15672`  | Exchange `topic` durável por tenant `linx.telemetry.{app_id}`; usuário e permissões isoladas por aplicação. |
+| `telemetry_consumer` | FastAPI            | `8000` (interna, não publicada) | Ambiente isolado por aplicação: consome a fila `linx.telemetry.{app_id}` com credencial do tenant, persiste no TimescaleDB e serve `GET /telemetry`/WebSocket. Acessível apenas pela rede do Compose. |
 | `db`              | PostgreSQL 15         | `5432` (interna) | Banco do plano de controle (tenants/applications).                                 |
 | `timescaledb`     | TimescaleDB (pg14)    | `5432` (interna) | Série temporal isolada do tenant (hypertable `telemetry`).                          |
 
@@ -57,7 +57,7 @@ flowchart LR
 
     MQTT[["Broker MQTT<br/>:1883"]]
     RT["routing<br/>(ingest)"]
-    RMQ{{"RabbitMQ<br/>exchange linx.telemetry"}}
+    RMQ{{"RabbitMQ<br/>exchange linx.telemetry.{app_id}"}}
     CA["client_agent<br/>:8001"]
     TC["telemetry_consumer<br/>:8000"]
     TS[("timescaledb")]
@@ -80,8 +80,8 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 | :------------------------------ | :------------------------------- | :-------------------- | :------ | :----------------------------------------------------- | :------------ |
 | `client_agent`                  | `agent_bridge`                   | gRPC                  | `50051` | `GetAppConfig` sob demanda (com cache) e health check  | startup / on-demand |
 | Broker MQTT                     | `routing`                        | MQTT                  | `1883`  | Receber uplinks LoRaWAN do ChirpStack                  | contínuo      |
-| `routing`                       | `rabbitmq` (exchange `linx.telemetry`) | AMQP            | `5672`  | Publicar envelope normalizado (routing key por tópico) | por uplink    |
-| `rabbitmq` (fila do tenant)     | `telemetry_consumer`             | AMQP                  | `5672`  | Entregar envelope na fila `linx.telemetry.{app_id}`    | por evento    |
+| `routing`                       | `rabbitmq` (exchange `linx.telemetry.{app_id}`) | AMQP            | `5672`  | Publicar envelope normalizado (routing key por tópico) | por uplink    |
+| `rabbitmq` (fila do tenant)     | `telemetry_consumer`             | AMQP                  | `5672`  | Entregar envelope na fila `linx.telemetry.{app_id}` (credencial do tenant) | por evento    |
 | `telemetry_consumer`            | `timescaledb`                    | PostgreSQL (`asyncpg`)| `5432`  | `INSERT` idempotente e `SELECT` na hypertable `telemetry` | por evento / leitura |
 | `agent_bridge` / `identity_api` | `db`                             | PostgreSQL            | `5432`  | Ler/escrever o plano de controle                       | contínuo      |
 | Clientes na rede do Compose     | `telemetry_consumer`             | HTTP/REST + WebSocket | `8000` (interna) | Histórico (`GET /telemetry`) e stream (`WS /ws/telemetry/{app_id}`) | sob demanda / contínuo |
@@ -241,23 +241,27 @@ entre os serviços ainda não está implementado.
 
 ## 5. Fluxo de ingestão de telemetria
 
-Fecha o caminho do dado: `Mosquitto → routing (ingest) → exchange topic "linx.telemetry" → telemetry_consumer → TimescaleDB/WebSocket`.
+Fecha o caminho do dado: `Mosquitto → routing (ingest) → exchange topic "linx.telemetry.{app_id}" → telemetry_consumer → TimescaleDB/WebSocket`.
 
 O serviço `middleware/services/routing` consome os uplinks LoRaWAN publicados pelo
 ChirpStack no broker MQTT, valida a integridade da mensagem, normaliza um envelope e
-publica no exchange `topic` durável `linx.telemetry` do RabbitMQ. O middleware **não**
-resolve tenant nem endpoint: a distribuição para os consumidores finais é feita por
-filas e bindings no RabbitMQ.
+publica no exchange `topic` durável **do tenant** (`linx.telemetry.{app_id}`),
+derivado do `app_id` do uplink. O middleware **não** resolve tenant nem endpoint: a
+distribuição para os consumidores finais é feita por filas e bindings no RabbitMQ.
 
-Na partida, o `routing` declara também uma fila durável de auditoria
-(`RABBIT_AUDIT_QUEUE`, default `linx.telemetry.audit`) com binding `#`, de modo que
-nenhuma mensagem é descartada em silêncio enquanto não há consumidor ligado ao
-exchange. Consumidores reais ligam suas próprias filas e podem usar essa fila apenas
-para auditoria/reprocessamento.
+O `routing` declara, sob demanda, o exchange de cada tenant e liga a fila durável de
+auditoria (`RABBIT_AUDIT_QUEUE`, default `linx.telemetry.audit`) a **todos** os
+exchanges de tenant com binding `#`, de modo que nenhuma mensagem é descartada e a
+auditoria agrega a telemetria de toda a plataforma. A leitura dessa fila é restrita
+ao usuário administrativo.
 
 O consumidor final é o `telemetry_consumer`, um serviço por tenant que declara a fila
-durável `linx.telemetry.{app_id}` com binding `application.{app_id}.#`, persiste na
-hypertable `telemetry` de forma idempotente e retransmite os eventos via WebSocket.
+durável `linx.telemetry.{app_id}` com binding `application.{app_id}.#` no exchange do
+tenant, persiste na hypertable `telemetry` de forma idempotente e retransmite os
+eventos via WebSocket. Cada tenant usa um usuário RabbitMQ próprio
+(`tenant.{app_id}`) com permissões `configure`/`write`/`read` restritas ao seu
+namespace `^linx\.telemetry\.{app_id}(\.|$)`, provisionado pelo `identity_api` na
+criação da aplicação (ver `docs/telemetry-consumer/rabbitmq-isolation.md`).
 
 ### 5.1 Sequência
 
@@ -266,17 +270,17 @@ sequenceDiagram
     autonumber
     participant MQ as Mosquitto
     participant RT as routing (ingest)
-    participant RMQ as RabbitMQ (exchange linx.telemetry)
+    participant RMQ as RabbitMQ (exchange linx.telemetry.{app_id})
     participant CO as telemetry_consumer
     participant DB as TimescaleDB
 
     MQ-->>RT: application/{app_id}/device/{dev_eui}/{event_type}
     Note over RT: parse do tópico + valida JSON/object/time + cap de payload
     RT->>RT: build_envelope
-    RT->>RMQ: publish routing_key=application.{app_id}.device.{dev_eui}.{event_type}
+    RT->>RMQ: publish exchange=linx.telemetry.{app_id} routing_key=application.{app_id}.device.{dev_eui}.{event_type}
     Note over RT: publisher confirm
     RT-->>MQ: ack MQTT (manual_ack) só após o confirm
-    RMQ-->>CO: entrega na fila linx.telemetry.{app_id}
+    RMQ-->>CO: entrega na fila linx.telemetry.{app_id} (credencial do tenant)
     CO->>DB: INSERT ... ON CONFLICT (dev_eui, time, event_type) DO NOTHING
     CO-->>RMQ: ack (sucesso ou duplicata; DLQ + ack em falha definitiva)
     CO-->>CO: broadcast WebSocket do evento persistido
@@ -334,10 +338,12 @@ vai para a DLQ `linx.telemetry.{app_id}.dlq` e recebe ack.
 
 > **Status de execução:** o pipeline está implementado em `middleware/services/routing`
 > e no `client/services/telemetry_consumer`. No `deploy/docker-compose.yml` o `routing`
-> sobe junto de `mosquitto` e `rabbitmq` e publica no exchange `linx.telemetry`; o
-> `telemetry_consumer` sobe junto de `timescaledb` e `rabbitmq` e consome a fila do
-> tenant. A ingestão REST via `POST /ingest` foi **removida**: o RabbitMQ é o único
-> caminho de ingestão.
+> sobe junto de `mosquitto` e `rabbitmq` e publica no exchange do tenant
+> (`linx.telemetry.{app_id}`); o `telemetry_consumer` sobe junto de `timescaledb` e
+> `rabbitmq` e consome a fila do tenant com credencial própria. O `identity_api`
+> provisiona essa credencial na criação da aplicação (management API do RabbitMQ).
+> A ingestão REST via `POST /ingest` foi **removida**: o RabbitMQ é o único
+> caminho de ingestão. Detalhes de isolamento: `docs/telemetry-consumer/rabbitmq-isolation.md`.
 
 ---
 
@@ -381,9 +387,12 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 | `MQTT_BROKER_PORT`       | `routing`                  | `1883`                                     | Porta do broker MQTT.                                            |
 | `MQTT_QOS`               | `routing`                  | `1`                                        | QoS da inscrição no tópico de uplink.                            |
 | `MQTT_TOPIC`             | `routing`                  | `application/+/device/+/event/up`          | Tópico MQTT de uplink.                                           |
-| `RABBIT_URL`             | `routing`, `telemetry_consumer` | `amqp://linx:linx@rabbitmq:5672/%2f`  | Conexão AMQP com o RabbitMQ.                                     |
-| `RABBIT_EXCHANGE`        | `routing`, `telemetry_consumer` | `linx.telemetry`                     | Exchange `topic` durável de telemetria.                          |
-| `RABBIT_AUDIT_QUEUE`     | `routing`                  | `linx.telemetry.audit`                     | Fila durável com binding `#`; evita descarte silencioso.         |
+| `RABBIT_URL`             | `routing`, `telemetry_consumer` | `amqp://linx:linx@rabbitmq:5672/%2f`  | Conexão AMQP. O `routing` usa a credencial administrativa; o `telemetry_consumer` usa a credencial do tenant (`tenant.{app_id}`). |
+| `RABBIT_EXCHANGE_PREFIX` | `routing`                  | `linx.telemetry`                           | Prefixo do exchange `topic` durável por tenant (`{prefix}.{app_id}`). |
+| `RABBIT_AUDIT_QUEUE`     | `routing`                  | `linx.telemetry.audit`                     | Fila durável ligada a todos os exchanges de tenant (binding `#`); leitura admin-only. |
+| `RABBITMQ_MANAGEMENT_URL` | `identity_api`            | `http://rabbitmq:15672`                    | Management API para provisionar usuário/permissões por tenant.   |
+| `RABBITMQ_ADMIN_USER` / `RABBITMQ_ADMIN_PASSWORD` | `identity_api` | `linx` / `...`              | Credencial administrativa do broker.                            |
+| `RABBITMQ_TENANT_SECRET` | `identity_api`             | `change-me`                                | Chave HMAC da senha determinística do usuário de tenant.         |
 | `RABBIT_CONNECT_MAX_ATTEMPTS` | `routing`, `telemetry_consumer` | `5`                                | Tentativas de conexão ao RabbitMQ.                               |
 | `RABBIT_CONNECT_BACKOFF_SECONDS` | `routing`, `telemetry_consumer` | `1.0`                          | Backoff (s) entre tentativas de conexão.                         |
 | `RABBIT_PREFETCH_COUNT`  | `telemetry_consumer`       | `10`                                       | Mensagens em voo no consumidor.                                  |

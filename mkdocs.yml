@@ -27,6 +27,7 @@ nav:
       - Middleware: middleware/README.md
       - Client (Tenant App): client/README.md
       - Migração do Telemetry Consumer: telemetry-consumer/migration.md
+      - Isolamento RabbitMQ por Tenant: telemetry-consumer/rabbitmq-isolation.md
   - Manuais e Documentação:
       - Análise de Segurança ChirpStack: analise_seguranca_chirpstack/chirpstack_security_analysis.md
       - Estrutura de Pastas: estrutura_de_pastas/estrutura.md

@@ -87,3 +87,24 @@ ALTER TABLE telemetry DROP COLUMN IF EXISTS app_id;
 ```
 
 > Referência completa do fluxo: `docs/superpowers/specs/2026-10-08-telemetry-consumer-design.md`.
+
+## Migração do broker — isolamento por tenant
+
+A partir do isolamento por tenant, cada aplicação consome do seu próprio exchange
+`linx.telemetry.{app_id}` (antes havia um exchange único `linx.telemetry`) com um
+usuário RabbitMQ dedicado. Para um tenant que já estava rodando:
+
+1. Provisionar a credencial do tenant
+   (`deploy/scripts/provision-rabbitmq-tenant.sh` ou a criação da aplicação no
+   `identity_api`, que já faz o provisionamento).
+2. Criar o exchange `linx.telemetry.{app_id}` (o `routing` o declara sob demanda na
+   primeira publicação, e o `telemetry_consumer` também o declara).
+3. Re-bindar a fila `linx.telemetry.{app_id}` ao novo exchange
+   (`application.{app_id}.#`).
+4. Drenar as mensagens em voo da binding antiga e removê-la do exchange único.
+5. Trocar o `RABBIT_URL` do `telemetry_consumer` pela URL do tenant
+   (`amqp://tenant.{app_id}:{senha}@host:5672/%2f`).
+
+Mantenha a fila de auditoria `linx.telemetry.audit` ativa durante a transição. O
+`routing` passa a ligá-la a todos os exchanges de tenant. Detalhes:
+`docs/telemetry-consumer/rabbitmq-isolation.md`.
