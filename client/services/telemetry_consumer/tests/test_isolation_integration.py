@@ -142,3 +142,43 @@ def test_tenant_publishes_and_consumes_own_namespace(two_apps):
     message = rabbitpy.Message(channel, json.dumps({"app_id": app_a}).encode())
     assert message.publish(exchange, f"application.{app_a}.device.dev1.up")
     connection.close()
+
+
+def test_tenant_dead_letters_via_named_dlx(two_apps):
+    app_a, _ = two_apps
+    connection = rabbitpy.Connection(_tenant_url(app_a))
+    channel = connection.channel()
+    dlx = rabbitpy.Exchange(
+        channel,
+        f"linx.telemetry.{app_a}.dlx",
+        exchange_type="direct",
+        durable=True,
+    )
+    dlx.declare()
+    dlq = rabbitpy.Queue(
+        channel,
+        f"linx.telemetry.{app_a}.dlq",
+        durable=True,
+        auto_delete=False,
+    )
+    dlq.declare()
+    dlq.bind(dlx, routing_key=f"linx.telemetry.{app_a}.dlq")
+    message = rabbitpy.Message(channel, b"dead-letter-body")
+    assert message.publish(dlx, f"linx.telemetry.{app_a}.dlq")
+    received = next(iter(dlq.consume(no_ack=True)), None)
+    assert received is not None
+    assert received.body == b"dead-letter-body"
+    connection.close()
+
+
+def test_tenant_cannot_publish_via_default_exchange(two_apps):
+    # Publicar no default exchange exige write em amq.default, negado ao
+    # tenant. Prova que o caminho antigo da DLQ (exchange "") quebra por
+    # permissao e motivou a DLX nomeada do tenant.
+    app_b, _ = two_apps
+    connection = rabbitpy.Connection(_tenant_url(app_b))
+    channel = connection.channel()
+    message = rabbitpy.Message(channel, b"x")
+    with pytest.raises(Exception):
+        message.publish("", f"linx.telemetry.{app_b}.dlq")
+    connection.close()

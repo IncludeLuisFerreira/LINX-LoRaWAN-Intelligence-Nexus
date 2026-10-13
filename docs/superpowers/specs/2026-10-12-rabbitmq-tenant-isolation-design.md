@@ -84,12 +84,12 @@ routing (usuário admin)
   → exchange topic durável linx.telemetry.{app_id}
       → fila linx.telemetry.{app_id}          (bind application.{app_id}.#)
       → fila linx.telemetry.audit             (bind #, todos os tenants)
-  → default exchange ""                        (DLQ)
 
 telemetry_consumer (usuário tenant.{app_id})
   → exchange linx.telemetry.{app_id}          (declare, configure próprio)
   → fila linx.telemetry.{app_id}              (consume)
-  → DLQ linx.telemetry.{app_id}.dlq           (publish via default exchange)
+  → exchange DLX direto linx.telemetry.{app_id}.dlx  (declare, write próprio)
+  → DLQ linx.telemetry.{app_id}.dlq           (bind à DLX; publish na DLX)
 ```
 
 ### Namespace por aplicação
@@ -99,6 +99,7 @@ telemetry_consumer (usuário tenant.{app_id})
 | Exchange | `linx.telemetry.{app_id}` | Ponto de publicação do tenant. |
 | Fila | `linx.telemetry.{app_id}` | Consumo da telemetria do tenant. |
 | DLQ | `linx.telemetry.{app_id}.dlq` | Falha definitiva / payload inválido. |
+| DLX | `linx.telemetry.{app_id}.dlx` | Exchange direta da DLQ; o tenant publica nela (write) e a DLQ consome. Evita o default exchange, que é negado ao tenant. |
 | Fila de auditoria | `linx.telemetry.audit` | Binding `#` em cada exchange de tenant. Admin only. |
 | Usuário | `tenant.{app_id}` | Credencial do cliente. |
 | Binding | `application.{app_id}.#` | Liga exchange do tenant à fila do tenant. |
@@ -115,9 +116,14 @@ Uma única regex aplicada a `configure`, `write` e `read`:
 montar a expressão, por robustez. Consequências:
 
 - `configure`: só declara/remove `linx.telemetry.{app_id}`,
+  `linx.telemetry.{app_id}.dlx` e `linx.telemetry.{app_id}.dlq`.
+- `write`: só publica nesses nomes. A DLQ recebe mensagens via publish na
+  **DLX nomeada do tenant** (`linx.telemetry.{app_id}.dlx`), nunca via default
+  exchange: o RabbitMQ valida `write` no `amq.default` (não na routing key),
+  e o default exchange não casa esta regex — publicar ali seria negado e
+  geraria loop de redelivery.
+- `read`: só consome as filas `linx.telemetry.{app_id}` e
   `linx.telemetry.{app_id}.dlq`.
-- `write`: só publica nesses nomes (cobre o publish da DLQ no default exchange).
-- `read`: só consome a fila `linx.telemetry.{app_id}`.
 - Não casa `linx.telemetry.audit` nem `linx.telemetry.{outro_app}`.
 
 ### Segredos
@@ -230,8 +236,9 @@ DLQ = `linx.telemetry.{app_id}.dlq`; binding = `application.{app_id}.#`.
 Unitários com fakes (sem broker), conforme suíte atual:
 
 - `telemetry_consumer/config`: `rabbit_exchange` derivado; override por env.
-- `telemetry_consumer/consumer`: declara o exchange do tenant; bind correto; DLQ no
-  default exchange com a routing key da DLQ; acesso negado → log `error` +
+- `telemetry_consumer/consumer`: declara o exchange do tenant e a DLX nomeada;
+  bind da fila e da DLQ corretos; publish da DLQ na DLX do tenant (nunca no
+  default exchange); acesso negado → log `error` +
   `_last_error` + reconexão; reconexão após queda; retry esgotado → DLQ.
 - `telemetry_consumer/app`: `/health` reflete `_last_error` no estado.
 - `routing/publisher`: publica no exchange do tenant correto por `app_id`; declara

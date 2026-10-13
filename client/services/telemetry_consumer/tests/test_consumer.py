@@ -416,3 +416,29 @@ def test_handler_timeout_triggers_retry_and_dlq():
         loop.call_soon_threadsafe(loop.stop)
         thread.join(timeout=5)
         loop.close()
+
+
+def test_dead_letter_publishes_to_tenant_dlx_not_default_exchange():
+    channel = FakeChannel()
+    settings = ConsumerSettings(app_id="app-1")
+    consumer = RabbitConsumer(settings, None, _ok, channel=channel)
+    message = FakeMessage(b"not-json")
+    consumer._handle_message(message)
+    # Publish na DLQ precisa ir para a DLX nomeada do tenant (casa o regex de
+    # permissao). Publicar no default exchange ("") e negado pelo broker
+    # (write em amq.default) e causa loop de redelivery.
+    assert channel.published[0][1] == "linx.telemetry.app-1.dlx"
+    assert channel.published[0][2] == "linx.telemetry.app-1.dlq"
+
+
+def test_open_declares_dlx_and_binds_dlq(monkeypatch):
+    monkeypatch.setattr(consumer_module.rabbitpy, "Connection", FakeConnection)
+    monkeypatch.setattr(consumer_module.rabbitpy, "Exchange", FakeExchange)
+    monkeypatch.setattr(consumer_module.rabbitpy, "Queue", FakeQueue)
+    settings = ConsumerSettings(app_id="app-1")
+    consumer = RabbitConsumer(settings, None, _ok)
+    consumer._open()
+    assert consumer._dlx.declared is True
+    assert consumer._dlx.name == "linx.telemetry.app-1.dlx"
+    assert consumer._dlq.bound is not None
+    assert consumer._dlq.bound[0].name == "linx.telemetry.app-1.dlx"

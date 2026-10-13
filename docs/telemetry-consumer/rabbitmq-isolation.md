@@ -17,6 +17,7 @@ Vhost único (`/`). Todos os nomes derivam do `app_id` (UUID da aplicação):
 | Exchange           | `linx.telemetry.{app_id}`         | Ponto de publicação do tenant (`topic`, durável). |
 | Fila               | `linx.telemetry.{app_id}`         | Consumo da telemetria do tenant.                  |
 | DLQ                | `linx.telemetry.{app_id}.dlq`     | Falha definitiva / payload inválido.              |
+| DLX                | `linx.telemetry.{app_id}.dlx`     | Exchange direta da DLQ; evita o default exchange. |
 | Fila de auditoria  | `linx.telemetry.audit`            | Binding `#` em todos os exchanges; admin-only.    |
 | Usuário            | `tenant.{app_id}`                 | Credencial do cliente.                            |
 | Binding            | `application.{app_id}.#`          | Liga o exchange do tenant à fila do tenant.       |
@@ -26,12 +27,12 @@ routing (admin)
   → exchange topic linx.telemetry.{app_id}
       → fila linx.telemetry.{app_id}     (bind application.{app_id}.#)
       → fila linx.telemetry.audit        (bind #, todos os tenants)
-  → default exchange ""                  (DLQ)
 
 telemetry_consumer (tenant.{app_id})
   → exchange linx.telemetry.{app_id}     (declare; configure do próprio namespace)
   → fila linx.telemetry.{app_id}         (consume)
-  → DLQ linx.telemetry.{app_id}.dlq      (publish via default exchange)
+  → exchange DLX linx.telemetry.{app_id}.dlx  (declare; publish da DLQ)
+  → DLQ linx.telemetry.{app_id}.dlq      (bind à DLX; consume)
 ```
 
 ## Permissões
@@ -45,9 +46,12 @@ Uma única regex é aplicada a `configure`, `write` e `read`:
 O isolamento é por **nome do recurso** (não por tópico roteado): o usuário do tenant
 só declara, publica e consome recursos cujo nome está no seu prefixo.
 
-- `configure`: declara/remove o exchange e as filas do tenant.
-- `write`: publica no exchange e na DLQ do tenant.
-- `read`: consome a fila do tenant.
+- `configure`: declara/remove o exchange, a DLX e as filas do tenant.
+- `write`: publica no exchange do tenant e na DLX (`linx.telemetry.{app_id}.dlx`).
+  A DLQ é populada por publish na DLX nomeada — nunca no default exchange `""`,
+  pois o RabbitMQ valida `write` no `amq.default` (não na routing key), que está
+  fora desta regex; publicar ali seria negado e causaria loop de redelivery.
+- `read`: consome a fila do tenant e a DLQ.
 - Não casa `linx.telemetry.audit` nem `linx.telemetry.{outro_app}`.
 
 ## Credenciais

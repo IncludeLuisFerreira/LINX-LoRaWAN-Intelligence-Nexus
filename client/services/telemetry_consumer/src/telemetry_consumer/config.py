@@ -35,5 +35,9 @@ class ConsumerSettings(BaseSettings):
         return f"linx.telemetry.{self.app_id}.dlq"
 
     @property
+    def dead_letter_exchange_name(self) -> str:
+        return f"linx.telemetry.{self.app_id}.dlx"
+
+    @property
     def binding_key(self) -> str:
         return f"application.{self.app_id}.#"
