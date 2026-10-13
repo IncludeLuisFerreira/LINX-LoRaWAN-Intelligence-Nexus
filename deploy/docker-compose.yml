@@ -28,6 +28,12 @@ services:
       - CHIRPSTACK_HOST=${CHIRPSTACK_HOST:-localhost:8080}
       - CHIRPSTACK_API_TOKEN=${CHIRPSTACK_API_TOKEN:?CHIRPSTACK_API_TOKEN must be set}
       - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+      - RABBITMQ_MANAGEMENT_URL=${RABBITMQ_MANAGEMENT_URL:-http://rabbitmq:15672}
+      - RABBITMQ_ADMIN_USER=${RABBITMQ_ADMIN_USER:-linx}
+      - RABBITMQ_ADMIN_PASSWORD=${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
+      - RABBITMQ_TENANT_SECRET=${RABBITMQ_TENANT_SECRET:?RABBITMQ_TENANT_SECRET must be set}
+      - RABBITMQ_AMQP_HOST=${RABBITMQ_AMQP_HOST:-rabbitmq:5672}
     ports:
       - "8000:8000"
     depends_on:
@@ -123,7 +129,7 @@ services:
     env_file: .env
     environment:
       - APP_ID=${APP_ID}
-      - RABBIT_URL=amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f
+      - RABBIT_URL=amqp://tenant.${APP_ID}:${RABBITMQ_TENANT_PASS}@rabbitmq:5672/%2f
       - DB_HOST=timescaledb
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
@@ -183,7 +189,7 @@ services:
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
       - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
       - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f}
-      - RABBIT_EXCHANGE=${RABBIT_EXCHANGE:-linx.telemetry}
+      - RABBIT_EXCHANGE_PREFIX=${RABBIT_EXCHANGE_PREFIX:-linx.telemetry}
       - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}
     depends_on:
       mosquitto:
