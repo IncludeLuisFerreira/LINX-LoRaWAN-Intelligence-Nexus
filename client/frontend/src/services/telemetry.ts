@@ -104,6 +104,14 @@ export function parseTelemetryMessage(raw: unknown): TelemetryItem | null {
   };
 }
 
+/** Chave estável do instante: epoch em ms quando parseável, senão o texto cru.
+ * Normaliza o mesmo momento escrito de formas diferentes (`...Z` vs `...+00:00`),
+ * que REST e WebSocket podem produzir, para que o dedupe não deixe duplicata passar. */
+function timeKey(time: string): string {
+  const ms = Date.parse(time);
+  return Number.isNaN(ms) ? time : String(ms);
+}
+
 /** Anexa um item deduplicando por (dev_eui, time, event_type), ordenado por time. */
 export function appendItem(
   items: TelemetryItem[],
@@ -112,12 +120,12 @@ export function appendItem(
   const exists = items.some(
     (current) =>
       current.dev_eui === item.dev_eui &&
-      current.time === item.time &&
-      current.event_type === item.event_type,
+      current.event_type === item.event_type &&
+      timeKey(current.time) === timeKey(item.time),
   );
   if (exists) return items;
   return [...items, item].sort(
-    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+    (a, b) => Date.parse(a.time) - Date.parse(b.time),
   );
 }
 

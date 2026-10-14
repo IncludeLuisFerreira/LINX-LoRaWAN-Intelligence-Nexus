@@ -250,4 +250,22 @@ describe('appendItem', () => {
     );
     expect(result).toHaveLength(2);
   });
+
+  it('dedupes the same instant written with different offset formats', () => {
+    const items = [point('2026-01-01T00:00:00Z')];
+    const result = appendItem(items, point('2026-01-01T00:00:00+00:00'));
+    expect(result).toBe(items);
+    expect(result).toHaveLength(1);
+  });
+
+  it('does not collapse an unparseable time with a valid one', () => {
+    const items = [point('garbage')];
+    const result = appendItem(items, point('2026-01-01T00:00:00Z'));
+    expect(result).toHaveLength(2);
+  });
+
+  it('dedupes exact duplicates that are not valid dates', () => {
+    const items = [point('garbage')];
+    expect(appendItem(items, point('garbage'))).toBe(items);
+  });
 });
