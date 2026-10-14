@@ -6,6 +6,7 @@ import {
   numericMetrics,
   buildSeries,
   appendItem,
+  capItems,
   type TelemetryHistory,
   type TelemetryItem,
   type SeriesInput,
@@ -25,6 +26,11 @@ import { TelemetryLineChart } from '../../components/charts/TelemetryLineChart';
 const ALL_DEVICES = '__all__';
 const EMPTY_HISTORY: TelemetryHistory = { items: [], next_cursor: null };
 const EMPTY_LIVE_ITEMS: TelemetryItem[] = [];
+// Tetos da janela de tempo real: em sessao longa com uplinks frequentes,
+// liveItems cresceria sem limite e appendItem reordenaria O(n log n) por
+// evento. Mantemos so os itens mais recentes; o historico REST ja traz o
+// passado, entao o overlay ao vivo nao precisa ser sem teto.
+const MAX_LIVE_ITEMS = 500;
 
 interface DeviceHistory {
   devEui: string;
@@ -88,7 +94,9 @@ export default function Dashboard() {
         // estado para o React nao re-renderizar sem necessidade. Troca de app
         // sempre reseed (stale), mesmo no caso extremo de duplicata.
         if (!stale && next === base) return previous;
-        return { appId, items: next };
+        // Mantem so os MAX_LIVE_ITEMS mais recentes (next ja vem ordenado por
+        // time); teto da janela ao vivo para sessoes longas.
+        return { appId, items: capItems(next, MAX_LIVE_ITEMS) };
       });
     },
     [appId],

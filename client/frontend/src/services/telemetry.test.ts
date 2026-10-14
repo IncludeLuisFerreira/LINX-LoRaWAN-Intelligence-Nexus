@@ -8,6 +8,7 @@ import {
   buildTelemetrySocketUrl,
   parseTelemetryMessage,
   appendItem,
+  capItems,
   type TelemetryItem,
 } from './telemetry';
 
@@ -267,5 +268,39 @@ describe('appendItem', () => {
   it('dedupes exact duplicates that are not valid dates', () => {
     const items = [point('garbage')];
     expect(appendItem(items, point('garbage'))).toBe(items);
+  });
+});
+
+describe('capItems', () => {
+  const point = (time: string): TelemetryItem => ({
+    time,
+    dev_eui: 'aabbccddeeff0011',
+    payload: { temperature: 1 },
+    rssi: null,
+    snr: null,
+    app_id: 'app-1',
+    event_type: 'up',
+  });
+
+  it('returns the same reference when already within the limit', () => {
+    const items = [point('2026-01-01T00:00:00Z'), point('2026-01-02T00:00:00Z')];
+    expect(capItems(items, 5)).toBe(items);
+  });
+
+  it('keeps the most recent items when over the limit', () => {
+    const items = [
+      point('2026-01-01T00:00:00Z'),
+      point('2026-01-02T00:00:00Z'),
+      point('2026-01-03T00:00:00Z'),
+    ];
+    expect(capItems(items, 2).map((i) => i.time)).toEqual([
+      '2026-01-02T00:00:00Z',
+      '2026-01-03T00:00:00Z',
+    ]);
+  });
+
+  it('handles an empty list', () => {
+    const items: TelemetryItem[] = [];
+    expect(capItems(items, 3)).toBe(items);
   });
 });

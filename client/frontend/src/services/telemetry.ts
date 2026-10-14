@@ -129,6 +129,15 @@ export function appendItem(
   );
 }
 
+/** Mantém só os `limit` itens mais recentes (a lista entra ordenada por time).
+ * Retorna a mesma referência quando já está dentro do limite. */
+export function capItems(
+  items: TelemetryItem[],
+  limit: number,
+): TelemetryItem[] {
+  return items.length > limit ? items.slice(-limit) : items;
+}
+
 export interface SeriesInput {
   key: string;
   label: string;
