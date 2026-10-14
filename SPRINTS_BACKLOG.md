@@ -119,7 +119,7 @@ O MVP é considerado completo quando:
 - [ ] Wizard de Onboarding (3 steps): Scan QR → Confirmar dados → Selecionar App → Submeter.
 - [ ] Tela de Dashboard com gráfico de linha (Recharts ou Chart.js) consumindo histórico REST.
 - [ ] Conectar Dashboard ao WebSocket do Client Agent: atualizar gráfico em tempo real.
-- [ ] Fallback: se WebSocket cair, polling REST `GET /telemetry` a cada 5s.
+- [x] Fallback: se WebSocket cair, polling REST `GET /telemetry` a cada 5s.
 
 ### Aluno 2 — Linx Core
 - [ ] Cliente ChirpStack gRPC em `linx_core/chirpstack_client.py` usando `chirpstack-api` Python.
