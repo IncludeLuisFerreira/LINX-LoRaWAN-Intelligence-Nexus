@@ -10,7 +10,10 @@ export function useTelemetrySocket(
   onMessage: (item: TelemetryItem) => void,
 ): void {
   const onMessageRef = useRef(onMessage);
-  onMessageRef.current = onMessage;
+
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   useEffect(() => {
     if (!appId) return;

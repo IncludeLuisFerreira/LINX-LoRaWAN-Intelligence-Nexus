@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import {
@@ -24,6 +24,7 @@ import { TelemetryLineChart } from '../../components/charts/TelemetryLineChart';
 
 const ALL_DEVICES = '__all__';
 const EMPTY_HISTORY: TelemetryHistory = { items: [], next_cursor: null };
+const EMPTY_LIVE_ITEMS: TelemetryItem[] = [];
 
 interface DeviceHistory {
   devEui: string;
@@ -72,16 +73,30 @@ export default function Dashboard() {
         ? selectedDevEui
         : (devices[0]?.dev_eui ?? '');
 
-  const [liveItems, setLiveItems] = useState<TelemetryItem[]>([]);
+  const [live, setLive] = useState<{ appId: string; items: TelemetryItem[] }>(
+    () => ({ appId, items: [] }),
+  );
 
-  useEffect(() => {
-    setLiveItems([]);
-  }, [appId]);
+  const handleLiveItem = useCallback(
+    (item: TelemetryItem) => {
+      if (item.app_id && item.app_id !== appId) return;
+      setLive((previous) => {
+        const stale = previous.appId !== appId;
+        const base = stale ? EMPTY_LIVE_ITEMS : previous.items;
+        const next = appendItem(base, item);
+        // Dedupe: appendItem devolve a mesma referencia; preserva o objeto de
+        // estado para o React nao re-renderizar sem necessidade. Troca de app
+        // sempre reseed (stale), mesmo no caso extremo de duplicata.
+        if (!stale && next === base) return previous;
+        return { appId, items: next };
+      });
+    },
+    [appId],
+  );
 
-  useTelemetrySocket(appId, (item) => {
-    if (item.app_id && item.app_id !== appId) return;
-    setLiveItems((previous) => appendItem(previous, item));
-  });
+  useTelemetrySocket(appId, handleLiveItem);
+
+  const liveItems = live.appId === appId ? live.items : EMPTY_LIVE_ITEMS;
 
   const {
     data: history,
