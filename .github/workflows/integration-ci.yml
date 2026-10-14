@@ -48,4 +48,9 @@ jobs:
 
       - name: Dump compose logs on failure
         if: failure()
-        run: docker compose -f tests/integration/docker-compose.yml logs --tail 120
+        run: >-
+          docker compose -p lynx-integration
+          --env-file tests/integration/telemetry/test.env
+          -f deploy/docker-compose.yml
+          -f tests/integration/telemetry/docker-compose.override.yml
+          logs --tail 120
