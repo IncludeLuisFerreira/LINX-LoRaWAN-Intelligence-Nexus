@@ -16,10 +16,15 @@ import { setupServer } from 'msw/node';
 import { handlers } from '../../mocks/handlers';
 import { formatDate } from '../../utils/format';
 import { useTelemetrySocket } from '../../hooks/useTelemetrySocket';
+import { useTelemetryPolling } from '../../hooks/useTelemetryPolling';
 import Dashboard from './Dashboard';
 
 vi.mock('../../hooks/useTelemetrySocket', () => ({
   useTelemetrySocket: vi.fn(),
+}));
+
+vi.mock('../../hooks/useTelemetryPolling', () => ({
+  useTelemetryPolling: vi.fn(),
 }));
 
 const server = setupServer(...handlers);
@@ -322,6 +327,7 @@ describe('Dashboard real-time (WebSocket)', () => {
     let emit: (item: unknown) => void = () => {};
     vi.mocked(useTelemetrySocket).mockImplementation((_appId, onMessage) => {
       emit = onMessage as (item: unknown) => void;
+      return 'online';
     });
     return () => emit;
   }
@@ -461,6 +467,118 @@ describe('Dashboard real-time (WebSocket)', () => {
     });
 
     const expected = `Última leitura: ${formatDate('2099-04-04T00:00:00Z')}`;
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard polling fallback', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const appId = await firstAppId();
+    const devices = (await (
+      await fetch(`${base}/devices?app_id=${appId}`)
+    ).json()) as { id: string }[];
+    await Promise.all(
+      devices.map((device) =>
+        fetch(`${base}/devices/${device.id}`, { method: 'DELETE' }),
+      ),
+    );
+  });
+
+  function capturePolling() {
+    let emit: (item: unknown) => void = () => {};
+    vi.mocked(useTelemetryPolling).mockImplementation(
+      (_devEui, _enabled, onItem) => {
+        emit = onItem as (item: unknown) => void;
+      },
+    );
+    return () => emit;
+  }
+
+  it('enables polling for the selected device when the socket is offline', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff2020');
+    vi.mocked(useTelemetrySocket).mockReturnValue('offline');
+
+    renderDashboard(appId);
+    await screen.findByTestId('telemetry-chart');
+
+    expect(vi.mocked(useTelemetryPolling)).toHaveBeenCalledWith(
+      'aabbccddeeff2020',
+      true,
+      expect.any(Function),
+    );
+  });
+
+  it('disables polling while the socket is online', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff2121');
+    vi.mocked(useTelemetrySocket).mockReturnValue('online');
+
+    renderDashboard(appId);
+    await screen.findByTestId('telemetry-chart');
+
+    const lastCall = vi.mocked(useTelemetryPolling).mock.calls.at(-1);
+    expect(lastCall?.[1]).toBe(false);
+  });
+
+  it('disables polling in Todos os devices mode', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff2222');
+    vi.mocked(useTelemetrySocket).mockReturnValue('offline');
+
+    renderDashboard(appId);
+    await screen.findByLabelText('Device');
+    await userEvent.selectOptions(
+      screen.getByLabelText('Device'),
+      'Todos os devices',
+    );
+
+    const lastCall = vi.mocked(useTelemetryPolling).mock.calls.at(-1);
+    expect(lastCall?.[1]).toBe(false);
+  });
+
+  it('updates the chart from a polled item while offline', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff2323');
+    vi.mocked(useTelemetrySocket).mockReturnValue('offline');
+    const getPoll = capturePolling();
+
+    server.use(
+      http.get('*/api/v1/telemetry', () =>
+        HttpResponse.json({
+          items: [
+            {
+              time: '2026-01-01T00:00:00Z',
+              dev_eui: 'aabbccddeeff2323',
+              payload: { temperature: 20 },
+              rssi: -70,
+              snr: 7,
+              app_id: appId,
+              event_type: 'up',
+            },
+          ],
+          next_cursor: null,
+        }),
+      ),
+    );
+
+    renderDashboard(appId);
+    await screen.findByTestId('telemetry-chart');
+
+    act(() => {
+      getPoll()({
+        time: '2026-01-01T00:07:00Z',
+        dev_eui: 'aabbccddeeff2323',
+        payload: { temperature: 27 },
+        rssi: -70,
+        snr: 7,
+        app_id: appId,
+        event_type: 'up',
+      });
+    });
+
+    const expected = `Última leitura: ${formatDate('2026-01-01T00:07:00Z')}`;
     expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 });
