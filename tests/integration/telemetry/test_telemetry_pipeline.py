@@ -56,7 +56,7 @@ def envelope(dev_eui: str, ts: str, temperature: float = 23.5) -> dict[str, Any]
 
 
 def test_uplink_mqtt_reaches_frontend_contracts(
-    publish_mqtt: Any, ws_open: Any, rest_get: Any, db_scalar: Any
+    publish_mqtt: Any, ws_open: Any, rest_get: Any, db_count: Any
 ) -> None:
     """Uplink MQTT (gateway) chega ao WS e ao REST do frontend em <= 2s."""
     dev = "70b3d57ed0000aaa"
@@ -85,17 +85,11 @@ def test_uplink_mqtt_reaches_frontend_contracts(
     items = rest_get(f"/telemetry?dev_eui={dev}&limit=10").json()["items"]
     assert any(item["dev_eui"] == dev for item in items), "REST não retornou o ponto"
 
-    assert (
-        db_scalar(
-            "select count(*) from telemetry "
-            f"where app_id='{APP_ID}' and dev_eui='{dev}'"
-        )
-        == "1"
-    )
+    assert db_count(dev) == "1"
 
 
 def test_amqp_envelope_persisted_and_broadcast(
-    publish_amqp: Any, ws_open: Any, rest_get: Any, db_scalar: Any
+    publish_amqp: Any, ws_open: Any, rest_get: Any, db_count: Any
 ) -> None:
     """Envelope AMQP válido persiste e é difundido no WebSocket."""
     dev = "70b3d57ed0000bbb"
@@ -108,19 +102,13 @@ def test_amqp_envelope_persisted_and_broadcast(
         )
 
     assert message["event_type"] == "up"
-    assert (
-        db_scalar(
-            "select count(*) from telemetry "
-            f"where app_id='{APP_ID}' and dev_eui='{dev}'"
-        )
-        == "1"
-    )
+    assert db_count(dev) == "1"
     items = rest_get(f"/telemetry?dev_eui={dev}&limit=10").json()["items"]
     assert any(item["dev_eui"] == dev for item in items)
 
 
 def test_duplicate_envelope_is_idempotent(
-    publish_amqp: Any, db_scalar: Any
+    publish_amqp: Any, db_count: Any
 ) -> None:
     """Reenvio do mesmo (app_id, dev_eui, time, event_type) não duplica."""
     dev = "70b3d57ed0000ccc"
@@ -130,17 +118,11 @@ def test_duplicate_envelope_is_idempotent(
     assert publish_amqp(envelope(dev, ts))
 
     time.sleep(2)
-    assert (
-        db_scalar(
-            "select count(*) from telemetry "
-            f"where app_id='{APP_ID}' and dev_eui='{dev}'"
-        )
-        == "1"
-    )
+    assert db_count(dev) == "1"
 
 
 def test_invalid_envelope_is_not_persisted(
-    publish_amqp: Any, db_scalar: Any
+    publish_amqp: Any, db_count: Any
 ) -> None:
     """Envelope sem `payload` é descartado (DLQ), sem persistir."""
     dev = "70b3d57ed0000ddd"
@@ -154,17 +136,11 @@ def test_invalid_envelope_is_not_persisted(
 
     assert publish_amqp(bad)
     time.sleep(2)
-    assert (
-        db_scalar(
-            "select count(*) from telemetry "
-            f"where app_id='{APP_ID}' and dev_eui='{dev}'"
-        )
-        == "0"
-    )
+    assert db_count(dev) == "0"
 
 
 def test_iso_string_timestamp_regression(
-    publish_amqp: Any, rest_get: Any, db_scalar: Any
+    publish_amqp: Any, rest_get: Any, db_count: Any
 ) -> None:
     """Regressão: `timestamp` string ISO precisa ser aceito pelo consumer.
 
@@ -178,12 +154,6 @@ def test_iso_string_timestamp_regression(
     assert publish_amqp(envelope(dev, ts))
     time.sleep(2)
 
-    assert (
-        db_scalar(
-            "select count(*) from telemetry "
-            f"where app_id='{APP_ID}' and dev_eui='{dev}'"
-        )
-        == "1"
-    )
+    assert db_count(dev) == "1"
     items = rest_get(f"/telemetry?dev_eui={dev}&limit=10").json()["items"]
     assert len(items) == 1

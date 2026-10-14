@@ -83,7 +83,9 @@ def _ensure_deploy_env() -> None:
         shutil.copyfile(example, deploy_env)
 
 
-def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+def compose(
+    *args: str, check: bool = True, input: str | None = None
+) -> subprocess.CompletedProcess:
     """Executa `docker compose` sobre a stack real (deploy + override)."""
     return subprocess.run(
         [
@@ -99,6 +101,7 @@ def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess:
             OVERRIDE_COMPOSE,
             *args,
         ],
+        input=input,
         capture_output=True,
         text=True,
         check=check,
@@ -241,6 +244,12 @@ def _publish_probe(dev: str) -> None:
     )
 
 
+_COUNT_SQL = (
+    "select count(*) from telemetry "
+    "where app_id = :'app_id' and dev_eui = :'dev_eui';\n"
+)
+
+
 def _db_count(dev: str) -> str:
     result = compose(
         "exec",
@@ -251,9 +260,13 @@ def _db_count(dev: str) -> str:
         DB_USER,
         "-d",
         DB_NAME,
-        "-tAc",
-        f"select count(*) from telemetry where app_id='{APP_ID}' and dev_eui='{dev}'",
+        "-tA",
+        "-v",
+        f"app_id={APP_ID}",
+        "-v",
+        f"dev_eui={dev}",
         check=False,
+        input=_COUNT_SQL,
     )
     return result.stdout.strip()
 
@@ -380,6 +393,13 @@ def db_scalar() -> Any:
         return result.stdout.strip()
 
     return _scalar
+
+
+@pytest.fixture
+def db_count() -> Any:
+    """Conta linhas de telemetria do device no app de teste (SQL parameterizado)."""
+
+    return _db_count
 
 
 @pytest.fixture
