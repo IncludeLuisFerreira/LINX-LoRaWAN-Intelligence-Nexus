@@ -5,11 +5,13 @@ import type { TelemetryItem } from '../services/telemetry';
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
+  url: string;
   onmessage: ((event: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   onclose: (() => void) | null = null;
   close = vi.fn();
-  constructor(public url: string) {
+  constructor(url: string) {
+    this.url = url;
     FakeWebSocket.instances.push(this);
   }
 }
