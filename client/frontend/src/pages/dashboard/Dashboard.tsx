@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import {
   telemetryService,
   numericMetrics,
   buildSeries,
+  appendItem,
   type TelemetryHistory,
+  type TelemetryItem,
   type SeriesInput,
 } from '../../services/telemetry';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useTelemetrySocket } from '../../hooks/useTelemetrySocket';
 import { formatDate } from '../../utils/format';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
@@ -69,6 +72,17 @@ export default function Dashboard() {
         ? selectedDevEui
         : (devices[0]?.dev_eui ?? '');
 
+  const [liveItems, setLiveItems] = useState<TelemetryItem[]>([]);
+
+  useEffect(() => {
+    setLiveItems([]);
+  }, [appId]);
+
+  useTelemetrySocket(appId, (item) => {
+    if (item.app_id && item.app_id !== appId) return;
+    setLiveItems((previous) => appendItem(previous, item));
+  });
+
   const {
     data: history,
     error: historyError,
@@ -87,7 +101,29 @@ export default function Dashboard() {
   );
 
   const entries = history ?? [];
-  const items = entries.flatMap((entry) => entry.history.items);
+
+  const liveByDevEui = new Map<string, TelemetryItem[]>();
+  for (const item of liveItems) {
+    const bucket = liveByDevEui.get(item.dev_eui);
+    if (bucket) bucket.push(item);
+    else liveByDevEui.set(item.dev_eui, [item]);
+  }
+
+  const combinedEntries: DeviceHistory[] = entries.map((entry) => {
+    const live = liveByDevEui.get(entry.devEui) ?? [];
+    return {
+      devEui: entry.devEui,
+      history: {
+        next_cursor: entry.history.next_cursor,
+        items: live.reduce(
+          (acc, item) => appendItem(acc, item),
+          entry.history.items,
+        ),
+      },
+    };
+  });
+
+  const items = combinedEntries.flatMap((entry) => entry.history.items);
   const metrics = numericMetrics(items);
   const activeMetric = metrics.includes(metric) ? metric : (metrics[0] ?? '');
 
@@ -106,7 +142,7 @@ export default function Dashboard() {
 
   const chartSeries: SeriesInput[] =
     activeDevEui === ALL_DEVICES
-      ? entries.map((entry) => ({
+      ? combinedEntries.map((entry) => ({
           key: entry.devEui,
           label: labelFor(entry.devEui),
           data: buildSeries(entry.history.items, activeMetric),

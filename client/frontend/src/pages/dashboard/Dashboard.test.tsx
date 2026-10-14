@@ -1,12 +1,26 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { handlers } from '../../mocks/handlers';
 import { formatDate } from '../../utils/format';
+import { useTelemetrySocket } from '../../hooks/useTelemetrySocket';
 import Dashboard from './Dashboard';
+
+vi.mock('../../hooks/useTelemetrySocket', () => ({
+  useTelemetrySocket: vi.fn(),
+}));
 
 const server = setupServer(...handlers);
 const base = 'http://localhost:8000/api/v1';
@@ -287,6 +301,166 @@ describe('Dashboard', () => {
     renderDashboard(appId);
 
     const expected = `Última leitura: ${formatDate('2026-01-03T00:00:00Z')}`;
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard real-time (WebSocket)', () => {
+  beforeEach(async () => {
+    const appId = await firstAppId();
+    const devices = (await (
+      await fetch(`${base}/devices?app_id=${appId}`)
+    ).json()) as { id: string }[];
+    await Promise.all(
+      devices.map((device) =>
+        fetch(`${base}/devices/${device.id}`, { method: 'DELETE' }),
+      ),
+    );
+  });
+
+  function captureSocket() {
+    let emit: (item: unknown) => void = () => {};
+    vi.mocked(useTelemetrySocket).mockImplementation((_appId, onMessage) => {
+      emit = onMessage as (item: unknown) => void;
+    });
+    return () => emit;
+  }
+
+  it('updates the chart and last reading without a new REST call', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff1111');
+    const getEmit = captureSocket();
+
+    let telemetryCalls = 0;
+    server.use(
+      http.get('*/api/v1/telemetry', () => {
+        telemetryCalls += 1;
+        return HttpResponse.json({
+          items: [
+            {
+              time: '2026-01-01T00:00:00Z',
+              dev_eui: 'aabbccddeeff1111',
+              payload: { temperature: 20 },
+              rssi: -70,
+              snr: 7,
+              app_id: appId,
+              event_type: 'up',
+            },
+          ],
+          next_cursor: null,
+        });
+      }),
+    );
+
+    renderDashboard(appId);
+    await screen.findByTestId('telemetry-chart');
+    const callsAfterLoad = telemetryCalls;
+
+    act(() => {
+      getEmit()({
+        time: '2026-01-01T00:05:00Z',
+        dev_eui: 'aabbccddeeff1111',
+        payload: { temperature: 25 },
+        rssi: -70,
+        snr: 7,
+        app_id: appId,
+        event_type: 'up',
+      });
+    });
+
+    const expected = `Última leitura: ${formatDate('2026-01-01T00:05:00Z')}`;
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect(telemetryCalls).toBe(callsAfterLoad);
+  });
+
+  it('ignores a live event from another app', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff1212');
+    server.use(
+      http.get('*/api/v1/telemetry', () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+    );
+    const getEmit = captureSocket();
+    renderDashboard(appId);
+    await screen.findByLabelText('Device');
+
+    act(() => {
+      getEmit()({
+        time: '2099-02-02T00:00:00Z',
+        dev_eui: 'aabbccddeeff1212',
+        payload: { temperature: 99 },
+        rssi: -70,
+        snr: 7,
+        app_id: 'outro-app',
+        event_type: 'up',
+      });
+    });
+
+    const notExpected = `Última leitura: ${formatDate('2099-02-02T00:00:00Z')}`;
+    expect(screen.queryByText(notExpected)).not.toBeInTheDocument();
+  });
+
+  it('ignores a live event from another device when one is selected', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff1313');
+    await createDevice(appId, 'aabbccddeeff1414');
+    server.use(
+      http.get('*/api/v1/telemetry', () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+    );
+    const getEmit = captureSocket();
+    renderDashboard(appId);
+    await screen.findByLabelText('Device');
+
+    act(() => {
+      getEmit()({
+        time: '2099-03-03T00:00:00Z',
+        dev_eui: 'aabbccddeeff1414',
+        payload: { temperature: 99 },
+        rssi: -70,
+        snr: 7,
+        app_id: appId,
+        event_type: 'up',
+      });
+    });
+
+    const notExpected = `Última leitura: ${formatDate('2099-03-03T00:00:00Z')}`;
+    expect(screen.queryByText(notExpected)).not.toBeInTheDocument();
+  });
+
+  it('accepts a live event from any device in Todos mode', async () => {
+    const appId = await firstAppId();
+    await createDevice(appId, 'aabbccddeeff1515');
+    await createDevice(appId, 'aabbccddeeff1616');
+    server.use(
+      http.get('*/api/v1/telemetry', () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+    );
+    const getEmit = captureSocket();
+    renderDashboard(appId);
+    await screen.findByLabelText('Device');
+
+    await userEvent.selectOptions(
+      screen.getByLabelText('Device'),
+      'Todos os devices',
+    );
+
+    act(() => {
+      getEmit()({
+        time: '2099-04-04T00:00:00Z',
+        dev_eui: 'aabbccddeeff1616',
+        payload: { temperature: 30 },
+        rssi: -70,
+        snr: 7,
+        app_id: appId,
+        event_type: 'up',
+      });
+    });
+
+    const expected = `Última leitura: ${formatDate('2099-04-04T00:00:00Z')}`;
     expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 });
