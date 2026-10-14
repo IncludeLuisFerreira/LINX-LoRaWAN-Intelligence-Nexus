@@ -1,4 +1,5 @@
 import inspect
+from datetime import datetime
 
 import pytest
 
@@ -68,6 +69,25 @@ async def test_insert_event_returns_false_on_conflict():
         snr=None,
     )
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_insert_event_coerces_iso_string_to_datetime():
+    # Regressao: asyncpg exige datetime no parametro $1::timestamptz; o
+    # envelope traz o timestamp como string ISO e deve ser convertido.
+    conn = FakeConnection()
+    await db.insert_event(
+        FakePool(conn),
+        event_time="2026-10-08T12:00:00Z",
+        app_id="app-1",
+        dev_eui="dev1",
+        event_type="up",
+        payload={},
+        rssi=None,
+        snr=None,
+    )
+    _, args = conn.calls[0]
+    assert isinstance(args[0], datetime)
 
 
 @pytest.mark.asyncio

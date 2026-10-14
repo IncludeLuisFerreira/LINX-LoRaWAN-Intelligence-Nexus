@@ -92,7 +92,7 @@ async def create_db_pool(
 async def insert_event(
     pool: asyncpg.Pool,
     *,
-    event_time: str,
+    event_time: str | datetime,
     app_id: str,
     dev_eui: str,
     event_type: str,
@@ -104,6 +104,8 @@ async def insert_event(
 
     Retorna True se inseriu, False se duplicata.
     """
+    if isinstance(event_time, str):
+        event_time = _parse_iso(event_time)
     query = """
         INSERT INTO telemetry
             (time, dev_eui, payload, rssi, snr, app_id, event_type)
