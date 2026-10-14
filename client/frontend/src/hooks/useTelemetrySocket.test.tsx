@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { useTelemetrySocket } from './useTelemetrySocket';
 import type { TelemetryItem } from '../services/telemetry';
 
@@ -7,6 +7,7 @@ class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
   url: string;
   onmessage: ((event: { data: string }) => void) | null = null;
+  onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onclose: (() => void) | null = null;
   close = vi.fn();
@@ -23,8 +24,8 @@ function Probe({
   appId: string;
   onMessage: (item: TelemetryItem) => void;
 }) {
-  useTelemetrySocket(appId, onMessage);
-  return null;
+  const status = useTelemetrySocket(appId, onMessage);
+  return <span data-testid="status">{status}</span>;
 }
 
 describe('useTelemetrySocket', () => {
@@ -34,7 +35,10 @@ describe('useTelemetrySocket', () => {
     vi.stubGlobal('location', { protocol: 'http:', host: 'localhost' });
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it('opens the socket at /ws/telemetry/{appId}', () => {
     render(<Probe appId="app-1" onMessage={vi.fn()} />);
@@ -84,6 +88,72 @@ describe('useTelemetrySocket', () => {
 
   it('does not throw when the socket errors', () => {
     render(<Probe appId="app-1" onMessage={vi.fn()} />);
-    expect(() => FakeWebSocket.instances[0].onerror?.()).not.toThrow();
+    expect(() =>
+      act(() => FakeWebSocket.instances[0].onerror?.()),
+    ).not.toThrow();
+  });
+});
+
+describe('useTelemetrySocket status', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    vi.stubGlobal('location', { protocol: 'http:', host: 'localhost' });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('starts in connecting', () => {
+    render(<Probe appId="app-1" onMessage={vi.fn()} />);
+    expect(screen.getByTestId('status')).toHaveTextContent('connecting');
+  });
+
+  it('reports online after the socket opens', () => {
+    render(<Probe appId="app-1" onMessage={vi.fn()} />);
+    act(() => FakeWebSocket.instances[0].onopen?.());
+    expect(screen.getByTestId('status')).toHaveTextContent('online');
+  });
+
+  it('reports offline when the socket closes', () => {
+    render(<Probe appId="app-1" onMessage={vi.fn()} />);
+    act(() => FakeWebSocket.instances[0].onclose?.());
+    expect(screen.getByTestId('status')).toHaveTextContent('offline');
+  });
+
+  it('reports offline when the socket errors', () => {
+    render(<Probe appId="app-1" onMessage={vi.fn()} />);
+    act(() => FakeWebSocket.instances[0].onerror?.());
+    expect(screen.getByTestId('status')).toHaveTextContent('offline');
+  });
+
+  it('falls back to offline when the connection stalls past the timeout', () => {
+    vi.useFakeTimers();
+    render(<Probe appId="app-1" onMessage={vi.fn()} />);
+
+    act(() => vi.advanceTimersByTime(5000));
+
+    expect(screen.getByTestId('status')).toHaveTextContent('offline');
+  });
+
+  it('stays online when it opens before the timeout', () => {
+    vi.useFakeTimers();
+    render(<Probe appId="app-1" onMessage={vi.fn()} />);
+
+    act(() => FakeWebSocket.instances[0].onopen?.());
+    act(() => vi.advanceTimersByTime(5000));
+
+    expect(screen.getByTestId('status')).toHaveTextContent('online');
+  });
+
+  it('resets to connecting when appId changes', () => {
+    const { rerender } = render(<Probe appId="app-1" onMessage={vi.fn()} />);
+    act(() => FakeWebSocket.instances[0].onopen?.());
+
+    rerender(<Probe appId="app-2" onMessage={vi.fn()} />);
+
+    expect(screen.getByTestId('status')).toHaveTextContent('connecting');
   });
 });
