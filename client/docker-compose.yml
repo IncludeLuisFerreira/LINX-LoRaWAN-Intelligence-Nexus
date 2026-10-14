@@ -41,6 +41,8 @@ services:
     environment:
       # Destino do proxy /api do nginx do dashboard (backend do plano de controle).
       - BACKEND_URL=${BACKEND_URL:?BACKEND_URL must be set}
+      # Destino do proxy /ws/ do nginx (WebSocket de telemetria).
+      - WS_BACKEND_URL=${WS_BACKEND_URL:-http://telemetry_consumer:8000}
     ports:
       - "8080:80"
 volumes:
