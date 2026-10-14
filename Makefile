@@ -1,6 +1,6 @@
 # O .PHONY avisa ao Make que essas palavras são nomes de comandos, e não nomes de arquivos físicos na pasta.
 # Isso evita conflitos caso você crie um arquivo chamado "build" ou "logs" no futuro.
-.PHONY: up down logs build stop-all progress
+.PHONY: up down logs build stop-all progress integration
 
 # COMANDO PARA PARAR TODOS OS CONTAINERS E SUBIR O NOVO
 # O "up: stop-all" diz que o comando "stop-all" deve rodar ANTES do "up".
@@ -37,3 +37,9 @@ stop-all:
 # Rode após fechar/abrir issues para refletir o progresso (checkboxes [x]/[ ]).
 progress:
 	python3 scripts/update_progress.py
+
+# COMANDO PARA RODAR OS TESTES DE INTEGRAÇÃO PONTA-A-PONTA
+# Sobe a stack de tests/integration (mosquitto, routing, rabbitmq,
+# timescaledb, telemetry_consumer), roda o pytest e derruba tudo no fim.
+integration:
+	tests/integration/run.sh

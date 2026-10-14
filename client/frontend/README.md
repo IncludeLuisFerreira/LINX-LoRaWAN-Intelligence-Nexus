@@ -19,8 +19,8 @@ Não há autenticação nesta versão — o acesso é direto.
   formulários em modais com validação tipada.
 - **[Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/)**
   — testes de unidade e integração (cobertura mínima de 70%).
-- **[MSW (Mock Service Worker)](https://mswjs.io/)** — mocking de API por
-  contrato.
+- **[MSW (Mock Service Worker)](https://mswjs.io/)** — mocking de API e de
+  WebSocket por contrato.
 - **OxLint** / **Prettier** / **Husky** — qualidade e formatação.
 
 ## Navegação
@@ -102,6 +102,16 @@ sobrepõe as séries em um gráfico multi-linha (uma linha por device).
 O componente se recarrega ao trocar de device ou de aplicação. Em
 desenvolvimento sem backend, o MSW serve uma série sintética (`VITE_ENABLE_MOCKS=true`).
 
+### Tempo real (WebSocket)
+
+O dashboard abre `WS /ws/telemetry/{app_id}` ao montar e aplica cada evento
+recebido ao gráfico em ≤ 2s, sem refresh. A conexão é fechada no unmount ou na
+troca de aplicação, e eventos de outro app/device são ignorados.
+
+Em desenvolvimento, o dev server faz proxy de `/ws` para
+`VITE_WS_PROXY_TARGET`. Com `VITE_ENABLE_MOCKS=true`, o MSW ativa um mock de
+WebSocket que emite eventos a cada 2s.
+
 ## Nickname de device
 
 Cada device aceita um `nickname` opcional (até 50 caracteres), útil para
@@ -156,9 +166,9 @@ npm install
 npm run dev
 ```
 
-O dev server faz **proxy de `/api` para `http://localhost:8000`**
-(configurado em `vite.config.ts`), então não há CORS envolvido. Suba o
-`identity_api` na porta 8000.
+O dev server faz **proxy de `/api` e de `/ws` para `http://localhost:8000`**
+(configurado em `vite.config.ts`; o proxy `/ws` usa `VITE_WS_PROXY_TARGET`),
+então não há CORS envolvido. Suba o `identity_api` na porta 8000.
 
 ### Scripts
 
@@ -177,6 +187,8 @@ npx vitest run --coverage   # cobertura (mínimo 70%)
 | Variável | Default | Descrição |
 | --- | --- | --- |
 | `VITE_API_URL` | `/api/v1` | Base URL da API (relativo; resolvido pelo proxy). |
+| `VITE_WS_URL` | vazio | Base URL do WebSocket de telemetria. Vazio resolve para a mesma origem (`ws`/`wss`). |
+| `VITE_WS_PROXY_TARGET` | `http://localhost:8000` | Alvo do proxy `/ws` no dev server. |
 | `VITE_ENABLE_MOCKS` | `false` | Liga o MSW no bundle. Use `true` para demos sem backend. |
 
 ## Docker

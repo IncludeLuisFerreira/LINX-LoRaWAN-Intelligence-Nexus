@@ -25,6 +25,9 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # em compose use o nome do serviço (ex.: -e BACKEND_URL=http://identity_api:8000).
 ENV BACKEND_URL=http://127.0.0.1:8000
 
+# Destino do proxy /ws/ (WebSocket de telemetria).
+ENV WS_BACKEND_URL=http://127.0.0.1:8000
+
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

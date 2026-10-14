@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import {
   telemetryService,
   numericMetrics,
   buildSeries,
+  appendItem,
+  capItems,
   type TelemetryHistory,
+  type TelemetryItem,
   type SeriesInput,
 } from '../../services/telemetry';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useTelemetrySocket } from '../../hooks/useTelemetrySocket';
 import { formatDate } from '../../utils/format';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
@@ -21,6 +25,12 @@ import { TelemetryLineChart } from '../../components/charts/TelemetryLineChart';
 
 const ALL_DEVICES = '__all__';
 const EMPTY_HISTORY: TelemetryHistory = { items: [], next_cursor: null };
+const EMPTY_LIVE_ITEMS: TelemetryItem[] = [];
+// Tetos da janela de tempo real: em sessao longa com uplinks frequentes,
+// liveItems cresceria sem limite e appendItem reordenaria O(n log n) por
+// evento. Mantemos so os itens mais recentes; o historico REST ja traz o
+// passado, entao o overlay ao vivo nao precisa ser sem teto.
+const MAX_LIVE_ITEMS = 500;
 
 interface DeviceHistory {
   devEui: string;
@@ -69,6 +79,33 @@ export default function Dashboard() {
         ? selectedDevEui
         : (devices[0]?.dev_eui ?? '');
 
+  const [live, setLive] = useState<{ appId: string; items: TelemetryItem[] }>(
+    () => ({ appId, items: [] }),
+  );
+
+  const handleLiveItem = useCallback(
+    (item: TelemetryItem) => {
+      if (item.app_id && item.app_id !== appId) return;
+      setLive((previous) => {
+        const stale = previous.appId !== appId;
+        const base = stale ? EMPTY_LIVE_ITEMS : previous.items;
+        const next = appendItem(base, item);
+        // Dedupe: appendItem devolve a mesma referencia; preserva o objeto de
+        // estado para o React nao re-renderizar sem necessidade. Troca de app
+        // sempre reseed (stale), mesmo no caso extremo de duplicata.
+        if (!stale && next === base) return previous;
+        // Mantem so os MAX_LIVE_ITEMS mais recentes (next ja vem ordenado por
+        // time); teto da janela ao vivo para sessoes longas.
+        return { appId, items: capItems(next, MAX_LIVE_ITEMS) };
+      });
+    },
+    [appId],
+  );
+
+  useTelemetrySocket(appId, handleLiveItem);
+
+  const liveItems = live.appId === appId ? live.items : EMPTY_LIVE_ITEMS;
+
   const {
     data: history,
     error: historyError,
@@ -87,7 +124,29 @@ export default function Dashboard() {
   );
 
   const entries = history ?? [];
-  const items = entries.flatMap((entry) => entry.history.items);
+
+  const liveByDevEui = new Map<string, TelemetryItem[]>();
+  for (const item of liveItems) {
+    const bucket = liveByDevEui.get(item.dev_eui);
+    if (bucket) bucket.push(item);
+    else liveByDevEui.set(item.dev_eui, [item]);
+  }
+
+  const combinedEntries: DeviceHistory[] = entries.map((entry) => {
+    const live = liveByDevEui.get(entry.devEui) ?? [];
+    return {
+      devEui: entry.devEui,
+      history: {
+        next_cursor: entry.history.next_cursor,
+        items: live.reduce(
+          (acc, item) => appendItem(acc, item),
+          entry.history.items,
+        ),
+      },
+    };
+  });
+
+  const items = combinedEntries.flatMap((entry) => entry.history.items);
   const metrics = numericMetrics(items);
   const activeMetric = metrics.includes(metric) ? metric : (metrics[0] ?? '');
 
@@ -106,7 +165,7 @@ export default function Dashboard() {
 
   const chartSeries: SeriesInput[] =
     activeDevEui === ALL_DEVICES
-      ? entries.map((entry) => ({
+      ? combinedEntries.map((entry) => ({
           key: entry.devEui,
           label: labelFor(entry.devEui),
           data: buildSeries(entry.history.items, activeMetric),

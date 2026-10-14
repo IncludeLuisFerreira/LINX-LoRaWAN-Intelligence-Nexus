@@ -1,0 +1,56 @@
+name: integration-ci
+
+on:
+  pull_request:
+    paths:
+      - "tests/integration/**"
+      - "client/services/telemetry_consumer/**"
+      - "middleware/services/routing/**"
+      - "deploy/docker-compose.yml"
+      - "deploy/db/**"
+      - "deploy/.env.example"
+      - ".github/workflows/integration-ci.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "tests/integration/**"
+      - "client/services/telemetry_consumer/**"
+      - "middleware/services/routing/**"
+      - "deploy/docker-compose.yml"
+      - "deploy/db/**"
+      - "deploy/.env.example"
+      - ".github/workflows/integration-ci.yml"
+
+env:
+  PYTHON_VERSION: "3.12"
+  POETRY_VERSION: "2.4.1"
+
+jobs:
+  integration:
+    name: Testes de integração ponta-a-ponta
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Run integration suite
+        run: tests/integration/run.sh
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: >-
+          docker compose -p lynx-integration
+          --env-file tests/integration/telemetry/test.env
+          -f deploy/docker-compose.yml
+          -f tests/integration/telemetry/docker-compose.override.yml
+          logs --tail 120
