@@ -1,10 +1,13 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { api } from './api';
 import {
   telemetryService,
   numericMetrics,
   buildSeries,
   mergeSeries,
+  buildTelemetrySocketUrl,
+  parseTelemetryMessage,
+  appendItem,
   type TelemetryItem,
 } from './telemetry';
 
@@ -142,5 +145,109 @@ describe('mergeSeries', () => {
       { time: 't1', a: 1, b: 2 },
       { time: 't2', b: 3 },
     ]);
+  });
+});
+
+describe('buildTelemetrySocketUrl', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('uses VITE_WS_URL as base when defined', () => {
+    vi.stubEnv('VITE_WS_URL', 'wss://ws.example.com');
+    expect(buildTelemetrySocketUrl('app-1')).toBe(
+      'wss://ws.example.com/ws/telemetry/app-1',
+    );
+  });
+
+  it('derives wss from https location', () => {
+    vi.stubEnv('VITE_WS_URL', '');
+    vi.stubGlobal('location', { protocol: 'https:', host: 'linx.test' });
+    expect(buildTelemetrySocketUrl('app-2')).toBe(
+      'wss://linx.test/ws/telemetry/app-2',
+    );
+  });
+
+  it('derives ws from http location', () => {
+    vi.stubEnv('VITE_WS_URL', '');
+    vi.stubGlobal('location', { protocol: 'http:', host: 'localhost:5173' });
+    expect(buildTelemetrySocketUrl('app-3')).toBe(
+      'ws://localhost:5173/ws/telemetry/app-3',
+    );
+  });
+});
+
+describe('parseTelemetryMessage', () => {
+  it('parses a valid JSON string into a TelemetryItem', () => {
+    const raw =
+      '{"time":"2026-01-01T00:00:00Z","dev_eui":"aabb","payload":{"temperature":21},"rssi":-70,"snr":7,"app_id":"app-1","event_type":"up"}';
+    expect(parseTelemetryMessage(raw)).toEqual({
+      time: '2026-01-01T00:00:00Z',
+      dev_eui: 'aabb',
+      payload: { temperature: 21 },
+      rssi: -70,
+      snr: 7,
+      app_id: 'app-1',
+      event_type: 'up',
+    });
+  });
+
+  it('returns null on invalid JSON', () => {
+    expect(parseTelemetryMessage('{not json')).toBeNull();
+  });
+
+  it('returns null when a required field is missing', () => {
+    expect(parseTelemetryMessage('{"dev_eui":"aabb","payload":{}}')).toBeNull();
+    expect(parseTelemetryMessage('{"time":"t","payload":{}}')).toBeNull();
+    expect(parseTelemetryMessage('{"time":"t","dev_eui":"aabb"}')).toBeNull();
+  });
+
+  it('defaults optional fields when absent', () => {
+    expect(
+      parseTelemetryMessage('{"time":"t","dev_eui":"aabb","payload":{}}'),
+    ).toEqual({
+      time: 't',
+      dev_eui: 'aabb',
+      payload: {},
+      rssi: null,
+      snr: null,
+      app_id: '',
+      event_type: '',
+    });
+  });
+});
+
+describe('appendItem', () => {
+  const point = (time: string, devEui = 'aabb', eventType = 'up') => ({
+    time,
+    dev_eui: devEui,
+    payload: { temperature: 1 },
+    rssi: null,
+    snr: null,
+    app_id: 'app-1',
+    event_type: eventType,
+  });
+
+  it('appends a new item sorted by time', () => {
+    const items = [point('2026-01-02T00:00:00Z')];
+    const result = appendItem(items, point('2026-01-01T00:00:00Z'));
+    expect(result.map((i) => i.time)).toEqual([
+      '2026-01-01T00:00:00Z',
+      '2026-01-02T00:00:00Z',
+    ]);
+  });
+
+  it('ignores a duplicate by (dev_eui, time, event_type)', () => {
+    const items = [point('2026-01-01T00:00:00Z')];
+    const result = appendItem(items, point('2026-01-01T00:00:00Z'));
+    expect(result).toHaveLength(1);
+    expect(result).toBe(items);
+  });
+
+  it('keeps different event_type at the same time', () => {
+    const items = [point('2026-01-01T00:00:00Z', 'aabb', 'up')];
+    const result = appendItem(
+      items,
+      point('2026-01-01T00:00:00Z', 'aabb', 'status'),
+    );
+    expect(result).toHaveLength(2);
   });
 });

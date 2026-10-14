@@ -68,6 +68,59 @@ export function buildSeries(
     .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 }
 
+/** URL absoluta do WebSocket de telemetria para o app. */
+export function buildTelemetrySocketUrl(appId: string): string {
+  const base = import.meta.env.VITE_WS_URL;
+  const prefix =
+    base && base.trim() !== ''
+      ? base.replace(/\/$/, '')
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+  return `${prefix}/ws/telemetry/${appId}`;
+}
+
+/** Valida e normaliza uma mensagem recebida do WebSocket. */
+export function parseTelemetryMessage(raw: unknown): TelemetryItem | null {
+  let data: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof data !== 'object' || data === null) return null;
+  const record = data as Record<string, unknown>;
+  const { time, dev_eui, payload } = record;
+  if (typeof time !== 'string' || typeof dev_eui !== 'string') return null;
+  if (typeof payload !== 'object' || payload === null) return null;
+  return {
+    time,
+    dev_eui,
+    payload: payload as Record<string, unknown>,
+    rssi: typeof record.rssi === 'number' ? record.rssi : null,
+    snr: typeof record.snr === 'number' ? record.snr : null,
+    app_id: typeof record.app_id === 'string' ? record.app_id : '',
+    event_type: typeof record.event_type === 'string' ? record.event_type : '',
+  };
+}
+
+/** Anexa um item deduplicando por (dev_eui, time, event_type), ordenado por time. */
+export function appendItem(
+  items: TelemetryItem[],
+  item: TelemetryItem,
+): TelemetryItem[] {
+  const exists = items.some(
+    (current) =>
+      current.dev_eui === item.dev_eui &&
+      current.time === item.time &&
+      current.event_type === item.event_type,
+  );
+  if (exists) return items;
+  return [...items, item].sort(
+    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
+  );
+}
+
 export interface SeriesInput {
   key: string;
   label: string;
