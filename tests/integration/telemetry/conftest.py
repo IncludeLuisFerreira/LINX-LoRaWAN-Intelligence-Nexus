@@ -69,6 +69,11 @@ DB_NAME = _ENV.get("DB_NAME", "tenantdb")
 
 UP_TIMEOUT = os.environ.get("IT_UP_TIMEOUT", "300")
 
+RABBIT_MGMT = os.environ.get("IT_RABBIT_MGMT", "http://127.0.0.1:15673")
+MGMT_USER = _ENV.get("RABBITMQ_DEFAULT_USER", "linx")
+MGMT_PASS = _ENV.get("RABBITMQ_DEFAULT_PASS", "changeme")
+DLQ_NAME = f"linx.telemetry.{APP_ID}.dlq"
+
 
 def _ensure_deploy_env() -> None:
     """Garante `deploy/.env` (exigido por `env_file` do compose base).
@@ -400,6 +405,22 @@ def db_count() -> Any:
     """Conta linhas de telemetria do device no app de teste (SQL parameterizado)."""
 
     return _db_count
+
+
+@pytest.fixture
+def dlq_messages() -> Any:
+    """Total de mensagens retidas na DLQ do tenant, via API de gestao do RabbitMQ."""
+
+    def _messages(queue: str = DLQ_NAME) -> int:
+        response = httpx.get(
+            f"{RABBIT_MGMT}/api/queues/%2f/{queue}",
+            auth=(MGMT_USER, MGMT_PASS),
+            timeout=10,
+        )
+        response.raise_for_status()
+        return int(response.json().get("messages", 0))
+
+    return _messages
 
 
 @pytest.fixture

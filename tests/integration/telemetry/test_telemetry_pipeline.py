@@ -26,6 +26,19 @@ def now_iso() -> str:
     )
 
 
+def wait_until(
+    predicate: Callable[[], bool], timeout: float = 15.0, step: float = 0.5
+) -> bool:
+    """Poll `predicate` até o prazo. `time.sleep` fixo é flaky no hop extra
+    dead-letter + métrica da API de gestão."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(step)
+    return bool(predicate())
+
+
 def recv_matching(
     ws: Any, predicate: Callable[[dict[str, Any]], bool], timeout: float = 10.0
 ) -> dict[str, Any]:
@@ -122,9 +135,13 @@ def test_duplicate_envelope_is_idempotent(
 
 
 def test_invalid_envelope_is_not_persisted(
-    publish_amqp: Any, db_count: Any
+    publish_amqp: Any, db_count: Any, dlq_messages: Any
 ) -> None:
-    """Envelope sem `payload` é descartado (DLQ), sem persistir."""
+    """Envelope sem `payload` vai para a DLQ, sem persistir.
+
+    Estreita o contrato prometido no README: nao basta "nao aparecer no banco"
+    -- o corpo bruto precisa chegar de fato na fila de dead-letter do tenant.
+    """
     dev = "70b3d57ed0000ddd"
     ts = now_iso()
     bad = {
@@ -134,8 +151,13 @@ def test_invalid_envelope_is_not_persisted(
         "timestamp": ts,
     }
 
+    before = dlq_messages()
+
     assert publish_amqp(bad)
-    time.sleep(2)
+
+    assert wait_until(lambda: dlq_messages() >= before + 1), (
+        "payload inválido não chegou à DLQ em 15s"
+    )
     assert db_count(dev) == "0"
 
 
