@@ -8,6 +8,8 @@ def test_settings_defaults(monkeypatch):
         "MQTT_TOPIC",
         "MQTT_QOS",
         "MQTT_CLIENT_ID",
+        "MQTT_USERNAME",
+        "MQTT_PASSWORD",
         "MQTT_CONNECT_MAX_ATTEMPTS",
         "MQTT_CONNECT_BACKOFF_SECONDS",
         "RABBIT_URL",
@@ -26,6 +28,8 @@ def test_settings_defaults(monkeypatch):
     assert settings.mqtt_topic == "application/+/device/+/event/up"
     assert settings.mqtt_qos == 1
     assert settings.mqtt_client_id == "linx-routing"
+    assert settings.mqtt_username == ""
+    assert settings.mqtt_password == ""
     assert settings.mqtt_connect_max_attempts == 5
     assert settings.mqtt_connect_backoff_seconds == 1.0
     assert settings.rabbit_url == "amqp://guest:guest@localhost:5672/%2f"
@@ -49,6 +53,8 @@ def test_settings_override(monkeypatch):
     monkeypatch.setenv("MQTT_BROKER_PORT", "8883")
     monkeypatch.setenv("MQTT_QOS", "0")
     monkeypatch.setenv("MQTT_CLIENT_ID", "custom-client")
+    monkeypatch.setenv("MQTT_USERNAME", "routing")
+    monkeypatch.setenv("MQTT_PASSWORD", "s3gredo")
     monkeypatch.setenv("RABBIT_URL", "amqp://guest:guest@rabbitmq:5672/%2f")
     monkeypatch.setenv("RABBIT_EXCHANGE_PREFIX", "custom.telemetry")
     monkeypatch.setenv("RABBIT_AUDIT_QUEUE", "custom.audit")
@@ -60,6 +66,8 @@ def test_settings_override(monkeypatch):
     assert settings.mqtt_broker_port == 8883
     assert settings.mqtt_qos == 0
     assert settings.mqtt_client_id == "custom-client"
+    assert settings.mqtt_username == "routing"
+    assert settings.mqtt_password == "s3gredo"
     assert settings.rabbit_url == "amqp://guest:guest@rabbitmq:5672/%2f"
     assert settings.rabbit_exchange_prefix == "custom.telemetry"
     assert settings.rabbit_audit_queue == "custom.audit"

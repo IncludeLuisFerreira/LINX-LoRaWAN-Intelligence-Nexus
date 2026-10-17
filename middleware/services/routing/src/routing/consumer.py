@@ -45,6 +45,8 @@ class MqttConsumer:
         max_payload_bytes: int,
         out_queue: queue.Queue,
         client_id: str = "linx-routing",
+        username: str = "",
+        password: str = "",
         connect_max_attempts: int = 5,
         connect_backoff_seconds: float = 1.0,
         stop_event: threading.Event | None = None,
@@ -56,6 +58,8 @@ class MqttConsumer:
         self.max_payload_bytes = max_payload_bytes
         self.out_queue = out_queue
         self.client_id = client_id
+        self.username = username
+        self.password = password
         self.connect_max_attempts = connect_max_attempts
         self.connect_backoff_seconds = connect_backoff_seconds
         self.stop_event = stop_event
@@ -165,6 +169,8 @@ class MqttConsumer:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
+        if self.username:
+            self.client.username_pw_set(self.username, self.password)
         if not self._connect():
             return False
         self.client.loop_forever()

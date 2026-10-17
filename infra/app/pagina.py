@@ -2,6 +2,7 @@ from datetime import datetime
 from flask import Flask, request, render_template_string
 from zoneinfo import ZoneInfo
 import json
+import os
 import paho.mqtt.client as mqtt
 import threading
 
@@ -10,6 +11,12 @@ app = Flask(__name__)
 historico_pacotes = []
 total_pacotes = 0
 MQTT_TOPIC = "application/+/device/+/event/up"
+# Auth no broker (#208, allow_anonymous false). Dev monitor reusa a
+# identidade de leitura `routing` (read application/#). Credenciais via env.
+MQTT_HOST = os.environ.get("MQTT_BROKER_HOST", "mosquitto")
+MQTT_PORT = int(os.environ.get("MQTT_BROKER_PORT", "1883"))
+MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", "")
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -140,7 +147,9 @@ def start_mqtt():
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         client.on_connect = on_connect
         client.on_message = on_message
-        client.connect("mosquitto", 1883, 60)
+        if MQTT_USERNAME:
+            client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+        client.connect(MQTT_HOST, MQTT_PORT, 60)
         client.loop_start()
         print("[MQTT] Thread iniciada", flush=True)
     except Exception as e:

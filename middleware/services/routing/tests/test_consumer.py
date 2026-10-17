@@ -151,6 +151,30 @@ def test_start_configures_manual_ack_and_persistent_session(monkeypatch):
     fake_client.loop_forever.assert_called_once()
 
 
+def test_start_sets_credentials_when_username_present(monkeypatch):
+    consumer, _ = _consumer(username="routing", password="pw")
+    fake_client = MagicMock()
+    monkeypatch.setattr(
+        consumer_module.mqtt, "Client", MagicMock(return_value=fake_client)
+    )
+
+    assert consumer.start() is True
+
+    fake_client.username_pw_set.assert_called_once_with("routing", "pw")
+
+
+def test_start_skips_credentials_when_no_username(monkeypatch):
+    consumer, _ = _consumer()
+    fake_client = MagicMock()
+    monkeypatch.setattr(
+        consumer_module.mqtt, "Client", MagicMock(return_value=fake_client)
+    )
+
+    assert consumer.start() is True
+
+    fake_client.username_pw_set.assert_not_called()
+
+
 def test_start_retries_connect_until_success(monkeypatch):
     monkeypatch.setattr("routing.consumer.time.sleep", lambda *_: None)
     consumer, _ = _consumer()

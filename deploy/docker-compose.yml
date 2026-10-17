@@ -144,19 +144,60 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      # Bind SOMENTE em loopback (#208): a 1883 nunca vai para 0.0.0.0.
+      # ChirpStack/routing alcançam o broker pela rede do Compose
+      # (nome de serviço `mosquitto`), não por esta porta publicada.
+      - "127.0.0.1:1883:1883"
     volumes:
       - ../infra/configuration/mosquitto/config:/mosquitto/config:ro
+    environment:
+      - MQTT_HEALTHCHECK_USER=${MQTT_HEALTHCHECK_USER:-healthcheck}
+      - MQTT_HEALTHCHECK_PASSWORD=${MQTT_HEALTHCHECK_PASSWORD:?MQTT_HEALTHCHECK_PASSWORD must be set}
+    depends_on:
+      mosquitto-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -W 3 -C 1 || exit 1",
+          "mosquitto_sub -h localhost -u \"$${MQTT_HEALTHCHECK_USER}\" -P \"$${MQTT_HEALTHCHECK_PASSWORD}\" -t '$$SYS/broker/uptime' -W 3 -C 1 || exit 1",
         ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
+
+  # One-shot: gera o mosquitto.passwd (allow_anonymous false exige password_file
+  # — #208) a partir das credenciais do .env, com os usuários do
+  # mosquitto.acl (chirpstack, routing, healthcheck). Idempotente: nao reescreve
+  # se o arquivo ja existe. O hash real NAO e versionado (.gitignore).
+  mosquitto-init:
+    image: eclipse-mosquitto:2
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        { [ -f /mosquitto/config/mosquitto.passwd ] || {
+        mosquitto_passwd -c -b /mosquitto/config/mosquitto.passwd
+        "$$MQTT_CHIRPSTACK_USER" "$$MQTT_CHIRPSTACK_PASSWORD" &&
+        mosquitto_passwd -b /mosquitto/config/mosquitto.passwd
+        "$$MQTT_ROUTING_USER" "$$MQTT_ROUTING_PASSWORD" &&
+        mosquitto_passwd -b /mosquitto/config/mosquitto.passwd
+        "$$MQTT_HEALTHCHECK_USER" "$$MQTT_HEALTHCHECK_PASSWORD";
+        }; } &&
+        chmod 0644 /mosquitto/config/mosquitto.passwd
+        /mosquitto/config/mosquitto.acl;
+        chown 1883:1883 /mosquitto/config/mosquitto.passwd
+        /mosquitto/config/mosquitto.acl 2>/dev/null || true
+    environment:
+      - MQTT_CHIRPSTACK_USER=${MQTT_CHIRPSTACK_USER:?MQTT_CHIRPSTACK_USER must be set}
+      - MQTT_CHIRPSTACK_PASSWORD=${MQTT_CHIRPSTACK_PASSWORD:?MQTT_CHIRPSTACK_PASSWORD must be set}
+      - MQTT_ROUTING_USER=${MQTT_ROUTING_USER:-routing}
+      - MQTT_ROUTING_PASSWORD=${MQTT_ROUTING_PASSWORD:?MQTT_ROUTING_PASSWORD must be set}
+      - MQTT_HEALTHCHECK_USER=${MQTT_HEALTHCHECK_USER:-healthcheck}
+      - MQTT_HEALTHCHECK_PASSWORD=${MQTT_HEALTHCHECK_PASSWORD:?MQTT_HEALTHCHECK_PASSWORD must be set}
+    volumes:
+      - ../infra/configuration/mosquitto/config:/mosquitto/config
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -188,6 +229,10 @@ services:
       - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mosquitto}
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
       - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
+      # Auth no broker (#208, allow_anonymous false): identidade de leitura
+      # `routing` (ACL read-only em application/#).
+      - MQTT_USERNAME=${MQTT_ROUTING_USER:-routing}
+      - MQTT_PASSWORD=${MQTT_ROUTING_PASSWORD:?MQTT_ROUTING_PASSWORD must be set}
       - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f}
       - RABBIT_EXCHANGE_PREFIX=${RABBIT_EXCHANGE_PREFIX:-linx.telemetry}
       - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}

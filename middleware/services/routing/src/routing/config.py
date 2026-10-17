@@ -7,6 +7,8 @@ class RoutingSettings(Settings):
     mqtt_topic: str = "application/+/device/+/event/up"
     mqtt_qos: int = 1
     mqtt_client_id: str = "linx-routing"
+    mqtt_username: str = ""
+    mqtt_password: str = ""
     mqtt_connect_max_attempts: int = 5
     mqtt_connect_backoff_seconds: float = 1.0
     rabbit_url: str = "amqp://guest:guest@localhost:5672/%2f"
