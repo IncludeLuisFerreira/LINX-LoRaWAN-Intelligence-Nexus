@@ -1,12 +1,13 @@
 from linx_shared.core.config import Settings
 
 
-def test_settings_default_database_url(monkeypatch):
+def test_settings_database_url_has_no_insecure_default(monkeypatch):
+    # #210: o default inseguro (linx:linx) foi removido. A base não impõe
+    # validador — routing herda de Settings e não usa banco; quem constrói a
+    # engine (identity_api, agent_bridge) valida no startup.
     monkeypatch.delenv("DATABASE_URL", raising=False)
     settings = Settings(_env_file=None)
-    assert settings.database_url == (
-        "postgresql+psycopg://linx:linx@localhost:5432/linx"
-    )
+    assert settings.database_url == ""
 
 
 def test_settings_override_database_url(monkeypatch):

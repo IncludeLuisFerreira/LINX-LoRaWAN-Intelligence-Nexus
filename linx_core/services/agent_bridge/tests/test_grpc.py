@@ -22,6 +22,15 @@ from agent_bridge.server import (
     is_grpc_serving,
 )
 
+AGENT_TOKEN = "test-agent-service-token-0123456789abcdef"
+AUTH_METADATA = [("authorization", f"Bearer {AGENT_TOKEN}")]
+
+
+@pytest.fixture(autouse=True)
+def agent_token(monkeypatch):
+    """Define um token de agente válido para toda a suíte."""
+    monkeypatch.setattr(settings, "agent_service_token", AGENT_TOKEN)
+
 
 class AbortError(Exception):
     """Levantado pelo contexto fake quando context.abort é chamado."""
@@ -30,12 +39,16 @@ class AbortError(Exception):
 class FakeContext:
     """Contexto gRPC mínimo, que registra e reproduz o abort."""
 
-    def __init__(self) -> None:
+    def __init__(self, metadata=None) -> None:
         self.aborted: tuple[grpc.StatusCode, str] | None = None
+        self._metadata = AUTH_METADATA if metadata is None else metadata
 
     def abort(self, code: grpc.StatusCode, details: str) -> None:
         self.aborted = (code, details)
         raise AbortError(details)
+
+    def invocation_metadata(self):
+        return self._metadata
 
 
 class BrokenSessionFactory:
@@ -202,7 +215,9 @@ def test_get_app_config_over_grpc(grpc_channel, session_factory):
     app_id = _create_application(session_factory)
     stub = linx_agent_pb2_grpc.AgentBridgeStub(grpc_channel)
 
-    response = stub.GetAppConfig(linx_agent_pb2.AppId(app_id=app_id))
+    response = stub.GetAppConfig(
+        linx_agent_pb2.AppId(app_id=app_id), metadata=AUTH_METADATA
+    )
 
     assert response.app_id == app_id
     assert response.mqtt_topic == f"application/{app_id}/device/+/event/up"
@@ -212,7 +227,10 @@ def test_get_app_config_over_grpc_not_found(grpc_channel):
     stub = linx_agent_pb2_grpc.AgentBridgeStub(grpc_channel)
 
     with pytest.raises(grpc.RpcError) as exc_info:
-        stub.GetAppConfig(linx_agent_pb2.AppId(app_id=str(uuid4())))
+        stub.GetAppConfig(
+            linx_agent_pb2.AppId(app_id=str(uuid4())),
+            metadata=AUTH_METADATA,
+        )
 
     assert exc_info.value.code() == grpc.StatusCode.NOT_FOUND
 
@@ -220,7 +238,9 @@ def test_get_app_config_over_grpc_not_found(grpc_channel):
 def test_report_violation_over_grpc(grpc_channel):
     stub = linx_agent_pb2_grpc.AgentBridgeStub(grpc_channel)
 
-    response = stub.ReportViolation(linx_agent_pb2.Violation())
+    response = stub.ReportViolation(
+        linx_agent_pb2.Violation(), metadata=AUTH_METADATA
+    )
 
     assert response.ok is False
     assert response.error == "not implemented"

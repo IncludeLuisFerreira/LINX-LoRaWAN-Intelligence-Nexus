@@ -81,10 +81,10 @@ services:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
       - GRPC_HOST=0.0.0.0
       - GRPC_PORT=50051
-    ports:
-      # 50051 expõe GetAppConfig (sem auth). Restrinja no Security Group ao IP
-      # do Client Agent; nunca a 0.0.0.0/0. Ver README (Runbook — Security Group).
-      - "50051:50051"
+      - AGENT_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN must be set}
+    # A porta 50051 não é publicada no host: GetAppConfig entrega db_password.
+    # O Client Agent alcança o agent_bridge pela rede interna do Compose
+    # (service name), sem exposição ao host. Ver issue #207.
     depends_on:
       db:
         condition: service_healthy
@@ -100,6 +100,7 @@ services:
       - SAAS_GRPC_HOST=${SAAS_GRPC_HOST:-agent_bridge:50051}
       - GRPC_TIMEOUT_SECONDS=${GRPC_TIMEOUT_SECONDS:-5}
       - CONFIG_CACHE_TTL_SECONDS=${CONFIG_CACHE_TTL_SECONDS:-60}
+      - GRPC_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN must be set}
     depends_on:
       agent_bridge:
         condition: service_started
