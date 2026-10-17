@@ -31,8 +31,9 @@ entre a chegada do pacote e a visualização ≤ 2s).
 ## Não-objetivos
 
 - Reconexão automática com backoff exponencial (issue #100).
-- Fallback de polling em `GET /telemetry` a cada 5s quando o WebSocket cai
-  (issue #44).
+- ~~Fallback de polling em `GET /telemetry` a cada 5s quando o WebSocket cai
+  (issue #44).~~ Implementado na issue #44 (`useTelemetryPolling` + status no
+  `useTelemetrySocket`).
 - Autenticação/autorização no WebSocket (documentado como pendência de hardening
   do `telemetry_consumer`, sem token neste escopo).
 - Alterar o backend `telemetry_consumer`, `broadcaster` ou o contrato das rotas
@@ -145,8 +146,9 @@ WS /ws/telemetry/{app_id}  ──▶  useTelemetrySocket (frontend)
 - **JSON inválido ou shape inesperado**: evento descartado, sem exceção.
 - **`app_id` divergente**: o backend fecha com `1008`; o `onclose` apenas
   encerra. Sem feedback visual neste escopo.
-- **Falha ao abrir / queda do socket**: `onerror`/`onclose` encerram; o gráfico
-  mantém o histórico já carregado (sem polling).
+- **Falha ao abrir / queda do socket**: `onerror`/`onclose` marcam o status
+  `offline`; desde a issue #44 um fallback de polling REST a cada 5s mantém o
+  gráfico atualizado até o socket voltar.
 - **Histórico REST falha**: comportamento atual preservado (erro com retry);
   o stream não interfere nessa tela.
 

@@ -70,7 +70,9 @@ desduplica eventos.
 
 O dashboard fica em `frontend/` (React 19 + Vite + TypeScript + TailwindCSS).
 Consome o histórico via `GET /telemetry` (REST) e a telemetria em tempo real
-via `WS /ws/telemetry/{app_id}`. Detalhes de telas, rotas e variáveis em
+via `WS /ws/telemetry/{app_id}`. Quando o WebSocket cai, um fallback de polling
+REST (`GET /telemetry?dev_eui=&limit=50`) atualiza o gráfico a cada 5s para o
+device selecionado. Detalhes de telas, rotas e variáveis em
 `frontend/README.md`.
 
 ```bash

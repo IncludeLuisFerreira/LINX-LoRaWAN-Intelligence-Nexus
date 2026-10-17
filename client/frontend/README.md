@@ -112,6 +112,23 @@ Em desenvolvimento, o dev server faz proxy de `/ws` para
 `VITE_WS_PROXY_TARGET`. Com `VITE_ENABLE_MOCKS=true`, o MSW ativa um mock de
 WebSocket que emite eventos a cada 2s.
 
+### Fallback de polling (WebSocket offline)
+
+Quando o WebSocket cai (`onclose`/`onerror`) ou fica preso em `connecting` por
+mais de 5s sem `onopen`, o dashboard ativa um fallback REST: `useTelemetryPolling`
+busca os itens mais recentes via `GET /telemetry?dev_eui=<dev_eui>&limit=50` a
+cada 5s e os anexa ao gráfico pelo mesmo caminho do WebSocket (dedupe por
+`(dev_eui, time, event_type)`). O `limit` é maior que 1 para não perder eventos
+que chegam em rajada entre dois ticks; o dedupe descarta os já vistos.
+
+O polling roda **indeterminadamente** enquanto o socket estiver `offline` — não
+há reconexão de WebSocket nesta versão (issue #100). Quando a reconexão for
+implementada, o status volta a `online` e o polling para sozinho.
+
+Limitação de escopo: o fallback só cobre o **device selecionado**. No modo
+**"Todos os devices"** o polling fica desativado, para não disparar N requisições
+globais por tick.
+
 ## Nickname de device
 
 Cada device aceita um `nickname` opcional (até 50 caracteres), útil para

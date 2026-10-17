@@ -13,6 +13,7 @@ import {
 } from '../../services/telemetry';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { useTelemetrySocket } from '../../hooks/useTelemetrySocket';
+import { useTelemetryPolling } from '../../hooks/useTelemetryPolling';
 import { formatDate } from '../../utils/format';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
@@ -102,7 +103,15 @@ export default function Dashboard() {
     [appId],
   );
 
-  useTelemetrySocket(appId, handleLiveItem);
+  const wsStatus = useTelemetrySocket(appId, handleLiveItem);
+
+  // Fallback REST: só com um device específico selecionado (modo "Todos os
+  // devices" fica de fora para não disparar N feeds globais por tick).
+  useTelemetryPolling(
+    activeDevEui,
+    wsStatus === 'offline' && activeDevEui !== ALL_DEVICES,
+    handleLiveItem,
+  );
 
   const liveItems = live.appId === appId ? live.items : EMPTY_LIVE_ITEMS;
 
