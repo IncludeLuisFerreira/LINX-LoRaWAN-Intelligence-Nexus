@@ -116,10 +116,10 @@ WebSocket que emite eventos a cada 2s.
 
 Quando o WebSocket cai (`onclose`/`onerror`) ou fica preso em `connecting` por
 mais de 5s sem `onopen`, o dashboard ativa um fallback REST: `useTelemetryPolling`
-busca o item mais recente via `GET /telemetry?dev_eui=<dev_eui>&limit=1` a cada
-5s e o anexa ao gráfico pelo mesmo caminho do WebSocket (dedupe por
-`(dev_eui, time, event_type)`). O item atualizado é escolhido pelo maior `time`
-da resposta, sem depender da ordem da API.
+busca os itens mais recentes via `GET /telemetry?dev_eui=<dev_eui>&limit=50` a
+cada 5s e os anexa ao gráfico pelo mesmo caminho do WebSocket (dedupe por
+`(dev_eui, time, event_type)`). O `limit` é maior que 1 para não perder eventos
+que chegam em rajada entre dois ticks; o dedupe descarta os já vistos.
 
 O polling roda **indeterminadamente** enquanto o socket estiver `offline` — não
 há reconexão de WebSocket nesta versão (issue #100). Quando a reconexão for

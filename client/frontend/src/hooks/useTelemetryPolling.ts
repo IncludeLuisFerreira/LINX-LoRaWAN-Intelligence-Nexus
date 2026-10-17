@@ -3,25 +3,19 @@ import { telemetryService, type TelemetryItem } from '../services/telemetry';
 
 export const DEFAULT_POLL_INTERVAL_MS = 5000;
 
-/** Item de maior `time` na lista, ou `null` quando vazia ou sem data válida. */
-function latestByTime(items: TelemetryItem[]): TelemetryItem | null {
-  let latest: TelemetryItem | null = null;
-  let latestMs = Number.NEGATIVE_INFINITY;
-  for (const item of items) {
-    const ms = Date.parse(item.time);
-    if (!Number.isNaN(ms) && ms > latestMs) {
-      latestMs = ms;
-      latest = item;
-    }
-  }
-  return latest;
-}
+/**
+ * Itens buscados por tick de polling. Maior que 1 para não perder eventos que
+ * chegam em rajada entre dois ticks; o dedupe por `(dev_eui, time, event_type)`
+ * de `appendItem` descarta os já vistos.
+ */
+export const POLL_LIMIT = 50;
 
 /**
  * Fallback de polling REST quando o WebSocket de telemetria está offline.
- * Busca o item mais recente em `GET /telemetry?dev_eui=<eui>&limit=1` a cada
- * `intervalMs` e o entrega via `onItem`. Erros de rede são ignorados para não
- * interromper o timer. Sem reconexão de WebSocket aqui (issue #100).
+ * Busca os itens mais recentes em `GET /telemetry?dev_eui=<eui>&limit=<POLL_LIMIT>`
+ * a cada `intervalMs` e entrega cada um via `onItem`; o dedupe do consumidor
+ * descarta repetições. Erros de rede são ignorados para não interromper o timer.
+ * Sem reconexão de WebSocket aqui (issue #100).
  */
 export function useTelemetryPolling(
   devEui: string,
@@ -40,9 +34,10 @@ export function useTelemetryPolling(
 
     const poll = async () => {
       try {
-        const history = await telemetryService.history(devEui, { limit: 1 });
-        const latest = latestByTime(history.items);
-        if (latest) onItemRef.current(latest);
+        const history = await telemetryService.history(devEui, {
+          limit: POLL_LIMIT,
+        });
+        for (const item of history.items) onItemRef.current(item);
       } catch {
         /* rede indisponível: mantém o timer e tenta no próximo tick */
       }

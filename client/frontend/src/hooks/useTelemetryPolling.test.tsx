@@ -8,7 +8,10 @@ import {
   type Mock,
 } from 'vitest';
 import { act, render } from '@testing-library/react';
-import { useTelemetryPolling } from './useTelemetryPolling';
+import {
+  POLL_LIMIT,
+  useTelemetryPolling,
+} from './useTelemetryPolling';
 import { telemetryService, type TelemetryItem } from '../services/telemetry';
 
 vi.mock('../services/telemetry', () => ({
@@ -64,23 +67,25 @@ describe('useTelemetryPolling', () => {
     expect(onItem).not.toHaveBeenCalled();
   });
 
-  it('polls GET /telemetry with limit 1 every 5s when enabled', async () => {
+  it('polls GET /telemetry with the batch limit every 5s when enabled', async () => {
     const latest = item('2026-01-01T00:05:00Z');
     mockedHistory.mockResolvedValue({ items: [latest], next_cursor: null });
     const onItem = vi.fn();
     render(<Probe devEui="aabb" enabled onItem={onItem} />);
 
     await advance(5000);
-    expect(mockedHistory).toHaveBeenCalledWith('aabb', { limit: 1 });
+    expect(mockedHistory).toHaveBeenCalledWith('aabb', { limit: POLL_LIMIT });
     expect(onItem).toHaveBeenCalledWith(latest);
 
     await advance(5000);
     expect(mockedHistory).toHaveBeenCalledTimes(2);
   });
 
-  it('picks the most recent item by time regardless of order', async () => {
+  it('delivers every item in the response regardless of order', async () => {
+    const older = item('2026-01-01T00:00:00Z');
+    const newer = item('2026-01-03T00:00:00Z');
     mockedHistory.mockResolvedValue({
-      items: [item('2026-01-01T00:00:00Z'), item('2026-01-03T00:00:00Z')],
+      items: [older, newer],
       next_cursor: null,
     });
     const onItem = vi.fn();
@@ -88,9 +93,9 @@ describe('useTelemetryPolling', () => {
 
     await advance(5000);
 
-    expect(onItem).toHaveBeenCalledWith(
-      expect.objectContaining({ time: '2026-01-03T00:00:00Z' }),
-    );
+    expect(onItem).toHaveBeenCalledWith(older);
+    expect(onItem).toHaveBeenCalledWith(newer);
+    expect(onItem).toHaveBeenCalledTimes(2);
   });
 
   it('keeps polling when the fetch rejects', async () => {
@@ -134,10 +139,10 @@ describe('useTelemetryPolling', () => {
     );
 
     await advance(5000);
-    expect(mockedHistory).toHaveBeenLastCalledWith('aabb', { limit: 1 });
+    expect(mockedHistory).toHaveBeenLastCalledWith('aabb', { limit: POLL_LIMIT });
 
     rerender(<Probe devEui="ccdd" enabled onItem={vi.fn()} />);
     await advance(5000);
-    expect(mockedHistory).toHaveBeenLastCalledWith('ccdd', { limit: 1 });
+    expect(mockedHistory).toHaveBeenLastCalledWith('ccdd', { limit: POLL_LIMIT });
   });
 });
