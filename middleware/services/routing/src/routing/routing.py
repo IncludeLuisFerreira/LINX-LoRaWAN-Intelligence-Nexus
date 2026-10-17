@@ -34,6 +34,8 @@ class IngestService:
             max_payload_bytes=settings.max_payload_bytes,
             out_queue=self._q,
             client_id=settings.mqtt_client_id,
+            username=settings.mqtt_username,
+            password=settings.mqtt_password,
             connect_max_attempts=settings.mqtt_connect_max_attempts,
             connect_backoff_seconds=settings.mqtt_connect_backoff_seconds,
             stop_event=self._stop_event,

@@ -13,7 +13,13 @@ from typing import Any, Callable
 
 import pytest
 
-from conftest import APP_ID
+from conftest import (
+    APP_ID,
+    MQTT_PUB_PASS,
+    MQTT_PUB_USER,
+    MQTT_READ_PASS,
+    MQTT_READ_USER,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -179,3 +185,28 @@ def test_iso_string_timestamp_regression(
     assert db_count(dev) == "1"
     items = rest_get(f"/telemetry?dev_eui={dev}&limit=10").json()["items"]
     assert len(items) == 1
+
+
+def test_ingest_acl_isolation(mqtt_publish_delivered: Any) -> None:
+    """Isolamento de ingestão (#208): broker recusa publicação anônima e a
+    identidade somente-leitura `routing` tem o PUBLISH descartado; a
+    `chirpstack` (legítima) entrega. Verificação por entrega, não por rc.
+    """
+    base = f"application/{APP_ID}/device/70b3d57ed000fff/event/up"
+
+    anon = mqtt_publish_delivered(
+        f"{base}/anon", "X-anon", username="", password=""
+    )
+    assert not anon, "publicação ANÔNIMA foi entregue (esperado recusar)"
+
+    readonly = mqtt_publish_delivered(
+        f"{base}/ro", "X-ro", username=MQTT_READ_USER, password=MQTT_READ_PASS
+    )
+    assert not readonly, (
+        "identidade read-only `routing` entregou mensagem (ACL não negou)"
+    )
+
+    legit = mqtt_publish_delivered(
+        f"{base}/ok", "X-ok", username=MQTT_PUB_USER, password=MQTT_PUB_PASS
+    )
+    assert legit, "identidade legítima `chirpstack` não entregou (uplink quebra)"

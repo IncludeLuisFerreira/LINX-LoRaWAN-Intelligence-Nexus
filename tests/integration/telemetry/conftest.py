@@ -74,6 +74,16 @@ MGMT_USER = _ENV.get("RABBITMQ_DEFAULT_USER", "linx")
 MGMT_PASS = _ENV.get("RABBITMQ_DEFAULT_PASS", "changeme")
 DLQ_NAME = f"linx.telemetry.{APP_ID}.dlq"
 
+# Auth no broker (#208, allow_anonymous false): o probe publica via docker exec
+# dentro do proprio container mosquitto, entao -h localhost; usa a identidade
+# `chirpstack` (ACL readwrite application/#), que e quem publica no fluxo real.
+MQTT_PUB_USER = _ENV.get("MQTT_CHIRPSTACK_USER", "chirpstack")
+MQTT_PUB_PASS = _ENV.get("MQTT_CHIRPSTACK_PASSWORD", "")
+MQTT_AUTH_ARGS = ["-u", MQTT_PUB_USER, "-P", MQTT_PUB_PASS]
+# Identidade somente-leitura (routing) para testar que publicar é negado (#208).
+MQTT_READ_USER = _ENV.get("MQTT_ROUTING_USER", "routing")
+MQTT_READ_PASS = _ENV.get("MQTT_ROUTING_PASSWORD", "")
+
 
 def _ensure_deploy_env() -> None:
     """Garante `deploy/.env` (exigido por `env_file` do compose base).
@@ -241,6 +251,7 @@ def _publish_probe(dev: str) -> None:
         "mosquitto_pub",
         "-h",
         "localhost",
+        *MQTT_AUTH_ARGS,
         "-t",
         f"application/{APP_ID}/device/{dev}/event/up",
         "-m",
@@ -350,6 +361,7 @@ def publish_mqtt() -> Any:
             "mosquitto_pub",
             "-h",
             "localhost",
+            *MQTT_AUTH_ARGS,
             "-t",
             topic,
             "-m",
@@ -362,6 +374,53 @@ def publish_mqtt() -> Any:
             )
 
     return _publish
+
+
+@pytest.fixture
+def mqtt_publish_delivered() -> Any:
+    """Publica no broker como `username`/`password` e diz se a mensagem foi
+    DE FATOS entregue a um assinante legítimo (chirpstack, readwrite
+    application/#).
+
+    Verificação por entrega, não por rc: em QoS 0 um PUBLISH negado pela ACL
+    é silenciosamente descartado pelo broker e o `mosquitto_pub` sai com rc 0
+    de todo modo. O que diferencia 'permitido' de 'negado' e a presenca (ou
+    ausencia) da mensagem no assinante.
+    """
+
+    def _delivered(
+        topic: str,
+        marker: str,
+        username: str,
+        password: str,
+    ) -> bool:
+        auth = f'-u "{username}" -P "{password}"' if username else ""
+        # Retained + QoS 1 elimina a corrida de associacao lenta: o broker
+        # entrega a mensagem ao assinante mesmo se ele conectar depois do
+        # PUBLISH. Publicacao negada (anonimo/ACL) nao grava retained,
+        # entao continua resultando em MISS.
+        shell = (
+            "mosquitto_sub -h localhost"
+            f" -u {MQTT_PUB_USER} -P {MQTT_PUB_PASS}"
+            f" -t '{topic}' -q 1 -C 1 -W 8 > /tmp/probe.out 2>/dev/null & "
+            "sleep 0.5; "
+            f"mosquitto_pub -h localhost {auth} -q 1 -r "
+            f"-t '{topic}' -m '{marker}' > /dev/null 2>&1; "
+            "sleep 1.5; "
+            f"grep -q '{marker}' /tmp/probe.out && echo GOT || echo MISS"
+        )
+        result = compose(
+            "exec",
+            "-T",
+            "mosquitto",
+            "sh",
+            "-c",
+            shell,
+            check=False,
+        )
+        return "GOT" in (result.stdout or "")
+
+    return _delivered
 
 
 @pytest.fixture

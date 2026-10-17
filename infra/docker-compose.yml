@@ -13,6 +13,10 @@ services:
       - MQTT_BROKER_HOST=mosquitto
       - REDIS_HOST=redis
       - POSTGRESQL_HOST=postgres
+      # Credenciais MQTT da integracao do ChirpStack (allow_anonymous false
+      # no broker desde #208). obrigatorias; defaults de dev em .env.example.
+      - MQTT_CHIRPSTACK_USER=${MQTT_CHIRPSTACK_USER:?defina em infra/.env (veja .env.example)}
+      - MQTT_CHIRPSTACK_PASSWORD=${MQTT_CHIRPSTACK_PASSWORD:?defina em infra/.env (veja .env.example)}
     ports:
       - "8080:8080"
 
@@ -27,6 +31,10 @@ services:
       - INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/event/{{ .EventType }}
       - INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/state/{{ .StateType }}
       - INTEGRATION__MQTT__COMMAND_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/command/#
+      # Auth no broker (#208): o bridge usa a identidade `chirpstack` (ACL
+      # readwrite au915_0/#). Sobrescreve o username/password vazios do .toml.
+      - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${MQTT_CHIRPSTACK_USER:?defina em infra/.env (veja .env.example)}
+      - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${MQTT_CHIRPSTACK_PASSWORD:?defina em infra/.env (veja .env.example)}
     depends_on:
       - mosquitto
   
@@ -38,6 +46,9 @@ services:
       - "3001:3001"
     volumes:
       - ./configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
+    environment:
+      - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${MQTT_CHIRPSTACK_USER:?defina em infra/.env (veja .env.example)}
+      - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${MQTT_CHIRPSTACK_PASSWORD:?defina em infra/.env (veja .env.example)}
     depends_on:
       - mosquitto
 
@@ -73,6 +84,12 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
+    environment:
+      # Dev monitor consome application/# -> identidade de leitura `routing`.
+      - MQTT_BROKER_HOST=mosquitto
+      - MQTT_BROKER_PORT=1883
+      - MQTT_USERNAME=${MQTT_ROUTING_USER:-routing}
+      - MQTT_PASSWORD=${MQTT_ROUTING_PASSWORD:?defina em infra/.env (veja .env.example)}
     depends_on:
       - mosquitto
 
@@ -81,7 +98,44 @@ services:
     restart: unless-stopped
     ports:
       - "1883:1883"
-    volumes: 
+    volumes:
+      # config/ traz mosquitto.conf + mosquitto.passwd + mosquitto.acl
+      # (gerados por infra/scripts/gen-mosquitto-passwd.sh). Read-only.
+      - ./configuration/mosquitto/config/:/mosquitto/config/:ro
+    depends_on:
+      mosquitto-init:
+        condition: service_completed_successfully
+
+  # One-shot: garante que mosquitto.passwd exista antes de subir o broker
+  # (allow_anonymous false exige password_file). Em dev, gera com as mesmas
+  # credenciais do .env; em producao, use gen-mosquitto-passwd.sh e commit zero
+  # de hash. NAO sobe se o arquivo ja existe (idempotente).
+  mosquitto-init:
+    image: eclipse-mosquitto:2
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        { [ -f /mosquitto/config/mosquitto.passwd ] || {
+        mosquitto_passwd -c -b /mosquitto/config/mosquitto.passwd
+        "$$MQTT_CHIRPSTACK_USER" "$$MQTT_CHIRPSTACK_PASSWORD" &&
+        mosquitto_passwd -b /mosquitto/config/mosquitto.passwd
+        "$$MQTT_ROUTING_USER" "$$MQTT_ROUTING_PASSWORD" &&
+        mosquitto_passwd -b /mosquitto/config/mosquitto.passwd
+        "$$MQTT_HEALTHCHECK_USER" "$$MQTT_HEALTHCHECK_PASSWORD";
+        }; } &&
+        chmod 0644 /mosquitto/config/mosquitto.passwd
+        /mosquitto/config/mosquitto.acl;
+        chown 1883:1883 /mosquitto/config/mosquitto.passwd
+        /mosquitto/config/mosquitto.acl 2>/dev/null || true
+    environment:
+      - MQTT_CHIRPSTACK_USER=${MQTT_CHIRPSTACK_USER:?defina em infra/.env (veja .env.example)}
+      - MQTT_CHIRPSTACK_PASSWORD=${MQTT_CHIRPSTACK_PASSWORD:?defina em infra/.env (veja .env.example)}
+      - MQTT_ROUTING_USER=${MQTT_ROUTING_USER:-routing}
+      - MQTT_ROUTING_PASSWORD=${MQTT_ROUTING_PASSWORD:?defina em infra/.env (veja .env.example)}
+      - MQTT_HEALTHCHECK_USER=${MQTT_HEALTHCHECK_USER:-healthcheck}
+      - MQTT_HEALTHCHECK_PASSWORD=${MQTT_HEALTHCHECK_PASSWORD:?defina em infra/.env (veja .env.example)}
+    volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
 
 volumes:
