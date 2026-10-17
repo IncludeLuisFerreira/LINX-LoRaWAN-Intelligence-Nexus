@@ -33,8 +33,13 @@ export function useTelemetrySocket(
     if (!appId) return;
 
     const ws = new WebSocket(buildTelemetrySocketUrl(appId));
-    const update = (status: TelemetrySocketStatus) =>
-      setState({ appId, status });
+    // Só este efeito pode reportar status enquanto estiver ativo. Eventos de um
+    // socket já substituído (StrictMode re-monta o efeito) devem ser ignorados,
+    // senão um `onclose` atrasado sobrescreve o status do socket atual.
+    let active = true;
+    const update = (status: TelemetrySocketStatus) => {
+      if (active) setState({ appId, status });
+    };
 
     // Se a conexão travar sem onopen/onerror/onclose, libera o fallback REST.
     let connectTimeout: ReturnType<typeof setTimeout> | null = setTimeout(() => {
@@ -66,6 +71,7 @@ export function useTelemetrySocket(
     };
 
     return () => {
+      active = false;
       clearConnectTimeout();
       ws.close();
     };

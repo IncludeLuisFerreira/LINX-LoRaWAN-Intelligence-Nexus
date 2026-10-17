@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { useTelemetrySocket } from './useTelemetrySocket';
@@ -155,5 +156,19 @@ describe('useTelemetrySocket status', () => {
     rerender(<Probe appId="app-2" onMessage={vi.fn()} />);
 
     expect(screen.getByTestId('status')).toHaveTextContent('connecting');
+  });
+
+  it('ignores events from a socket replaced by a re-mount', () => {
+    render(
+      <StrictMode>
+        <Probe appId="app-1" onMessage={vi.fn()} />
+      </StrictMode>,
+    );
+    const [stale, live] = FakeWebSocket.instances;
+
+    act(() => live.onopen?.());
+    act(() => stale.onclose?.());
+
+    expect(screen.getByTestId('status')).toHaveTextContent('online');
   });
 });
