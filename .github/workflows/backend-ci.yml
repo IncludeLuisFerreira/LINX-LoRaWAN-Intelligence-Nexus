@@ -67,7 +67,7 @@ jobs:
         image: postgres:15-alpine
         env:
           POSTGRES_USER: linx
-          POSTGRES_PASSWORD: linx
+          POSTGRES_PASSWORD: ci-db-pass
           POSTGRES_DB: linx
         ports:
           - 5432:5432
@@ -76,6 +76,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://linx:ci-db-pass@localhost:5432/linx
     defaults:
       run:
         working-directory: linx_core

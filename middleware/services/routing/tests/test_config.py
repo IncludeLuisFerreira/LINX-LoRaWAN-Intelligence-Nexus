@@ -1,4 +1,9 @@
+import pytest
+from pydantic import ValidationError
+
 from routing.config import RoutingSettings
+
+_VALID_RABBIT_URL = "amqp://linx:secret-rabbit-pass@localhost:5672/%2f"
 
 
 def test_settings_defaults(monkeypatch):
@@ -10,7 +15,6 @@ def test_settings_defaults(monkeypatch):
         "MQTT_CLIENT_ID",
         "MQTT_CONNECT_MAX_ATTEMPTS",
         "MQTT_CONNECT_BACKOFF_SECONDS",
-        "RABBIT_URL",
         "RABBIT_EXCHANGE_PREFIX",
         "RABBIT_AUDIT_QUEUE",
         "MAX_PAYLOAD_BYTES",
@@ -18,6 +22,7 @@ def test_settings_defaults(monkeypatch):
         "RABBIT_CONNECT_BACKOFF_SECONDS",
     ):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("RABBIT_URL", _VALID_RABBIT_URL)
 
     settings = RoutingSettings(_env_file=None)
 
@@ -28,7 +33,7 @@ def test_settings_defaults(monkeypatch):
     assert settings.mqtt_client_id == "linx-routing"
     assert settings.mqtt_connect_max_attempts == 5
     assert settings.mqtt_connect_backoff_seconds == 1.0
-    assert settings.rabbit_url == "amqp://guest:guest@localhost:5672/%2f"
+    assert settings.rabbit_url == _VALID_RABBIT_URL
     assert settings.rabbit_exchange_prefix == "linx.telemetry"
     assert settings.rabbit_audit_queue == "linx.telemetry.audit"
     assert settings.max_payload_bytes == 65536
@@ -49,7 +54,7 @@ def test_settings_override(monkeypatch):
     monkeypatch.setenv("MQTT_BROKER_PORT", "8883")
     monkeypatch.setenv("MQTT_QOS", "0")
     monkeypatch.setenv("MQTT_CLIENT_ID", "custom-client")
-    monkeypatch.setenv("RABBIT_URL", "amqp://guest:guest@rabbitmq:5672/%2f")
+    monkeypatch.setenv("RABBIT_URL", "amqp://linx:secret@rabbitmq:5672/%2f")
     monkeypatch.setenv("RABBIT_EXCHANGE_PREFIX", "custom.telemetry")
     monkeypatch.setenv("RABBIT_AUDIT_QUEUE", "custom.audit")
     monkeypatch.setenv("MAX_PAYLOAD_BYTES", "1024")
@@ -60,7 +65,25 @@ def test_settings_override(monkeypatch):
     assert settings.mqtt_broker_port == 8883
     assert settings.mqtt_qos == 0
     assert settings.mqtt_client_id == "custom-client"
-    assert settings.rabbit_url == "amqp://guest:guest@rabbitmq:5672/%2f"
+    assert settings.rabbit_url == "amqp://linx:secret@rabbitmq:5672/%2f"
     assert settings.rabbit_exchange_prefix == "custom.telemetry"
     assert settings.rabbit_audit_queue == "custom.audit"
     assert settings.max_payload_bytes == 1024
+
+
+def test_startup_rejects_missing_rabbit_url(monkeypatch):
+    monkeypatch.delenv("RABBIT_URL", raising=False)
+    with pytest.raises(ValidationError, match="RABBIT_URL"):
+        RoutingSettings(_env_file=None)
+
+
+def test_startup_rejects_guest_credentials(monkeypatch):
+    monkeypatch.setenv("RABBIT_URL", "amqp://guest:guest@localhost:5672/%2f")
+    with pytest.raises(ValidationError, match="insecure default"):
+        RoutingSettings(_env_file=None)
+
+
+def test_startup_accepts_real_rabbit_url(monkeypatch):
+    monkeypatch.setenv("RABBIT_URL", _VALID_RABBIT_URL)
+    settings = RoutingSettings(_env_file=None)
+    assert settings.rabbit_url == _VALID_RABBIT_URL

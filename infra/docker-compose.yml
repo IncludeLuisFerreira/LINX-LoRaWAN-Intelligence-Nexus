@@ -58,7 +58,7 @@ services:
       - postgresqldata:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=chirpstack
-      - POSTGRES_PASSWORD=chirpstack
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatorio}
       - POSTGRES_DB=chirpstack
 
   redis:

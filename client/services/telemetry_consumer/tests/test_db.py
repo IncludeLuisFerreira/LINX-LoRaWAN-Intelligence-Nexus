@@ -168,3 +168,25 @@ def test_create_db_pool_defaults_match_config():
     params = inspect.signature(db.create_db_pool).parameters
     assert params["user"].default == "tenant"
     assert params["database"].default == "tenantdb"
+
+
+def test_create_db_pool_password_has_no_default():
+    # #210: a senha deixa de ter default "changeme"; precisa ser explícita.
+    params = inspect.signature(db.create_db_pool).parameters
+    assert params["password"].default is inspect.Parameter.empty
+
+
+@pytest.mark.asyncio
+async def test_create_db_pool_rejects_empty_password():
+    with pytest.raises(ValueError, match="DB_PASSWORD"):
+        await db.create_db_pool(
+            host="h", port=1, user="u", database="d", password=""
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_db_pool_rejects_blank_password():
+    with pytest.raises(ValueError, match="DB_PASSWORD"):
+        await db.create_db_pool(
+            host="h", port=1, user="u", database="d", password="   "
+        )
