@@ -1,4 +1,9 @@
+import pytest
+from pydantic import ValidationError
+
 from agent_bridge.config import AgentBridgeSettings
+
+_VALID_DB = "postgresql+psycopg://u:p@h:5432/db"
 
 
 def test_settings_grpc_defaults(monkeypatch):
@@ -35,3 +40,24 @@ def test_settings_reads_agent_token_and_tls(monkeypatch):
     assert settings.grpc_cert_chain_path == "/certs/server.crt"
     assert settings.grpc_private_key_path == "/certs/server.key"
     assert settings.grpc_ca_cert_path == "/certs/ca.crt"
+
+
+def test_startup_rejects_missing_database_url(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
+        AgentBridgeSettings(_env_file=None)
+
+
+def test_startup_rejects_default_database_credentials(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+psycopg://linx:linx@localhost:5432/linx",
+    )
+    with pytest.raises(ValidationError, match="DATABASE_URL"):
+        AgentBridgeSettings(_env_file=None)
+
+
+def test_startup_accepts_real_database_url(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", _VALID_DB)
+    settings = AgentBridgeSettings(_env_file=None)
+    assert settings.database_url == _VALID_DB

@@ -71,12 +71,22 @@ async def create_db_pool(
     host: str = "timescaledb",
     port: int = 5432,
     user: str = "tenant",
-    password: str = "changeme",
     database: str = "tenantdb",
     min_size: int = 1,
     max_size: int = 10,
+    *,
+    password: str,
 ) -> asyncpg.Pool:
-    """Cria e retorna um pool de conexoes asyncpg com codec JSONB."""
+    """Cria e retorna um pool de conexoes asyncpg com codec JSONB.
+
+    ``password`` é obrigatório e não tem default: sem credencial explícita o
+    serviço falha cedo (fail closed) em vez de subir com senha placeholder.
+    """
+    if not (password or "").strip():
+        raise ValueError(
+            "DB_PASSWORD is required and must not be empty; refusing to "
+            "create the TimescaleDB pool with a placeholder credential."
+        )
     return await asyncpg.create_pool(
         host=host,
         port=port,
