@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 from identity_api.dependencies import get_chirpstack_client
 from identity_api.main import app
 from identity_api.routes.tenant import create_tenant
+from tests.auth import AUTH
 from tests.fakes import FakeChirpStackClient
 
-client = TestClient(app)
+client = TestClient(app, headers=AUTH)
 
 
 @pytest.fixture(autouse=True)

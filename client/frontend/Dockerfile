@@ -28,6 +28,13 @@ ENV BACKEND_URL=http://127.0.0.1:8000
 # Destino do proxy /ws/ (WebSocket de telemetria).
 ENV WS_BACKEND_URL=http://127.0.0.1:8000
 
+# Valor de SERVICE_TOKEN injetado no header X-Service-Token do proxy /api.
+# O default mantém o nginx de pé em execução isolada (docker run, smoke de CI):
+# sem ele, o envsubst deixa `${SERVICE_TOKEN}` literal e o `nginx -t` falha.
+# Em compose use o mesmo SERVICE_TOKEN do identity_api (client/docker-compose.yml).
+# O valor default não é um segredo válido e é rejeitado pelo identity_api.
+ENV SERVICE_TOKEN=unconfigured-service-token
+
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

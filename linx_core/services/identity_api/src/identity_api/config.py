@@ -7,6 +7,8 @@ from pydantic import field_validator
 
 
 class IdentitySettings(Settings):
+    environment: str = "development"
+
     chirpstack_host: str = "localhost:8080"
     chirpstack_api_token: str = ""
     chirpstack_use_tls: bool = False

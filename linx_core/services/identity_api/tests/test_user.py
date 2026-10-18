@@ -12,17 +12,11 @@ from sqlalchemy.orm import Session
 
 from identity_api.main import app
 from identity_api.security import password_hasher
+from tests.auth import AUTH, TOKEN
 
 client = TestClient(app)
 
-TOKEN = "test-service-token-0123456789abcdef"
-AUTH = {"X-Service-Token": TOKEN}
 BASE = "/api/v1/user"
-
-
-@pytest.fixture(autouse=True)
-def service_token(monkeypatch) -> None:
-    monkeypatch.setattr(shared_settings, "service_token", TOKEN)
 
 
 @pytest.fixture(autouse=True)

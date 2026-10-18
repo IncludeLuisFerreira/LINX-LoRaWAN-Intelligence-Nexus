@@ -24,6 +24,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
       - CHIRPSTACK_HOST=${CHIRPSTACK_HOST:-localhost:8080}
       - CHIRPSTACK_API_TOKEN=${CHIRPSTACK_API_TOKEN:?CHIRPSTACK_API_TOKEN must be set}
@@ -34,8 +35,10 @@ services:
       - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
       - RABBITMQ_TENANT_SECRET=${RABBITMQ_TENANT_SECRET:?RABBITMQ_TENANT_SECRET must be set}
       - RABBITMQ_AMQP_HOST=${RABBITMQ_AMQP_HOST:-rabbitmq:5672}
-    ports:
-      - "8000:8000"
+    # Sem publicação de porta no host: a API só é acessível pela rede interna
+    # (via nginx). O acesso direto à 8000 contornava o proxy e a autenticação.
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy

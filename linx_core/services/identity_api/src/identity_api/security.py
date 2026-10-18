@@ -2,6 +2,11 @@ import secrets
 
 from argon2 import PasswordHasher
 from fastapi import Header, HTTPException, status
+
+# Fonte de verdade do segredo. `create_app()` lê identity_settings.environment,
+# enquanto esta dependência lê settings.service_token: são instâncias distintas
+# (IdentitySettings herda de Settings), mas ambas resolvem do mesmo ambiente.
+# Ao mudar a origem do token, ajuste as duas pontas.
 from linx_shared.core.config import settings
 
 SERVICE_TOKEN_HEADER = "X-Service-Token"
