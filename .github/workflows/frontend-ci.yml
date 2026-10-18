@@ -45,3 +45,15 @@ jobs:
           VITE_API_URL: /api/v1
           VITE_ENABLE_MOCKS: 'false'
 
+  nginx-template:
+    name: Nginx Template (execução isolada)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build image e valida 'nginx -t' sem variáveis extras
+        run: ./scripts/check-nginx-template.sh
+        working-directory: ./client/frontend
+
