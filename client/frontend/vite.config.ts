@@ -4,6 +4,7 @@ import { defineConfig, loadEnv } from 'vite';
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
+  const allEnv = loadEnv(mode, process.cwd(), '');
   return {
     plugins: [react()],
     server: {
@@ -11,6 +12,9 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: 'http://localhost:8000',
           changeOrigin: true,
+          headers: {
+            'X-Service-Token': allEnv.DEV_SERVICE_TOKEN ?? '',
+          },
         },
         '/ws': {
           target: env.VITE_WS_PROXY_TARGET || 'http://localhost:8000',

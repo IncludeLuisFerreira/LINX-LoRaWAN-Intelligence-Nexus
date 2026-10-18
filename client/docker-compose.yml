@@ -41,6 +41,8 @@ services:
     environment:
       # Destino do proxy /api do nginx do dashboard (backend do plano de controle).
       - BACKEND_URL=${BACKEND_URL:?BACKEND_URL must be set}
+      # Token de serviço injetado pelo nginx no proxy /api (nunca chega ao browser).
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
       # Destino do proxy /ws/ do nginx (WebSocket de telemetria).
       - WS_BACKEND_URL=${WS_BACKEND_URL:-http://telemetry_consumer:8000}
     ports:
