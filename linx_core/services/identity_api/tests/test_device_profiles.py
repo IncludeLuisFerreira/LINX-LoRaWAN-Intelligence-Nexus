@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 
 from identity_api.main import app
 from identity_api.routes.device_profile import get_chirpstack_client
+from tests.auth import AUTH
 
-client = TestClient(app)
+client = TestClient(app, headers=AUTH)
 
 
 class FakeChirpStackClient:

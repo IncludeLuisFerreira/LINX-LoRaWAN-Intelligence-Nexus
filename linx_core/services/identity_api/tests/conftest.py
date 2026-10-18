@@ -15,6 +15,16 @@ os.environ.setdefault("RABBITMQ_TENANT_SECRET", "ci-rabbit-tenant-secret")
 
 
 @pytest.fixture(autouse=True)
+def service_token(monkeypatch) -> None:
+    """Configura um SERVICE_TOKEN válido para todos os testes."""
+    from linx_shared.core.config import settings as shared_settings
+
+    from tests.auth import TOKEN
+
+    monkeypatch.setattr(shared_settings, "service_token", TOKEN)
+
+
+@pytest.fixture(autouse=True)
 def rabbitmq() -> Generator[object, None, None]:
     """Substitui o client da management API do RabbitMQ por um fake."""
     # Import tardio: só os testes que exercitam a aplicação precisam das

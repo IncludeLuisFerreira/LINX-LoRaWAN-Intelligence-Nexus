@@ -21,9 +21,10 @@ from identity_api.routes.devices import (
     create_device,
     get_chirpstack_client,
 )
+from tests.auth import AUTH
 from tests.fakes import FakeChirpStackClient
 
-client = TestClient(app)
+client = TestClient(app, headers=AUTH)
 
 PROFILE_ID = "11111111-1111-1111-1111-111111111111"
 
