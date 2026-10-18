@@ -79,20 +79,6 @@ services:
     volumes:
       - redisdata:/data
 
-  webapp:
-    build: ./app
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    environment:
-      # Dev monitor consome application/# -> identidade de leitura `routing`.
-      - MQTT_BROKER_HOST=mosquitto
-      - MQTT_BROKER_PORT=1883
-      - MQTT_USERNAME=${MQTT_ROUTING_USER:-routing}
-      - MQTT_PASSWORD=${MQTT_ROUTING_PASSWORD:?defina em infra/.env (veja .env.example)}
-    depends_on:
-      - mosquitto
-
   mosquitto:
     image: eclipse-mosquitto:2
     restart: unless-stopped

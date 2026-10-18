@@ -127,6 +127,8 @@ volumes:
 ```
 
 > **O que foi modificado em relação ao original:** ajuste nos topic templates do gateway bridge para usar o prefixo `au915_0` (região AU915), e adição do serviço `webapp` customizado.
+>
+> **Nota (#209):** o serviço `webapp` (monitor Flask em `infra/app/`) foi removido da stack — rodava com Werkzeug `debug=True`, superfície de RCE. Este guia preserva a configuração da fase inicial apenas como referência histórica; a stack atual não sobe esses serviços.
 
 #### `configuration/chirpstack/chirpstack.toml`
 
