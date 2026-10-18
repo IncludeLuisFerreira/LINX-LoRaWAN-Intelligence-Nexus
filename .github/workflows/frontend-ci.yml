@@ -22,7 +22,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # >=22.19: jsdom@30 -> undici@8 usa worker_threads.markAsUncloneable,
+          # ausente no Node 20 (quebra o `require('jsdom')` no vitest).
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: './client/frontend/package-lock.json'
 
