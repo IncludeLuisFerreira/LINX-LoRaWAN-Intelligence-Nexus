@@ -67,6 +67,20 @@ def test_startup_rejects_placeholder_db_password(monkeypatch):
         ConsumerSettings(_env_file=None)
 
 
+def test_startup_rejects_missing_service_token(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.delenv("SERVICE_TOKEN", raising=False)
+    with pytest.raises(ValidationError, match="SERVICE_TOKEN"):
+        ConsumerSettings(_env_file=None)
+
+
+def test_startup_rejects_placeholder_service_token(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("SERVICE_TOKEN", "changeme")
+    with pytest.raises(ValidationError, match="SERVICE_TOKEN"):
+        ConsumerSettings(_env_file=None)
+
+
 def test_startup_accepts_full_config(monkeypatch):
     _valid_env(monkeypatch)
     settings = ConsumerSettings(_env_file=None)

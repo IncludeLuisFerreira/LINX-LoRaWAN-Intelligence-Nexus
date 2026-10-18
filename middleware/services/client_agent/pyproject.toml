@@ -6,15 +6,7 @@ authors = [
     {name = "includeLuisFerreira",email = "prgluisfelipe@gmail.com"}
 ]
 requires-python = ">=3.12,<4.0"
-dependencies = [
-    "fastapi (>=0.141.1,<0.142.0)",
-    "uvicorn[standard] (>=0.52.4,<0.53.0)",
-    "paho-mqtt (>=2.1.0,<3.0.0)",
-    "python-dotenv (>=1.2.3,<2.0.0)",
-    "grpcio (>=1.83.1,<2.0.0)",
-    "protobuf (>=7.36.1,<8.0.0)",
-    "pydantic-settings (>=2.15.0,<3.0.0)"
-]
+dynamic = ["dependencies"]
 
 
 [build-system]
@@ -30,7 +22,6 @@ dev = [
     "pytest-cov (>=7.1.0,<8.0.0)",
     "taskipy (>=1.14.1,<2.0.0)",
     "isort (>=9.0.1,<10.0.0)",
-    "grpcio-tools (>=1.83.1,<2.0.0)",
     "types-grpcio (>=1.83.0.20260730,<2.0.0.0)",
     "types-protobuf (>=7.35.0,<8.0.0)",
     "httpx2 (>=2.12.0,<3.0.0)"
@@ -39,28 +30,32 @@ dev = [
 [tool.poetry]
 packages = [{include="agent", from="src"}]
 
+[tool.poetry.dependencies]
+# Stubs gRPC do AgentBridge vêm do pacote compartilhado (dono único do
+# contrato). Antes eram gerados/versionados em dois lugares e divergiam (#215).
+linx-shared = { path = "../../../linx_core/shared", develop = true }
+fastapi = ">=0.141.1,<0.142.0"
+uvicorn = { version = ">=0.52.4,<0.53.0", extras = ["standard"] }
+paho-mqtt = ">=2.1.0,<3.0.0"
+python-dotenv = ">=1.2.3,<2.0.0"
+grpcio = ">=1.83.1,<2.0.0"
+protobuf = ">=7.36.1,<8.0.0"
+pydantic-settings = ">=2.15.0,<3.0.0"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 
-[tool.coverage.run]
-omit = ["src/agent/grpc/*"]
-
 [tool.black]
 line-length = 79
 target-version = ["py312"]
-extend-exclude = '''
-src/agent/grpc
-'''
 
 [tool.isort]
 profile = "black"
 line_length = 79
-skip_glob = ["src/agent/grpc/*"]
 
 [tool.mypy]
-exclude = ["src/agent/grpc/"]
 
 [tool.taskipy.tasks]
 

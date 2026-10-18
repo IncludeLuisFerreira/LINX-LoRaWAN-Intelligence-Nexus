@@ -96,8 +96,9 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 ## 3. Contrato gRPC — `AgentBridge`
 
 O contrato é versionado na raiz do repositório em [`proto/linx_agent.proto`](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/blob/main/proto/linx_agent.proto)
-e é **compartilhado** entre o Linx Core e o Client Agent. Os stubs Python são gerados
-por `scripts/gen_proto.sh` para os pacotes `linx.grpc` e `agent.grpc`.
+e é **compartilhado** entre o Linx Core e o Client Agent. Os stubs Python são
+gerados por `scripts/gen_proto.sh` no pacote compartilhado `linx_shared.grpc`;
+o Client Agent consome esse pacote via path dependency (#215).
 
 - **Pacote:** `linx`
 - **Proto:** `proto3`

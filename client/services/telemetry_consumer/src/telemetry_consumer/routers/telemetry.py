@@ -1,5 +1,12 @@
-"""Rotas de leitura: listagem REST e stream WebSocket de telemetria."""
+"""Rotas de leitura: listagem REST e stream WebSocket de telemetria.
 
+O plano de dados por tenant exige credencial de serviço (header
+`X-Service-Token`). O nginx do dashboard injeta o token server-side nos
+proxies `/api` e `/ws`, então o browser nunca conhece o segredo. O `app_id`
+continua validado contra o `settings.app_id` do pod (isolamento por pod).
+"""
+
+import secrets
 from typing import Any
 
 from fastapi import (
@@ -17,7 +24,18 @@ router = APIRouter()
 MIN_LIMIT = 1
 MAX_LIMIT = 1000
 DEFAULT_LIMIT = 100
+SERVICE_TOKEN_HEADER = "X-Service-Token"
+WS_UNAUTHORIZED = 4401
 WS_POLICY_VIOLATION = 1008
+
+
+def _token_matches(provided: str | None, expected: str) -> bool:
+    """Compara em tempo constante. Falha fechada se o token não configurado."""
+    if not expected:
+        return False
+    return secrets.compare_digest(
+        (provided or "").encode("utf-8"), expected.encode("utf-8")
+    )
 
 
 @router.get("/telemetry")
@@ -27,10 +45,15 @@ async def get_telemetry(
     limit: int = DEFAULT_LIMIT,
     before: str | None = None,
 ) -> dict[str, Any]:
+    settings = request.app.state.settings
+    if not _token_matches(
+        request.headers.get(SERVICE_TOKEN_HEADER), settings.service_token
+    ):
+        raise HTTPException(status_code=401, detail="Invalid service token")
     pool = getattr(request.app.state, "db_pool", None)
     if pool is None:
         raise HTTPException(status_code=503, detail="database unavailable")
-    app_id = request.app.state.settings.app_id
+    app_id = settings.app_id
     if before is not None:
         try:
             db.parse_cursor(before)
@@ -47,10 +70,17 @@ async def get_telemetry(
 @router.websocket("/ws/telemetry/{app_id}")
 async def ws_telemetry(websocket: WebSocket, app_id: str) -> None:
     settings = websocket.app.state.settings
-    await websocket.accept()
+    # Validação antes do accept: nenhum cliente sem credencial conclui o
+    # handshake, e o app_id é conferido antes de registrar o socket.
+    if not _token_matches(
+        websocket.headers.get(SERVICE_TOKEN_HEADER), settings.service_token
+    ):
+        await websocket.close(code=WS_UNAUTHORIZED)
+        return
     if app_id != settings.app_id:
         await websocket.close(code=WS_POLICY_VIOLATION)
         return
+    await websocket.accept()
     broadcaster = websocket.app.state.broadcaster
     await broadcaster.register(websocket)
     try:

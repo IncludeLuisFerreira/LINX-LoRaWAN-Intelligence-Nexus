@@ -1,37 +1,29 @@
 #!/usr/bin/env bash
 # Gera os stubs Python gRPC (linx_agent_pb2.py / linx_agent_pb2_grpc.py) a
-# partir de proto/linx_agent.proto, para a biblioteca compartilhada do Linx Core
-# (package linx_shared) e o Client Agent (package agent).
+# partir de proto/linx_agent.proto para o pacote compartilhado `linx_shared`,
+# dono único do contrato do AgentBridge (#215).
 #
 # Uso:
 #     bash scripts/gen_proto.sh
 #
-# Requer grpcio-tools instalado em cada módulo (poetry install).
+# Requer grpcio-tools instalado em linx_core/shared (poetry install).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-gen() {
-  local module="$1"
-  local out="$2"
-  poetry -C "$module" run python -m grpc_tools.protoc \
-    -I "$ROOT/proto" \
-    --python_out="$ROOT/$out" \
-    --grpc_python_out="$ROOT/$out" \
-    "$ROOT/proto/linx_agent.proto"
-}
+OUT="linx_core/shared/src/linx_shared/grpc"
 
-gen linx_core/shared linx_core/shared/src/linx_shared/grpc
-gen middleware/services/client_agent middleware/services/client_agent/src/agent/grpc
+poetry -C linx_core/shared run python -m grpc_tools.protoc \
+  -I "$ROOT/proto" \
+  --python_out="$ROOT/$OUT" \
+  --grpc_python_out="$ROOT/$OUT" \
+  "$ROOT/proto/linx_agent.proto"
 
 # grpc_tools.protoc gera `import linx_agent_pb2` (absoluto), o que quebra
-# quando o arquivo vive dentro de um pacote (linx_shared.grpc / agent.grpc).
-# Corrige para import relativo.
-for grpc_file in \
-  linx_core/shared/src/linx_shared/grpc/linx_agent_pb2_grpc.py \
-  middleware/services/client_agent/src/agent/grpc/linx_agent_pb2_grpc.py; do
-  sed -i 's/^import linx_agent_pb2 as linx__agent__pb2$/from . import linx_agent_pb2 as linx__agent__pb2/' "$grpc_file"
-done
+# quando o arquivo vive dentro do pacote linx_shared.grpc. Corrige para
+# import relativo.
+sed -i 's/^import linx_agent_pb2 as linx__agent__pb2$/from . import linx_agent_pb2 as linx__agent__pb2/' \
+  "$OUT/linx_agent_pb2_grpc.py"
 
-echo "Stubs gRPC gerados em linx_core/shared/src/linx_shared/grpc e middleware/services/client_agent/src/agent/grpc"
+echo "Stubs gRPC gerados em $OUT"

@@ -77,14 +77,21 @@ frontend/
 
 O front consome o `identity_api` via `baseURL` `/api/v1`:
 
-| Recurso | Endpoints |
-| --- | --- |
-| Tenant | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}` |
-| Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}` |
-| Device | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
-| Telemetry | `GET /telemetry?dev_eui=&limit=&before=` |
+| Recurso     | Endpoints                                                                              |
+| ----------- | -------------------------------------------------------------------------------------- |
+| Tenant      | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}`                                    |
+| Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}`       |
+| Device      | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
+| Telemetry   | `GET /telemetry?dev_eui=&limit=&before=`                                               |
 
 > O `PATCH /devices/{id}` aceita apenas `nickname`.
+
+> **Contratos OpenAPI (#217):** há dois artefatos com papéis distintos:
+> `client/frontend/openapi-stub.yaml` é o subconjunto REST que o front consome,
+> validado por `@redocly/cli` no `frontend-ci`; `docs/openapi-stub.json` é o
+> `app.openapi()` do `identity_api` materializado, mantido em sincronia por teste
+> (`identity_api/tests/test_openapi.py`). O `yaml` orienta o front; o `json` é a
+> fonte de verdade em runtime.
 
 ## Dashboard de Telemetria
 
@@ -168,7 +175,7 @@ O envio chama `POST /devices` com o contrato real (`dev_eui`, `join_eui`,
 `app_key`, `app_id`, `device_profile_id`, `nickname`) e redireciona para
 `/devices` em caso de sucesso.
 
-A câmera exige *secure context* — funciona em `localhost` ou HTTPS, não
+A câmera exige _secure context_ — funciona em `localhost` ou HTTPS, não
 em HTTP via IP de LAN. Para testar sem QR físico, cole um código como:
 
 ```
@@ -201,12 +208,12 @@ npx vitest run --coverage   # cobertura (mínimo 70%)
 
 ### Variáveis
 
-| Variável | Default | Descrição |
-| --- | --- | --- |
-| `VITE_API_URL` | `/api/v1` | Base URL da API (relativo; resolvido pelo proxy). |
-| `VITE_WS_URL` | vazio | Base URL do WebSocket de telemetria. Vazio resolve para a mesma origem (`ws`/`wss`). |
-| `VITE_WS_PROXY_TARGET` | `http://localhost:8000` | Alvo do proxy `/ws` no dev server. |
-| `VITE_ENABLE_MOCKS` | `false` | Liga o MSW no bundle. Use `true` para demos sem backend. |
+| Variável               | Default                 | Descrição                                                                            |
+| ---------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| `VITE_API_URL`         | `/api/v1`               | Base URL da API (relativo; resolvido pelo proxy).                                    |
+| `VITE_WS_URL`          | vazio                   | Base URL do WebSocket de telemetria. Vazio resolve para a mesma origem (`ws`/`wss`). |
+| `VITE_WS_PROXY_TARGET` | `http://localhost:8000` | Alvo do proxy `/ws` no dev server.                                                   |
+| `VITE_ENABLE_MOCKS`    | `false`                 | Liga o MSW no bundle. Use `true` para demos sem backend.                             |
 
 ## Docker
 

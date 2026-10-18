@@ -1,0 +1,13 @@
+# Compose dedicado do client_agent (deploy). O cliente Docker usa a raiz do
+# repositório como contexto porque o serviço depende de linx_core/shared
+# (path dependency, #215). Para orquestrar a stack completa use
+# deploy/docker-compose.yml, que já inclui este serviço.
+services:
+  client_agent:
+    build:
+      context: ..
+      dockerfile: middleware/services/client_agent/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8001:8001"

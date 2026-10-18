@@ -7,7 +7,7 @@ on:
       - "client/services/telemetry_consumer/**"
       - "middleware/services/routing/**"
       - "deploy/docker-compose.yml"
-      - "deploy/db/**"
+      - "client/db/**"
       - "deploy/.env.example"
       - ".github/workflows/integration-ci.yml"
   push:
@@ -19,7 +19,7 @@ on:
       - "client/services/telemetry_consumer/**"
       - "middleware/services/routing/**"
       - "deploy/docker-compose.yml"
-      - "deploy/db/**"
+      - "client/db/**"
       - "deploy/.env.example"
       - ".github/workflows/integration-ci.yml"
 

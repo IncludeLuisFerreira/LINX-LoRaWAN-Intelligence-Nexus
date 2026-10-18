@@ -5,10 +5,9 @@ Documento de migração para bancos TimescaleDB já existentes que rodavam o ant
 colunas `app_id` e `event_type` e um índice único de deduplicação; bancos criados
 antes dessa mudança precisam ser migrados **uma vez** antes de subir o serviço.
 
-O novo esquema canônico está em `client/db/schema.sql` e
-`deploy/db/schema.sql` (arquivos duplicados, mantidos
-idênticos). Bancos novos já nascem migrados; o procedimento abaixo é apenas para
-bancos existentes.
+O esquema canônico é único: `client/db/schema.sql` (o compose de deploy monta
+esse arquivo via `../client/db/schema.sql`). Bancos novos já nascem migrados; o
+procedimento abaixo é apenas para bancos existentes.
 
 ## Ordem de deploy
 

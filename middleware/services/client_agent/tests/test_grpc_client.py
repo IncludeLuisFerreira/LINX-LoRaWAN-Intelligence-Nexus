@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import grpc
 import pytest
+from linx_shared.grpc import linx_agent_pb2
 
-from agent.grpc import linx_agent_pb2
 from agent.grpc_client import (
     AgentBootstrapError,
     SaasGrpcClient,

@@ -14,7 +14,7 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 **Subsistemas:**
 
 - `linx_core/` — Microsserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`) e `services/` com `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
-- `middleware/` — Middleware de segurança e roteamento: `services/client_agent/` valida JWT e direciona requisições ao contêiner isolado correto; `services/routing/` roteia uplinks MQTT.
+- `middleware/` — Camada de middleware: `services/routing/` roteia uplinks MQTT do ChirpStack para a exchange RabbitMQ do tenant; `services/client_agent/` é o agente por tenant (health + cliente gRPC ao Linx Core). A validação de credenciais do plano de controle fica no `identity_api` (`linx_core/`).
 - `client/` — Ambiente isolado do cliente: dashboard (`frontend/`), consumidor de telemetria (`services/telemetry_consumer/`) e TimescaleDB (`db/`).
 - `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
 - `proto/` — Contrato gRPC compartilhado (`linx_agent.proto`) entre Linx Core e Client Agent.
@@ -32,10 +32,10 @@ LINX/
 │   │   ├── identity_api/   #   REST (FastAPI)      :8000
 │   │   └── agent_bridge/   #   gRPC (AgentBridge)  :50051
 │   └── shared/             #   biblioteca comum (linx_shared)
-├── middleware/             # Middleware: autenticação JWT + roteamento multi-tenant
+├── middleware/             # Middleware: agente por tenant + roteamento de uplinks
 │   └── services/
-│       ├── client_agent/   #   Client Agent (REST + gRPC client)
-│       └── routing/        #   Roteamento de uplinks MQTT
+│       ├── client_agent/   #   Agente do tenant (health + gRPC client)
+│       └── routing/        #   Roteamento de uplinks MQTT -> RabbitMQ
 ├── client/                 # Ambiente isolado do cliente (Docker)
 │   ├── frontend/           #   Dashboard web (React + Vite + TailwindCSS)
 │   ├── services/           #   telemetry_consumer (ingestão AMQP + REST/WS)
@@ -46,6 +46,10 @@ LINX/
 │   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
 ├── proto/                  # Contrato gRPC compartilhado (AgentBridge)
 │   └── linx_agent.proto    # service AgentBridge (proto3)
+├── deploy/                 # Stack full-stack (nginx + TLS + todos os serviços) + schema
+├── scripts/                # gen_proto.sh, update_progress.py, docker_install.sh
+├── tests/                  # Testes de integração ponta-a-ponta
+├── website/                # Site institucional (Astro)
 ├── docs/
 │   ├── estrutura_de_pastas/
 │   ├── analise_seguranca_chirpstack/

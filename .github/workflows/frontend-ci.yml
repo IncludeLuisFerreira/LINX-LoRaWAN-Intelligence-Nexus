@@ -38,6 +38,9 @@ jobs:
       - name: Check TypeScript Types
         run: npx tsc --noEmit
 
+      - name: Run Unit Tests (Vitest)
+        run: npm test
+
       - name: Build Application
         run: npm run build
         working-directory: ./client/frontend

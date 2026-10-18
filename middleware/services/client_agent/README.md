@@ -1,10 +1,10 @@
 # Client Agent
 
-Middleware compartilhado do LINX (Modelo A) — fica entre o
-frontend/integrações e os contêineres isolados por aplicação, validando acesso
-e roteando por `app_id`. No startup valida a conectividade gRPC com o Linx Core
-e resolve a configuração de cada tenant sob demanda via
-`GetAppConfig(app_id)`, com cache TTL.
+Agente por tenant do LINX — valida a conectividade gRPC com o Linx Core no
+startup e resolve a configuração de cada tenant sob demanda via
+`GetAppConfig(app_id)`, com cache TTL. **Não** valida JWT nem roteia
+requisições; a autenticação do plano de controle é do `identity_api`
+(`linx_core/`).
 
 > A ingestão de telemetria é feita pelo serviço **routing**
 > (`middleware/services/routing`): ele consome os uplinks do ChirpStack via MQTT e
@@ -20,7 +20,7 @@ e resolve a configuração de cada tenant sob demanda via
 - [x] Tooling de dev espelhado do `linx_core`: `black`, `isort`, `flake8`,
       `mypy`, `pytest` + `pytest-cov`, `taskipy` e `httpx`.
 - [x] `Dockerfile` mínimo (`python:3.12-slim` + poetry + uvicorn).
-- [x] Stubs gRPC do contrato `linx_agent.proto` em `src/agent/grpc/` (pacote `agent.grpc`).
+- [x] Stubs gRPC do contrato `linx_agent.proto` consumidos do pacote compartilhado `linx_shared`.
 
 ## 📍 Endpoints
 
@@ -122,7 +122,7 @@ Os comandos são os mesmos; mude apenas o host:
 | `src/agent/main.py`           | Aplicação FastAPI, lifespan gRPC e `/health`.   |
 | `src/agent/config.py`         | `AgentSettings` (host gRPC, timeout, TTL do cache) via env. |
 | `src/agent/grpc_client.py`    | `SaasGrpcClient` (`GetAppConfig` + cache TTL + conectividade). |
-| `src/agent/grpc/`             | Stubs gRPC do contrato `linx_agent.proto`.      |
+| `linx_shared.grpc`            | Stubs gRPC do contrato `linx_agent.proto` (pacote compartilhado). |
 | `tests/test_main.py`          | Testes do `/health` e do lifespan com `TestClient`. |
 | `tests/test_config.py`        | Testes dos defaults de `AgentSettings`.         |
 | `tests/test_grpc_client.py`   | Testes do `SaasGrpcClient` (mapeamento, cache, erros). |
@@ -178,11 +178,12 @@ poetry run pytest
 ## 🔌 Contrato gRPC (stubs)
 
 O contrato `AgentBridge` é definido em `proto/linx_agent.proto` (raiz do repo).
-Os stubs Python ficam em `src/agent/grpc/` (`linx_agent_pb2.py` e
-`linx_agent_pb2_grpc.py`). Para verificar e regenerar:
+Os stubs Python são versionados em `linx_core/shared/src/linx_shared/grpc/` e
+consumidos via path dependency (sem cópia local, #215). Para verificar e
+regenerar:
 
 ```bash
-poetry run python -c "from agent.grpc import linx_agent_pb2, linx_agent_pb2_grpc"
+poetry run python -c "from linx_shared.grpc import linx_agent_pb2, linx_agent_pb2_grpc"
 bash ../../../scripts/gen_proto.sh
 ```
 
@@ -194,10 +195,14 @@ task lint          # black + isort + mypy + flake8
 
 ## 🐳 Docker
 
+O `Dockerfile` usa a raiz do repositório como contexto de build (precisa de
+`linx_core/shared` para a path dependency). A partir da raiz:
+
 ```bash
-docker build -t client-agent-api .
-docker run --rm -p 8001:8001 --env-file .env client-agent-api
+docker build -f middleware/services/client_agent/Dockerfile -t client-agent-api .
+docker run --rm -p 8001:8001 --env-file middleware/services/client_agent/.env client-agent-api
 ```
 
-Em produção use `docker compose -f docker-compose.prod.yml up -d`, com o
-`SAAS_GRPC_HOST` apontando para o endereço acessível do Linx Core.
+Em produção use o compose unificado `deploy/docker-compose.yml` (serviço
+`client_agent`), com o `SAAS_GRPC_HOST` apontando para o endereço acessível do
+Linx Core.

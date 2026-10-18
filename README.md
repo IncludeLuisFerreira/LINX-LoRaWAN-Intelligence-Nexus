@@ -61,12 +61,30 @@ npm run dev
 
 > ChirpStack UI em `http://localhost:8080` (`admin`/`admin`). REST do core em `http://localhost:8000` (`/docs`). Dashboard em `http://localhost:5173`.
 
+## Stacks (Makefile)
+
+Cada compose do repositório tem um target `up-<stack>` (e `down-<stack>` /
+`logs-<stack>`). `make up` continua subindo só a infraestrutura base.
+
+| Target | Compose | Conteúdo |
+| --- | --- | --- |
+| `make up` / `up-infra` | `infra/docker-compose.yml` | ChirpStack v4 + MQTT + PostgreSQL |
+| `make up-base` | `infra/docker-compose.base.yml` | Base de dev (PostgreSQL + Redis + Mosquitto) |
+| `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + db) |
+| `make up-client` | `client/docker-compose.yml` | Ambiente isolado (frontend + telemetry_consumer + TimescaleDB) |
+| `make up-deploy` | `deploy/docker-compose.yml` | Stack full-stack (nginx + TLS + todos os serviços) |
+| `make up-client-agent` | `deploy/docker-compose.client-agent.yml` | Client Agent isolado |
+| `make test-integration` | `tests/integration/run.sh` | Testes de integração ponta-a-ponta |
+
+> `make help` lista a matriz completa. Rode `make down-<stack>` para derrubar
+> uma stack específica.
+
 ## Estrutura
 
 ```
 LINX/
 ├── linx_core/     # Plano de controle (REST FastAPI + gRPC AgentBridge)
-├── middleware/    # Client Agent (JWT + roteamento) e roteamento MQTT
+├── middleware/    # Middleware: roteamento de uplinks (routing) + agente por tenant (client_agent)
 ├── client/        # Ambiente isolado do cliente (frontend + telemetry_consumer + TimescaleDB)
 ├── infra/         # Stack ChirpStack v4 (gateway bridge, MQTT, PostgreSQL)
 ├── deploy/        # Compose full-stack (nginx, TLS, todos os serviços)
@@ -76,3 +94,17 @@ LINX/
 ```
 
 > Documentação completa: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md) · [`docs/`](docs/)
+
+## Contribuição
+
+Instale as dependências da raiz (uma vez) para habilitar o hook de pre-commit:
+
+```bash
+npm install          # husky + lint-staged na raiz
+pipx install ruff    # ou deixe `ruff` no PATH
+```
+
+O `.husky/pre-commit` roda `lint-staged` com a config do `package.json` da
+raiz: arquivos do frontend passam por `prettier` + `oxlint`, e arquivos
+Python por `ruff check --fix`. O hook cobre todo o monorepo (não só
+`client/frontend`).

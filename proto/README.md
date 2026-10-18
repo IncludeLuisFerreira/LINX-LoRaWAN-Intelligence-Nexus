@@ -92,9 +92,11 @@ protoc --descriptor_set_out=/dev/null --proto_path=proto proto/linx_agent.proto
 
 ## Gerar stubs Python (issue #20)
 
-Os stubs são versionados em `linx_core/shared/src/linx_shared/grpc/` (pacote
-`linx_shared`) e em `middleware/services/client_agent/src/agent/grpc/` (pacote
-`agent`). Para regenerar:
+Os stubs são versionados em um único lugar:
+`linx_core/shared/src/linx_shared/grpc/` (pacote `linx_shared`). O
+`client_agent` resolve `linx_agent_pb2` por esse pacote (path dependency),
+como o serviço `routing`; não há mais cópia sob `middleware/` (#215). Para
+regenerar:
 
 ```bash
 bash scripts/gen_proto.sh
@@ -102,4 +104,5 @@ bash scripts/gen_proto.sh
 
 O script usa `grpc_tools.protoc` e corrige o import absoluto gerado para
 import relativo (`from . import linx_agent_pb2`), necessário dentro de pacote.
-Requer `grpcio-tools` instalado em cada módulo (dev dependency).
+Requer `grpcio-tools` instalado em `linx_core/shared` (dev dependency). O CI
+regenera os stubs e falha se divergirem do versionado (drift gate).

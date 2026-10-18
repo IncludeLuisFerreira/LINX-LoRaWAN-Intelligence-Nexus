@@ -1,4 +1,6 @@
 {
+  "name": "LINX-LoRaWAN-Intelligence-Nexus",
+  "private": true,
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^17.4.1",
@@ -7,5 +9,17 @@
   },
   "scripts": {
     "prepare": "husky"
+  },
+  "lint-staged": {
+    "client/frontend/**/*.{js,jsx,ts,tsx}": [
+      "prettier --write",
+      "oxlint --fix"
+    ],
+    "client/frontend/**/*.{css,json,md}": [
+      "prettier --write"
+    ],
+    "**/*.py": [
+      "ruff check --fix"
+    ]
   }
 }

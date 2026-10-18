@@ -44,12 +44,6 @@
     "vite": "^8.2.2",
     "vitest": "^3.2.7"
   },
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx}": [
-      "prettier --write",
-      "oxlint --fix"
-    ]
-  },
   "msw": {
     "workerDirectory": [
       "public"

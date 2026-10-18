@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "linx_core/**"
+      - "proto/**"
+      - "scripts/gen_proto.sh"
       - ".github/workflows/backend-ci.yml"
   push:
     branches:
@@ -11,6 +13,8 @@ on:
       - develop
     paths:
       - "linx_core/**"
+      - "proto/**"
+      - "scripts/gen_proto.sh"
       - ".github/workflows/backend-ci.yml"
 
 env:
@@ -104,3 +108,26 @@ jobs:
 
       - name: Pytest (cobertura >= 70%)
         run: poetry -C ${{ matrix.package }} run pytest --cov=src --cov-report=term-missing --cov-fail-under=70
+
+  proto-drift:
+    name: gRPC stubs drift check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linx-shared deps (grpcio-tools)
+        run: poetry -C linx_core/shared install
+
+      - name: Regenerate stubs and fail on drift
+        run: |
+          bash scripts/gen_proto.sh
+          git diff --exit-code -- linx_core/shared/src/linx_shared/grpc

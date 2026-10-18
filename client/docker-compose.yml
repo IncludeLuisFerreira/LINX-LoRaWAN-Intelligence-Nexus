@@ -27,6 +27,9 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
+      # Token exigido no REST/WS de telemetria (#211); o nginx do frontend
+      # injeta o mesmo valor no header X-Service-Token dos proxies /api e /ws.
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
     depends_on:
       timescaledb:
         condition: service_healthy

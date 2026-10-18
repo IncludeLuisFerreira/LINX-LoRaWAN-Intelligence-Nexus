@@ -126,10 +126,41 @@ def test_tenant_cannot_read_audit_queue(two_apps):
     connection.close()
 
 
+def test_tenant_b_cannot_access_tenant_a_queue(two_apps):
+    """Isola o cenário crítico: A publica na própria fila; B não a alcança."""
+    app_a, app_b = two_apps
+
+    conn_a = rabbitpy.Connection(_tenant_url(app_a))
+    ch_a = conn_a.channel()
+    ch_a.enable_publisher_confirms()
+    exchange = rabbitpy.Exchange(
+        ch_a, f"linx.telemetry.{app_a}", exchange_type="topic", durable=True
+    )
+    exchange.declare()
+    queue = rabbitpy.Queue(
+        ch_a, f"linx.telemetry.{app_a}", durable=True, auto_delete=False
+    )
+    queue.declare()
+    queue.bind(exchange, routing_key=f"application.{app_a}.#")
+    message = rabbitpy.Message(ch_a, json.dumps({"app_id": app_a}).encode())
+    assert message.publish(exchange, f"application.{app_a}.device.dev1.up")
+    conn_a.close()
+
+    conn_b = rabbitpy.Connection(_tenant_url(app_b))
+    ch_b = conn_b.channel()
+    foreign_queue = rabbitpy.Queue(
+        ch_b, f"linx.telemetry.{app_a}", durable=True, auto_delete=False
+    )
+    with pytest.raises(Exception):
+        foreign_queue.declare()
+    conn_b.close()
+
+
 def test_tenant_publishes_and_consumes_own_namespace(two_apps):
     app_a, _ = two_apps
     connection = rabbitpy.Connection(_tenant_url(app_a))
     channel = connection.channel()
+    channel.enable_publisher_confirms()
     exchange = rabbitpy.Exchange(
         channel, f"linx.telemetry.{app_a}", exchange_type="topic", durable=True
     )
@@ -148,6 +179,7 @@ def test_tenant_dead_letters_via_named_dlx(two_apps):
     app_a, _ = two_apps
     connection = rabbitpy.Connection(_tenant_url(app_a))
     channel = connection.channel()
+    channel.enable_publisher_confirms()
     dlx = rabbitpy.Exchange(
         channel,
         f"linx.telemetry.{app_a}.dlx",
@@ -178,6 +210,7 @@ def test_tenant_cannot_publish_via_default_exchange(two_apps):
     app_b, _ = two_apps
     connection = rabbitpy.Connection(_tenant_url(app_b))
     channel = connection.channel()
+    channel.enable_publisher_confirms()
     message = rabbitpy.Message(channel, b"x")
     with pytest.raises(Exception):
         message.publish("", f"linx.telemetry.{app_b}.dlq")
