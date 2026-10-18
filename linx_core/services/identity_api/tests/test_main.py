@@ -69,6 +69,7 @@ def test_openapi_enabled_outside_production(monkeypatch):
     dev_app = create_app()
 
     assert dev_app.docs_url == "/docs"
+    assert dev_app.redoc_url == "/redoc"
     assert dev_app.openapi_url == "/openapi.json"
 
 
@@ -79,8 +80,10 @@ def test_swagger_disabled_in_production(monkeypatch):
     production_client = TestClient(production_app)
 
     assert production_app.docs_url is None
+    assert production_app.redoc_url is None
     assert production_app.openapi_url is None
     assert production_client.get("/docs").status_code == 404
+    assert production_client.get("/redoc").status_code == 404
     assert production_client.get("/openapi.json").status_code == 404
 
 
