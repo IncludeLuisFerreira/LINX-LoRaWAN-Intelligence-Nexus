@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from identity_api.security import hash_password, verify_service_token
+from identity_api.security import hash_password
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,6 @@ AUTH_RESPONSES: dict[int | str, dict] = {
 router = APIRouter(
     prefix="/api/v1/user",
     tags=["Users"],
-    dependencies=[Depends(verify_service_token)],
 )
 
 
