@@ -192,13 +192,17 @@ npm install
 npm run dev
 ```
 
-O dev server faz **proxy de `/api` e de `/ws` para `http://localhost:8000`**
-(configurado em `vite.config.ts`; o proxy `/ws` usa `VITE_WS_PROXY_TARGET`),
-então não há CORS envolvido. Ambos os proxies injetam
+O dev server faz **proxy de `/api` para `http://localhost:8000` e de `/ws` para
+`VITE_WS_PROXY_TARGET`** (configurado em `vite.config.ts`), então não há CORS
+envolvido. Ambos os proxies injetam
 `X-Service-Token: $DEV_SERVICE_TOKEN`; defina `DEV_SERVICE_TOKEN` no `.env.local`
 com o mesmo valor de `SERVICE_TOKEN` do backend, senão o `/api` responde `401` e
-o `/ws` fecha com `4401`. Suba o `identity_api` e o `telemetry_consumer` na
-porta 8000.
+o `/ws` fecha com `4401`. Suba o `identity_api` no host em `http://localhost:8000`
+para o `/api`. O `/ws` usa `VITE_WS_PROXY_TARGET`, que precisa apontar para um
+`telemetry_consumer` alcançável a partir do host: publique ou encaminhe a porta
+interna `8000` dele para outra porta local (por exemplo `8001`) e defina
+`VITE_WS_PROXY_TARGET=http://localhost:8001` no `.env.local`. No Compose o
+`telemetry_consumer` não publica porta no host.
 
 ### Scripts
 
@@ -214,13 +218,13 @@ npx vitest run --coverage   # cobertura (mínimo 70%)
 
 ### Variáveis
 
-| Variável               | Default                 | Descrição                                                                                           |
-| ---------------------- | ----------------------- | --------------------------------------------------------------------------------------------------- |
-| `VITE_API_URL`         | `/api/v1`               | Base URL da API (relativo; resolvido pelo proxy).                                                   |
-| `VITE_WS_URL`          | vazio                   | Base URL do WebSocket de telemetria. Vazio resolve para a mesma origem (`ws`/`wss`).                |
-| `VITE_WS_PROXY_TARGET` | `http://localhost:8000` | Alvo do proxy `/ws` no dev server.                                                                  |
-| `DEV_SERVICE_TOKEN`    | vazio                   | Token injetado como `X-Service-Token` nos proxies `/api` e `/ws` do dev server. Obrigatório no dev. |
-| `VITE_ENABLE_MOCKS`    | `false`                 | Liga o MSW no bundle. Use `true` para demos sem backend.                                            |
+| Variável               | Default                 | Descrição                                                                                                                          |
+| ---------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_URL`         | `/api/v1`               | Base URL da API (relativo; resolvido pelo proxy).                                                                                  |
+| `VITE_WS_URL`          | vazio                   | Base URL do WebSocket de telemetria. Vazio resolve para a mesma origem (`ws`/`wss`).                                               |
+| `VITE_WS_PROXY_TARGET` | `http://localhost:8000` | Alvo do proxy `/ws` no dev server. Aponte para um `telemetry_consumer` alcançável (o default `localhost:8000` é o `identity_api`). |
+| `DEV_SERVICE_TOKEN`    | vazio                   | Token injetado como `X-Service-Token` nos proxies `/api` e `/ws` do dev server. Obrigatório no dev.                                |
+| `VITE_ENABLE_MOCKS`    | `false`                 | Liga o MSW no bundle. Use `true` para demos sem backend.                                                                           |
 
 ## Docker
 

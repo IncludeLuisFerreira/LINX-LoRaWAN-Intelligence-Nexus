@@ -83,7 +83,7 @@ via `WS /ws/telemetry/{app_id}`. Detalhes de telas, rotas e variáveis em
 ```bash
 # a partir de client/frontend/
 npm install
-npm run dev     # dev server (proxy /api)
+npm run dev     # dev server (proxies /api e /ws)
 ```
 
 ## 📁 Estrutura
