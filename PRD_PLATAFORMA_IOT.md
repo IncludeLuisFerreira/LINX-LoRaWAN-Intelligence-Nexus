@@ -80,7 +80,7 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 
 **UC01 — Cadastro de Organização e Criação de Aplicação**
 
-- **Atores:** Administrador da Plataforma, Linx Core, identity_api.
+- **Atores:** Administrador da Plataforma, Linx Core, identity_api, routing.
 - **Fluxo Principal:** O administrador cadastra uma organização no SaaS e cria uma nova "Aplicação" no painel SaaS. Uma “aplicação” precisa estar relacionada à uma organização. O Linx Core orquestra na nuvem um novo *Docker Cliente* isolado para este projeto (contendo exclusivamente os bancos de dados PostgreSQL/TimescaleDB e o motor de regras da aplicação). O `identity_api` registra a nova Aplicação no plano de controle e o `routing` passa a publicar a telemetria dela no exchange RabbitMQ correspondente.
 
 **UC02 — Gestão de Usuários e Controle de Acesso (RBAC)**
@@ -92,7 +92,7 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 
 **UC03 — Cadastro de Gateway LoRaWAN**
 
-- **Atores:** Administrador SaaS, Equipe de Operação de Rede (Startup), Linx Core, ChirpStack.
+- **Atores:** Administrador SaaS, Equipe de Operação de Rede (Startup), Linx Core, ChirpStack, routing.
 - **Fluxo Principal:** A startup opera uma rede externa de Gateways LoRaWAN (infraestrutura própria) e é responsável por planejar cobertura, instalar, cadastrar e monitorar os Gateways na região atendida. Os Gateways são previamente provisionados pela startup e vinculados ao ambiente ChirpStack (AWS), de modo que os sensores dos clientes possam utilizar a cobertura existente sem que o cliente instale hardware de gateway no local. O Linx Core utiliza o ChirpStack como camada de rede LoRaWAN e mantém o vínculo Organização → Aplicação → Dispositivo; o `routing` consome os uplinks do MQTT e os publica no RabbitMQ.
 - **Pós-condição:** A rede de Gateways está operacional e apta a receber uplinks dos sensores, encaminhando-os ao ChirpStack/MQTT, de onde o `routing` os publica no RabbitMQ para processamento e persistência na nuvem.
 
@@ -104,13 +104,13 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 **UC05 — Atualização Remota de Firmware (FUOTA)**
 
 - **Atores:** Administrador, identity_api, Linx Core, ChirpStack.
-- **Fluxo Principal:** O administrador agenda uma atualização de firmware pelo painel. A requisição é autenticada pelo `identity_api`, que repassa o comando ao Linx Core. O Linx Core coordena com o ChirpStack o envio do arquivo em pacotes *multicast* (Downlink) para os sensores físicos.
+- **Fluxo Principal:** O administrador agenda uma atualização de firmware pelo painel. A requisição é autenticada pelo `identity_api`; o Linx Core coordena com o ChirpStack o envio do arquivo em pacotes *multicast* (Downlink) para os sensores físicos.
 
 ## Categoria C: Operação, Regras e Monitoramento (Nuvem)
 
 **UC06 — Monitoramento de Telemetria em Tempo Real**
 
-- **Atores:** Operador, Linx Core, routing, telemetry_consumer, Frontend.
+- **Atores:** Operador, routing, telemetry_consumer, Frontend.
 - **Fluxo Principal:** O operador acessa o dashboard. O frontend abre uma conexão WebSocket. O sensor transmite um dado que chega ao MQTT via ChirpStack. O `routing` consome a fila MQTT e publica o envelope no RabbitMQ. O `telemetry_consumer` da aplicação consome o envelope, salva o dado no *TimescaleDB* isolado e, simultaneamente, faz o *push* via WebSocket para o frontend do operador.
 
 **UC07 — Configuração de Regras de Negócio e Acionamento Remoto (Downlink)**
@@ -180,7 +180,7 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 
 A arquitetura move toda a inteligência para a AWS (Cloud), reduzindo o hardware nas instalações do cliente a componentes passivos de rede de sensores.
 
-O plano de controle é composto pelo `identity_api` (autenticação JWT e RBAC), pelo `agent_bridge` (gRPC) e pelo `routing` (ingestão MQTT → RabbitMQ). O `client_agent` é o agente por tenant responsável pelo health check e pelo cliente gRPC (`GetAppConfig`); ele não valida JWT nem roteia requisições de usuários. A persistência e a leitura de telemetria ficam com o `telemetry_consumer` de cada aplicação.
+O plano de controle é composto pelo `identity_api` (autenticação JWT e RBAC) e pelo `agent_bridge` (gRPC). A ingestão MQTT → RabbitMQ é responsabilidade do `routing`, no `middleware`. O `client_agent` é o agente por tenant responsável pelo health check e pelo cliente gRPC (`GetAppConfig`); ele não valida JWT nem roteia requisições de usuários. A persistência e a leitura de telemetria ficam com o `telemetry_consumer` de cada aplicação.
 
 !Arquitetura LINX - LoRaWAN Intelligence Nexus.jpg
 
