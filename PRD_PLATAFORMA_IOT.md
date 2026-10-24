@@ -80,53 +80,53 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 
 **UC01 — Cadastro de Organização e Criação de Aplicação**
 
-- **Atores:** Administrador da Plataforma, Linx Core.
-- **Fluxo Principal:** O administrador cadastra uma organização no SaaS e cria uma nova "Aplicação" no painel SaaS. Uma “aplicação” precisa estar relacionada à uma organização. O Linx Core orquestra na nuvem um novo *Docker Cliente* isolado para este projeto (contendo exclusivamente os bancos de dados PostgreSQL/TimescaleDB e o motor de regras da aplicação). O Linx Core atualiza as rotas da **Client Agent API** (middleware) para que ela saiba direcionar requisições futuras para esta nova instância isolada.
+- **Atores:** Administrador da Plataforma, Linx Core, identity_api.
+- **Fluxo Principal:** O administrador cadastra uma organização no SaaS e cria uma nova "Aplicação" no painel SaaS. Uma “aplicação” precisa estar relacionada à uma organização. O Linx Core orquestra na nuvem um novo *Docker Cliente* isolado para este projeto (contendo exclusivamente os bancos de dados PostgreSQL/TimescaleDB e o motor de regras da aplicação). O `identity_api` registra a nova Aplicação no plano de controle e o `routing` passa a publicar a telemetria dela no exchange RabbitMQ correspondente.
 
 **UC02 — Gestão de Usuários e Controle de Acesso (RBAC)**
 
-- **Atores:** Administrador da Organização, Aplicação, Linx Core, Client Agent API.
-- **Fluxo Principal:** O administrador convida um usuário e o vincula a uma Aplicação. O Linx Core registra as permissões. Ao fazer login, o usuário recebe um token JWT. Todas as requisições desse usuário passarão pela **Client Agent API**, que atuará como middleware de segurança, validando o token e garantindo que ele só acesse os recursos do *Docker Cliente* da sua aplicação autorizada.
+- **Atores:** Administrador da Organização, Aplicação, Linx Core, identity_api.
+- **Fluxo Principal:** O administrador convida um usuário e o vincula a uma Aplicação. O Linx Core registra as permissões. Ao fazer login, o usuário recebe um token JWT emitido pelo `identity_api`. Todas as requisições desse usuário são autenticadas pelo `identity_api`, que valida o token e aplica o RBAC, garantindo que ele só acesse os recursos autorizados da sua organização ou aplicação.
 
 ### Categoria B: Infraestrutura IoT e Conectividade
 
 **UC03 — Cadastro de Gateway LoRaWAN**
 
 - **Atores:** Administrador SaaS, Equipe de Operação de Rede (Startup), Linx Core, ChirpStack.
-- **Fluxo Principal:** A startup opera uma rede externa de Gateways LoRaWAN (infraestrutura própria) e é responsável por planejar cobertura, instalar, cadastrar e monitorar os Gateways na região atendida. Os Gateways são previamente provisionados pela startup e vinculados ao ambiente ChirpStack (AWS), de modo que os sensores dos clientes possam utilizar a cobertura existente sem que o cliente instale hardware de gateway no local. O Linx Core utiliza o ChirpStack como camada de rede LoRaWAN e mantém a lógica de roteamento (Organização → Aplicação → Dispositivo) e persistência em nuvem.
-- **Pós-condição:** A rede de Gateways está operacional e apta a receber uplinks dos sensores, encaminhando-os ao ChirpStack/MQTT para posterior roteamento e persistência na nuvem.
+- **Fluxo Principal:** A startup opera uma rede externa de Gateways LoRaWAN (infraestrutura própria) e é responsável por planejar cobertura, instalar, cadastrar e monitorar os Gateways na região atendida. Os Gateways são previamente provisionados pela startup e vinculados ao ambiente ChirpStack (AWS), de modo que os sensores dos clientes possam utilizar a cobertura existente sem que o cliente instale hardware de gateway no local. O Linx Core utiliza o ChirpStack como camada de rede LoRaWAN e mantém o vínculo Organização → Aplicação → Dispositivo; o `routing` consome os uplinks do MQTT e os publica no RabbitMQ.
+- **Pós-condição:** A rede de Gateways está operacional e apta a receber uplinks dos sensores, encaminhando-os ao ChirpStack/MQTT, de onde o `routing` os publica no RabbitMQ para processamento e persistência na nuvem.
 
 **UC04 — Provisionamento de Sensor via QR Code (TR005)**
 
-- **Atores:** Técnico de Campo, Linx Core, ChirpStack, Client Agent API.
-- **Fluxo Principal:** O técnico escaneia o QR Code do sensor pelo celular ou do computador e o vincula a uma Aplicação. O Linx Core provisiona o dispositivo no ChirpStack (via gRPC). A partir desse momento, a **Client Agent API** é instruída a rotear toda a telemetria proveniente deste sensor diretamente para o banco de dados isolado da aplicação escolhida.
+- **Atores:** Técnico de Campo, Linx Core, ChirpStack, routing, telemetry_consumer.
+- **Fluxo Principal:** O técnico escaneia o QR Code do sensor pelo celular ou do computador e o vincula a uma Aplicação. O Linx Core provisiona o dispositivo no ChirpStack (via gRPC). A partir desse momento, o `routing` consome a telemetria do sensor via MQTT e publica envelopes normalizados no RabbitMQ; o `telemetry_consumer` da aplicação escolhida consome esses envelopes e os persiste no banco de dados isolado.
 
 **UC05 — Atualização Remota de Firmware (FUOTA)**
 
-- **Atores:** Administrador, Client Agent API, Linx Core, ChirpStack.
-- **Fluxo Principal:** O administrador agenda uma atualização de firmware pelo painel. A requisição bate na **Client Agent API** (middleware), que autentica a chamada e repassa o comando ao Linx Core. O Linx Core coordena com o ChirpStack o envio do arquivo em pacotes *multicast* (Downlink) para os sensores físicos.
+- **Atores:** Administrador, identity_api, Linx Core, ChirpStack.
+- **Fluxo Principal:** O administrador agenda uma atualização de firmware pelo painel. A requisição é autenticada pelo `identity_api`, que repassa o comando ao Linx Core. O Linx Core coordena com o ChirpStack o envio do arquivo em pacotes *multicast* (Downlink) para os sensores físicos.
 
 ## Categoria C: Operação, Regras e Monitoramento (Nuvem)
 
 **UC06 — Monitoramento de Telemetria em Tempo Real**
 
-- **Atores:** Operador, Linx Core, Client Agent API, Frontend.
-- **Fluxo Principal:** O operador acessa o dashboard. O frontend abre uma conexão WebSocket. O sensor transmite um dado que chega ao MQTT via ChirpStack. O Linx Core lê a fila MQTT e repassa à **Client Agent API**. O middleware salva o dado no *TimescaleDB* isolado da aplicação e, simultaneamente, faz o *push* via WebSocket para o frontend do operador.
+- **Atores:** Operador, Linx Core, routing, telemetry_consumer, Frontend.
+- **Fluxo Principal:** O operador acessa o dashboard. O frontend abre uma conexão WebSocket. O sensor transmite um dado que chega ao MQTT via ChirpStack. O `routing` consome a fila MQTT e publica o envelope no RabbitMQ. O `telemetry_consumer` da aplicação consome o envelope, salva o dado no *TimescaleDB* isolado e, simultaneamente, faz o *push* via WebSocket para o frontend do operador.
 
 **UC07 — Configuração de Regras de Negócio e Acionamento Remoto (Downlink)**
 
-- **Atores:** Operador, Docker Cliente (Motor de Regras), Client Agent API, Linx Core.
-- **Fluxo Principal:** O operador cadastra uma regra ("Temperatura > 40ºC liga o exaustor"). Essa regra fica salva no *Docker Cliente* da aplicação. Quando a telemetria chega, o motor isolado confirma a violação da regra e gera um comando de acionamento. Esse comando sobe para a **Client Agent API**, que o encaminha ao Linx Core, que por sua vez aciona o ChirpStack via gRPC para transmitir o *Downlink* até o Gateway físico.
+- **Atores:** Operador, Docker Cliente (Motor de Regras), Linx Core.
+- **Fluxo Principal:** O operador cadastra uma regra ("Temperatura > 40ºC liga o exaustor"). Essa regra fica salva no *Docker Cliente* da aplicação. Quando a telemetria chega, o motor isolado confirma a violação da regra e gera um comando de acionamento. Esse comando é enviado ao Linx Core, que por sua vez aciona o ChirpStack via gRPC para transmitir o *Downlink* até o Gateway físico.
 
 **UC08 — Disparo de Alertas (Telegram/Email)**
 
-- **Atores:** Docker Cliente (Motor de Regras), Client Agent API, Serviço de Notificação.
-- **Fluxo Principal:** O motor de regras da aplicação (no Docker isolado) detecta uma anomalia nos dados recém-chegados. Ele dispara um evento de alerta para a **Client Agent API**. O middleware intercepta o evento, formata a mensagem e invoca a API externa (Telegram ou Email) para notificar a equipe configurada naquela aplicação.
+- **Atores:** Docker Cliente (Motor de Regras), Linx Core, Serviço de Notificação.
+- **Fluxo Principal:** O motor de regras da aplicação (no Docker isolado) detecta uma anomalia nos dados recém-chegados. Ele dispara um evento de alerta para o Linx Core, que formata a mensagem e invoca a API externa (Telegram ou Email) para notificar a equipe configurada naquela aplicação.
 
 **UC09 — Consulta de Histórico e Integração Externa (APIs REST)**
 
-- **Atores:** Sistema Externo (ERP do Cliente), Client Agent API, Docker Cliente.
-- **Fluxo Principal:** O ERP do cliente solicita o histórico de dados de um mês enviando uma requisição HTTP/REST. A **Client Agent API** atua como *Middleware*, valida o token de acesso (TLS/HTTPS) e roteia a consulta para o PostgreSQL/TimescaleDB isolado daquela aplicação. Os dados são recuperados, formatados em JSON pelo middleware e devolvidos ao ERP.
+- **Atores:** Sistema Externo (ERP do Cliente), telemetry_consumer.
+- **Fluxo Principal:** O ERP do cliente solicita o histórico de dados de um mês enviando uma requisição HTTP/REST. O `telemetry_consumer` da aplicação atende a requisição, valida o token de serviço e consulta o PostgreSQL/TimescaleDB isolado daquela aplicação. Os dados são recuperados e devolvidos em JSON ao ERP.
 
 ---
 
@@ -143,7 +143,7 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 - **RF-010:** Para cada Aplicação criada, a plataforma deve provisionar um ambiente "Docker Cliente" dedicado na nuvem.
 - **RF-011:** A lógica de negócio  e confirmação de regras  devem rodar exclusivamente neste contêiner isolado.
 - **RF-012:** Cada Aplicação deve possuir persistência de dados isolada (PostgreSQL + TimescaleDB próprio na nuvem).
-- **RF-013:** O Linx Core deve rotear os dados (via MQTT/gRPC) garantindo que a telemetria de um dispositivo chegue apenas ao contêiner da sua respectiva aplicação.
+- **RF-013:** O serviço `routing` deve publicar a telemetria no exchange RabbitMQ da aplicação de origem, garantindo que apenas o `telemetry_consumer` daquela aplicação a consuma.
 
 ### 5.3. Gestão e Ingestão de Dispositivos (IoT)
 
@@ -180,6 +180,8 @@ Organizações B2B que demandam monitoramento IoT em diferentes projetos/aplica�
 
 A arquitetura move toda a inteligência para a AWS (Cloud), reduzindo o hardware nas instalações do cliente a componentes passivos de rede de sensores.
 
+O plano de controle é composto pelo `identity_api` (autenticação JWT e RBAC), pelo `agent_bridge` (gRPC) e pelo `routing` (ingestão MQTT → RabbitMQ). O `client_agent` é o agente por tenant responsável pelo health check e pelo cliente gRPC (`GetAppConfig`); ele não valida JWT nem roteia requisições de usuários. A persistência e a leitura de telemetria ficam com o `telemetry_consumer` de cada aplicação.
+
 !Arquitetura LINX - LoRaWAN Intelligence Nexus.jpg
 
 ---
@@ -206,14 +208,14 @@ A arquitetura move toda a inteligência para a AWS (Cloud), reduzindo o hardware
 1. **Sensor** transmite pacote RF.
 2. **Gateway** recebe e encaminha via rede IP para o **ChirpStack** na AWS.
 3. **ChirpStack** decifra o pacote e publica o evento no **MQTT Broker**.
-4. **Linx Core** intercepta a mensagem, verifica a qual Aplicação o *DevEUI* pertence e realiza o roteamento.
-5. Os dados são persistidos no **TimescaleDB** isolado da Aplicação e enviados via **WebSocket** para o Frontend.
+4. O serviço **routing** consome a mensagem do MQTT, valida a integridade e publica um envelope normalizado no **RabbitMQ**.
+5. O **telemetry_consumer** da Aplicação consome o envelope, persiste os dados no **TimescaleDB** isolado e os envia via **WebSocket** para o Frontend.
 
 ### 9.2. Fluxo de Acionamento (Downlink / Comando)
 
 1. Motor de Regras no **Docker da Aplicação** constata anomalia (ou Operador clica em "Ligar").
-2. **Client Agent API** envia requisição HTTPS/REST ao **Linx Core**.
-3. **Linx Core** valida a permissão e aciona o **ChirpStack** via chamada **gRPC** (Middleware).
+2. O motor de regras envia uma requisição de acionamento ao **Linx Core**.
+3. **Linx Core** valida a permissão e aciona o **ChirpStack** via chamada **gRPC**.
 4. **ChirpStack** enfileira a mensagem. Na próxima janela de transmissão (RX), envia o pacote de rádio ao **Gateway**, que aciona o equipamento final.
 
 ---
@@ -223,7 +225,7 @@ A arquitetura move toda a inteligência para a AWS (Cloud), reduzindo o hardware
 A arquitetura adota o princípio de privilégio mínimo (*least privilege*) e criptografia em todas as etapas:
 
 - **Dispositivos Físicos:** Validação nativa do protocolo LoRaWAN (AES-128, NwkSKey, AppSKey) contra *replay attacks*.
-- **SaaS API (Borda da Nuvem):** HTTPS/TLS para tráfego web. Controle de usuários e senhas protegidas com `bcrypt` e JWT/OAuth2.
+- **SaaS API (Borda da Nuvem):** HTTPS/TLS para tráfego web. O `identity_api` controla usuários e senhas protegidas com `bcrypt` e autentica as APIs com JWT/OAuth2.
 - **Isolamento de Contêineres:** Um *Docker Cliente* de uma Aplicação não tem rota de rede direta para o banco de dados de outra Aplicação, garantindo segurança a nível de infraestrutura.
 
 ---
@@ -255,7 +257,7 @@ O MVP (Minimum Viable Product) acadêmico/inicial será considerado concluído q
 ## 13. Roadmap de Produto
 
 - **Fase 1 — Core Cloud:** Deploy na AWS do Linx Core, ChirpStack, MQTT e PostgreSQL Central.
-- **Fase 2 — Orquestração de Aplicações:** Desenvolvimento da rotina automatizada de criação do *Docker Cliente* (motor de regras + TimescaleDB) para cada nova Aplicação. O `middleware/services/client_agent` é middleware compartilhado e não faz parte do container por-tenant.
+- **Fase 2 — Orquestração de Aplicações:** Desenvolvimento da rotina automatizada de criação do *Docker Cliente* (motor de regras + TimescaleDB) para cada nova Aplicação. O `client_agent` é o agente por tenant (health check e cliente gRPC); a ingestão de telemetria MQTT → RabbitMQ é responsabilidade do `routing`.
 - **Fase 3 — Plug and Play e Dados:** Leitura de QR Code, fluxo ponta-a-ponta de telemetria e integração WebSocket.
 - **Fase 4 — Lógica e Downlink:** Motor de confirmação de regras e roteamento de comandos via gRPC.
 - **Fase 5 — Observabilidade e Alertas:** Serviço de notificações (Telegram/Email), monitoramento de saúde dos contêineres e detecção de quedas de Gateways.
