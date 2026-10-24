@@ -127,10 +127,7 @@ describe('device handlers', () => {
 
   it('rejects an invalid DevEUI with 422', async () => {
     const appId = await firstAppId();
-    const res = await post(
-      `${base}/devices`,
-      validDevice(appId, 'abc'),
-    );
+    const res = await post(`${base}/devices`, validDevice(appId, 'abc'));
 
     expect(res.status).toBe(422);
   });
@@ -198,11 +195,48 @@ describe('device nickname handlers', () => {
   });
 });
 
+describe('provisioning status handler', () => {
+  it('progresses PENDING -> PROVISIONING -> RUNNING per application', async () => {
+    const appId = crypto.randomUUID();
+    const readStatus = async () =>
+      (
+        (await (
+          await fetch(`${base}/applications/${appId}/status`)
+        ).json()) as { status: string }
+      ).status;
+
+    expect(await readStatus()).toBe('PENDING');
+    expect(await readStatus()).toBe('PROVISIONING');
+    expect(await readStatus()).toBe('RUNNING');
+    expect(await readStatus()).toBe('RUNNING');
+  });
+
+  it('honors the localStorage status override', async () => {
+    const appId = crypto.randomUUID();
+    localStorage.setItem('linx:mock-provisioning-status', 'ERROR');
+
+    try {
+      const res = await fetch(`${base}/applications/${appId}/status`);
+      const body = (await res.json()) as { status: string };
+
+      expect(body.status).toBe('ERROR');
+    } finally {
+      localStorage.removeItem('linx:mock-provisioning-status');
+    }
+  });
+});
+
 describe('telemetry handlers', () => {
   it('returns a paginated history envelope for a dev_eui', async () => {
-    const res = await fetch(`${base}/telemetry?dev_eui=aabbccddeeff0004&limit=5`);
+    const res = await fetch(
+      `${base}/telemetry?dev_eui=aabbccddeeff0004&limit=5`,
+    );
     const body = (await res.json()) as {
-      items: { time: string; dev_eui: string; payload: Record<string, unknown> }[];
+      items: {
+        time: string;
+        dev_eui: string;
+        payload: Record<string, unknown>;
+      }[];
       next_cursor: string | null;
     };
 

@@ -5,10 +5,12 @@ import { applicationService, type ApplicationOutput } from '../../services/app';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import type { TenantOutput } from '../../services/tenant';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useProvisioningStatus } from '../../hooks/useProvisioningStatus';
 import { getErrorMessage } from '../../services/api';
 import { formatDate } from '../../utils/format';
 import { cleanOptionalDescription } from '../../utils/form';
 import { PageHeader } from '../../components/layout/PageHeader';
+import { ProvisioningStatus } from '../../components/ProvisioningStatus';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
 import { Tabs } from '../../components/ui/Tabs';
 import { Card } from '../../components/ui/Card';
@@ -50,6 +52,7 @@ export default function ApplicationDetailPage() {
     () => loadApplication(tenantId, appId),
     [tenantId, appId],
   );
+  const { status } = useProvisioningStatus(appId);
 
   const [tab, setTab] = useState('devices');
   const [editingApp, setEditingApp] = useState(false);
@@ -194,6 +197,7 @@ export default function ApplicationDetailPage() {
         }
         actions={
           <>
+            {status && <ProvisioningStatus status={status} />}
             <Button
               variant="secondary"
               onClick={() =>

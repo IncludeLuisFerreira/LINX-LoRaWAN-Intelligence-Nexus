@@ -54,6 +54,17 @@ describe('applicationService', () => {
     expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications/a1');
   });
 
+  it('gets the provisioning status of an application', async () => {
+    mocked.get.mockResolvedValue({
+      data: { app_id: 'a1', status: 'RUNNING', container_id: 'c1' },
+    });
+
+    const status = await applicationService.getStatus('a1');
+
+    expect(mocked.get).toHaveBeenCalledWith('/applications/a1/status');
+    expect(status).toBe('RUNNING');
+  });
+
   it('updates an application with PATCH', async () => {
     mocked.patch.mockResolvedValue({ data: { id: 'a1' } });
 
@@ -100,8 +111,9 @@ describe('loadApplicationsByTenant', () => {
   });
 
   it('treats a non-array response as an empty list', async () => {
-    const result = await loadApplicationsByTenant([tenant('a')], async () =>
-      null as never,
+    const result = await loadApplicationsByTenant(
+      [tenant('a')],
+      async () => null as never,
     );
 
     expect(result).toEqual({ a: [] });

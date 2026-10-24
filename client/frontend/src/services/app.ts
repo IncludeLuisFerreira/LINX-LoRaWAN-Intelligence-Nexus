@@ -9,6 +9,16 @@ export interface ApplicationOutput {
   updated_at: string;
 }
 
+/** Estados de provisionamento definidos pelo contrato da aplicação. */
+export type ProvisioningStatusValue =
+  'PENDING' | 'PROVISIONING' | 'RUNNING' | 'ERROR';
+
+export interface ApplicationStatusOutput {
+  app_id: string;
+  status: ProvisioningStatusValue;
+  container_id: string;
+}
+
 export interface CreateApplicationInput {
   name: string;
   description?: string;
@@ -52,6 +62,19 @@ export const applicationService = {
       `/tenant/${tenantId}/applications/${applicationId}`,
     );
     return response.data;
+  },
+
+  /**
+   * Consulta o status do container da aplicação. O polling fica no hook
+   * `useProvisioningStatus`, não neste serviço.
+   */
+  getStatus: async (
+    applicationId: string,
+  ): Promise<ProvisioningStatusValue> => {
+    const response = await api.get<ApplicationStatusOutput>(
+      `/applications/${applicationId}/status`,
+    );
+    return response.data.status;
   },
 
   update: async (
