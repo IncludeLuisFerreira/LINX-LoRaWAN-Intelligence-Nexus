@@ -18,7 +18,7 @@ A Plataforma IoT Distribuída LINX é uma solução para aquisição, processame
 
 A conectividade LoRaWAN é fornecida por uma **rede externa de Gateways** operada pela própria startup. Assim, o cliente não precisa adquirir, instalar, configurar ou manter Gateways no seu ambiente: o hardware no local se limita aos sensores/dispositivos finais (e, quando aplicável, suas fontes de energia e fixação). O SaaS realiza o onboarding dos sensores e faz o roteamento/armazenamento/acionamento na nuvem, enquanto a camada de rádio é provida como serviço pela rede de cobertura.
 
-A plataforma adota um modelo arquitetural de **isolamento por aplicação**. A infraestrutura central em nuvem (Linx Core) atua como orquestradora geral e roteadora de comunicação. Para cada Aplicação criada por uma Organização, o sistema provisiona um ambiente isolado (contêineres Docker) também na nuvem, contendo o motor de regras, armazenamento de telemetria (PostgreSQL/TimescaleDB) e serviços específicos daquela aplicação. O ambiente físico (Edge) é restrito exclusivamente aos sensores e Gateways de comunicação de rádio (RF).
+A plataforma adota um modelo arquitetural de **isolamento por aplicação**. A infraestrutura central em nuvem (Linx Core) atua como orquestradora geral. Para cada Aplicação criada por uma Organização, o sistema provisiona um ambiente isolado (contêineres Docker) também na nuvem, contendo o motor de regras, armazenamento de telemetria (PostgreSQL/TimescaleDB) e serviços específicos daquela aplicação. O ambiente físico (Edge) é restrito exclusivamente aos sensores e Gateways de comunicação de rádio (RF).
 
 ### 1.2. Problema
 
