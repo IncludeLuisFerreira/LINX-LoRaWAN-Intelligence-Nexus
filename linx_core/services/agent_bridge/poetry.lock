@@ -777,6 +777,7 @@ develop = true
 
 [package.dependencies]
 grpcio = ">=1.84.0,<2.0.0"
+pika = ">=1.4.4,<2.0.0"
 protobuf = ">=7.36.1,<8.0.0"
 psycopg = {version = ">=3.3.4,<4.0.0", extras = ["binary"]}
 pydantic = ">=2.13.5,<3.0.0"
@@ -931,6 +932,23 @@ files = [
 hyperscan = ["hyperscan (>=0.7)"]
 optional = ["typing-extensions (>=4)"]
 re2 = ["google-re2 (>=1.1)"]
+
+[[package]]
+name = "pika"
+version = "1.4.4"
+description = "Pika Python AMQP Client Library"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "pika-1.4.4-py3-none-any.whl", hash = "sha256:48de960c97a93b55db06b8be4c53eb977c9c8a2754c57cdae9097abcbd70ce04"},
+    {file = "pika-1.4.4.tar.gz", hash = "sha256:8cfc8b33a5cb16e733bd60cffca9732c0d1d761ecd80a89f34ed7df2cd38d6d6"},
+]
+
+[package.extras]
+gevent = ["gevent"]
+tornado = ["tornado"]
+twisted = ["twisted"]
 
 [[package]]
 name = "platformdirs"
