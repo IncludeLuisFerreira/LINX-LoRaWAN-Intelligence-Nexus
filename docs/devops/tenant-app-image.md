@@ -93,14 +93,17 @@ script:
 PROVISION_IMAGE=includeluisferreira/linx-tenant-app:latest
 ```
 
-Adicione a linha acima ao `linx_core/.env` (ou exporte no ambiente). Em
-`linx_core/docker-compose.yml`, a variável é repassada ao
-`docker_provisioner`:
+Quando a issue #58 estiver integrada em `develop`, adicione a linha acima ao
+`linx_core/.env` (ou exporte no ambiente). A implementação da #58 é quem
+repassa a variável ao `docker_provisioner` no `linx_core/docker-compose.yml`:
 
 ```yaml
 environment:
   PROVISION_IMAGE: ${PROVISION_IMAGE:-linx-tenant-app:latest}
 ```
+
+Enquanto a #58 não estiver em `develop`, essa variável e o serviço
+`docker_provisioner` ainda não existem no branch de destino.
 
 Para ECR, use a referência completa:
 
