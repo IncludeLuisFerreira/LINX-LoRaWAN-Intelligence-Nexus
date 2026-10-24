@@ -6,6 +6,8 @@ from linx_shared.db.base_class import Base
 from linx_shared.models.application import Application  # noqa: F401
 from linx_shared.models.device import Device  # noqa: F401
 from linx_shared.models.device_route import DeviceRoute  # noqa: F401
+from linx_shared.models.job import Job  # noqa: F401
+from linx_shared.models.job_outbox import JobOutbox  # noqa: F401
 from linx_shared.models.tenant import Tenant  # noqa: F401
 from linx_shared.models.tenant_user import TenantUser  # noqa: F401
 from linx_shared.models.user import User  # noqa: F401
