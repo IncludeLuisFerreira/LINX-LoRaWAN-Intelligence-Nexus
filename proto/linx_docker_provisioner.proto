@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package linx;
+
+// DockerProvisioner é o contrato interno entre o identity_api e o serviço
+// que cria e mantém containers Docker por aplicação.
+//
+// O identity_api valida tenant/application no Postgres e envia apenas o
+// app_id; o provisioner concentra a política de imagem, porta, rede e envs.
+service DockerProvisioner {
+  rpc ProvisionApplication(ProvisionApplicationRequest)
+      returns (ProvisionApplicationResponse);
+}
+
+message ProvisionApplicationRequest {
+  // UUID da application já validada pelo identity_api.
+  string app_id = 1;
+}
+
+message ProvisionApplicationResponse {
+  string container_id = 1;
+  uint32 port = 2;
+  string network = 3;
+  string image = 4;
+  string status = 5;
+  bool created = 6;
+  string mqtt_topic = 7;
+}

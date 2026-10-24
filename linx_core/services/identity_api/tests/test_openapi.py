@@ -35,6 +35,13 @@ def test_openapi_exposes_applications_crud():
     assert {"get", "patch", "delete"} <= set(
         paths["/api/v1/tenant/{tenant_id}/applications/{application_id}"]
     )
+    assert (
+        "post"
+        in paths[
+            "/api/v1/tenant/{tenant_id}/applications/{application_id}"
+            "/provision"
+        ]
+    )
 
 
 def test_openapi_schemas_have_id_uuid_and_name():

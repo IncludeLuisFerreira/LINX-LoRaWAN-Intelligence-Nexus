@@ -50,7 +50,9 @@ poetry install
 poetry -C shared install
 poetry -C services/identity_api install
 poetry -C services/agent_bridge install
-cp .env.example .env        # ajuste POSTGRES_PASSWORD e CHIRPSTACK_API_TOKEN
+poetry -C services/docker_provisioner install
+make -C .. build-tenant-image  # imagem mínima provisionada por aplicação
+cp .env.example .env        # ajuste POSTGRES_PASSWORD, SERVICE_TOKEN, DOCKER_GID e CHIRPSTACK_API_TOKEN
 poetry run task run
 
 # 4. Dashboard web (opcional, em outro terminal)
@@ -70,10 +72,11 @@ Cada compose do repositório tem um target `up-<stack>` (e `down-<stack>` /
 | --- | --- | --- |
 | `make up` / `up-infra` | `infra/docker-compose.yml` | ChirpStack v4 + MQTT + PostgreSQL |
 | `make up-base` | `infra/docker-compose.base.yml` | Base de dev (PostgreSQL + Redis + Mosquitto) |
-| `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + db) |
+| `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + docker_provisioner + db) |
 | `make up-client` | `client/docker-compose.yml` | Ambiente isolado (frontend + telemetry_consumer + TimescaleDB) |
 | `make up-deploy` | `deploy/docker-compose.yml` | Stack full-stack (nginx + TLS + todos os serviços) |
 | `make up-client-agent` | `deploy/docker-compose.client-agent.yml` | Client Agent isolado (ver nota abaixo) |
+| `make build-tenant-image` | `client/tenant_app/` | Imagem mínima `linx-tenant-app:latest` usada no provisionamento |
 | `make test-integration` | `tests/integration/run.sh` | Testes de integração ponta-a-ponta |
 
 > `make up-client-agent` exige um `AGENT_SERVICE_TOKEN` real (não placeholder)
@@ -89,12 +92,12 @@ Cada compose do repositório tem um target `up-<stack>` (e `down-<stack>` /
 
 ```
 LINX/
-├── linx_core/     # Plano de controle (REST FastAPI + gRPC AgentBridge)
+├── linx_core/     # Plano de controle (REST FastAPI + gRPC AgentBridge/DockerProvisioner)
 ├── middleware/    # Middleware: roteamento de uplinks (routing) + agente por tenant (client_agent)
-├── client/        # Ambiente isolado do cliente (frontend + telemetry_consumer + TimescaleDB)
+├── client/        # Ambiente isolado do cliente (frontend + telemetry_consumer + tenant_app + TimescaleDB)
 ├── infra/         # Stack ChirpStack v4 (gateway bridge, MQTT, PostgreSQL)
 ├── deploy/        # Compose full-stack (nginx, TLS, todos os serviços)
-├── proto/         # Contrato gRPC compartilhado (linx_agent.proto)
+├── proto/         # Contratos gRPC compartilhados (AgentBridge + DockerProvisioner)
 ├── docs/          # Documentação (MkDocs)
 └── website/       # Site institucional (Astro)
 ```

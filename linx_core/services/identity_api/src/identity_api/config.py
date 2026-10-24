@@ -21,6 +21,26 @@ class IdentitySettings(Settings):
     rabbitmq_tenant_secret: str = ""
     rabbitmq_amqp_host: str = "rabbitmq:5672"
 
+    provisioner_grpc_host: str = "localhost:50052"
+    provisioner_grpc_timeout_seconds: float = 10.0
+
+    @field_validator("provisioner_grpc_host")
+    @classmethod
+    def _validate_provisioner_grpc_host(cls, value: str) -> str:
+        cleaned = (value or "").strip()
+        if not cleaned:
+            raise ValueError("PROVISIONER_GRPC_HOST não pode ser vazio")
+        return cleaned
+
+    @field_validator("provisioner_grpc_timeout_seconds")
+    @classmethod
+    def _validate_provisioner_timeout(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError(
+                "PROVISIONER_GRPC_TIMEOUT_SECONDS deve ser positivo"
+            )
+        return value
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: str) -> str:

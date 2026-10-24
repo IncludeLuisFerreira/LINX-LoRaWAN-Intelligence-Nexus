@@ -8,7 +8,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from identity_api.config import settings as identity_settings
-from identity_api.dependencies import close_chirpstack_client
+from identity_api.dependencies import (
+    close_chirpstack_client,
+    close_provisioner_client,
+)
 from identity_api.routes.application import router as application_router
 from identity_api.routes.device_profile import router as device_profile_router
 from identity_api.routes.devices import router as devices_router
@@ -25,6 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     ensure_service_token_configured()
     yield
     close_chirpstack_client()
+    close_provisioner_client()
 
 
 def create_app() -> FastAPI:

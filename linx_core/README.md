@@ -17,10 +17,15 @@ linx_core/
 │   │   ├── migrations/        # Alembic (dono: identity_api)
 │   │   ├── src/identity_api/  # main.py + routes/ + templates/ + static/
 │   │   └── tests/
-│   └── agent_bridge/          # microserviço gRPC (AgentBridge)  → :50051
+│   ├── agent_bridge/          # microserviço gRPC (AgentBridge)  → :50051
+│   │   ├── pyproject.toml
+│   │   ├── Dockerfile
+│   │   ├── src/agent_bridge/  # server.py + config.py
+│   │   └── tests/
+│   └── docker_provisioner/    # microserviço gRPC (DockerProvisioner) → :50052
 │       ├── pyproject.toml
 │       ├── Dockerfile
-│       ├── src/agent_bridge/  # server.py + config.py
+│       ├── src/docker_provisioner/  # server.py + docker_service.py
 │       └── tests/
 │
 ├── shared/                    # biblioteca compartilhada (linx_shared)
@@ -30,10 +35,10 @@ linx_core/
 │       ├── db/                # engine, SessionLocal, get_db, Base
 │       ├── models/            # tenant, application, user, tenant_user, device_routes, devices
 │       ├── schemas/           # schemas Pydantic da API
-│       └── grpc/              # stubs do contrato AgentBridge
+│       └── grpc/              # stubs dos contratos AgentBridge/DockerProvisioner
 │
 ├── alembic.ini
-├── docker-compose.yml         # sobe db + identity_api + agent_bridge
+├── docker-compose.yml         # sobe db + identity_api + agent_bridge + docker_provisioner
 ├── scripts/deploy.sh
 └── .env.example
 ```
@@ -64,6 +69,7 @@ Serviço FastAPI com os recursos de identidade/catálogo:
 |  `GET`  | `/api/v1/tenant/{id}/applications/{app_id}` | Busca uma application.                |
 | `PATCH` | `/api/v1/tenant/{id}/applications/{app_id}` | Atualiza parcialmente uma application.|
 | `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}` | Remove uma application (`204`).       |
+| `POST`  | `/api/v1/tenant/{id}/applications/{app_id}/provision` | Provisiona o container Docker da application via gRPC. |
 | `POST`  | `/api/v1/devices`                          | Cria um device (`201`) e provisiona no ChirpStack. |
 |  `GET`  | `/api/v1/devices?app_id={id}`              | Lista os devices de uma application.               |
 | `DELETE`| `/api/v1/devices/{id}`                     | Remove um device (`204`) e deleta no ChirpStack.   |
@@ -80,6 +86,75 @@ Servidor gRPC do contrato `AgentBridge`:
 > O `agent_bridge` consulta o Postgres diretamente via `linx_shared`. Migrar
 > para consultar o `identity_api` é uma evolução futura (desacoplamento total).
 
+### `docker_provisioner` (gRPC — porta 50052)
+
+Serviço interno que cria e reaproveita containers Docker por aplicação. É o
+único serviço do plano de controle com acesso ao `/var/run/docker.sock`.
+
+| RPC | Direção | Uso |
+| --- | ------- | --- |
+| `ProvisionApplication` | identity_api → docker_provisioner | Cria/reaproveita o container da aplicação e devolve porta/rede. |
+
+Contrato em `proto/linx_docker_provisioner.proto`. A chamada exige o metadado
+`authorization: Bearer <SERVICE_TOKEN>` e a porta não é publicada no host.
+
+## Provisionamento Docker (issue #58)
+
+Fluxo do endpoint:
+
+1. `identity_api` valida o `tenant_id` e a `application_id` no Postgres.
+2. Chama o `docker_provisioner` por gRPC com apenas o `app_id`.
+3. O provisioner:
+   - reutiliza o container se já existir label `linx.application.id`;
+   - cria/reutiliza a rede `linx-app-<app_id>`;
+   - sorteia uma porta no range `8100–9100` (`secrets.SystemRandom`), consulta
+     portas publicadas no Docker e re-tenta se o daemon rejeitar uma porta já
+     alocada;
+   - sobe a imagem `PROVISION_IMAGE` em `0.0.0.0:<porta>`;
+   - injeta `APP_ID`, `DB_PASSWORD`, `MQTT_TOPIC` e `SERVICE_TOKEN`.
+4. A resposta HTTP devolve `container_id`, `port`, `network`, `image`,
+   `status`, `created` e `mqtt_topic`. `DB_PASSWORD` nunca é retornado.
+
+Request de exemplo:
+
+```bash
+TOKEN="$(grep '^SERVICE_TOKEN=' .env | cut -d= -f2-)"
+curl -X POST \
+  "http://localhost:8000/api/v1/tenant/$TENANT_ID/applications/$APP_ID/provision" \
+  -H "X-Service-Token: $TOKEN"
+```
+
+Resposta (`201` na criação, `200` quando o container já existia):
+
+```json
+{
+  "container_id": "3f1c...",
+  "port": 8421,
+  "network": "linx-app-<app_id>",
+  "image": "linx-tenant-app:latest",
+  "status": "running",
+  "created": true,
+  "mqtt_topic": "application/<app_id>/device/+/event/up"
+}
+```
+
+Códigos de erro: `401` sem token, `404` tenant/app inexistente, `409` estado
+inconsistente no provisioner, `502` falha do Docker/provisioner, `503`
+indisponível ou sem porta livre e `504` timeout gRPC.
+
+### Segurança do socket Docker
+
+O `docker_provisioner` monta `/var/run/docker.sock`, o que dá poder equivalente
+a root no host. Use apenas em ambiente controlado. O `DOCKER_GID` deve ser o
+GID do grupo dono do socket:
+
+```bash
+stat -c '%g' /var/run/docker.sock
+```
+
+Preencha `DOCKER_GID` no `.env` do `linx_core/`. O `identity_api` **não** monta
+o socket.
+
 ## Desenvolvimento local
 
 Cada serviço é um projeto Poetry independente que depende de `linx_shared` por
@@ -92,10 +167,11 @@ poetry install                       # task runner (taskipy)
 poetry -C shared install
 poetry -C services/identity_api install
 poetry -C services/agent_bridge install
+poetry -C services/docker_provisioner install
 ```
 
-Subir os dois serviços de uma vez (carrega o `.env` da raiz e sobe REST + gRPC;
-`Ctrl+C` encerra ambos):
+Subir os três serviços de uma vez (carrega o `.env` da raiz e sobe REST + os
+dois servidores gRPC; `Ctrl+C` encerra todos):
 
 ```bash
 poetry run task run
@@ -106,6 +182,7 @@ Ou individualmente:
 ```bash
 poetry -C services/identity_api run uvicorn identity_api.main:app --reload
 poetry -C services/agent_bridge run python -m agent_bridge.server
+poetry -C services/docker_provisioner run python -m docker_provisioner.server
 ```
 
 > `poetry -C <serviço>` executa o comando com o diretório de trabalho do
@@ -116,13 +193,13 @@ poetry -C services/agent_bridge run python -m agent_bridge.server
 
 | Task         | Ação                                                          |
 | ------------ | ------------------------------------------------------------- |
-| `run`        | Sobe `identity_api` + `agent_bridge` em modo dev.             |
+| `run`        | Sobe `identity_api` + `agent_bridge` + `docker_provisioner`.  |
 | `run-docker` | `docker compose up --build` (foreground).                     |
 | `up`         | `docker compose up -d --build`.                               |
 | `down`       | `docker compose down`.                                        |
 | `migrate`    | Aplica as migrations do Alembic (`upgrade head`).             |
 | `migration`  | Gera nova migration (`revision --autogenerate -m "<msg>"`).   |
-| `test`       | Roda os testes dos três pacotes.                              |
+| `test`       | Roda os testes dos quatro pacotes.                            |
 
 ### Testes
 
@@ -133,6 +210,7 @@ poetry run task test
 poetry -C shared run pytest
 poetry -C services/identity_api run pytest   # exige Postgres em localhost:5432
 poetry -C services/agent_bridge run pytest   # exige Postgres em localhost:5432
+poetry -C services/docker_provisioner run pytest  # não exige Docker real
 ```
 
 ## Banco de dados e migrações
@@ -154,12 +232,16 @@ startup.
 
 > Os models ficam em `linx_shared.models`; o `migrations/env.py` importa de lá.
 
-## Contrato gRPC
+## Contratos gRPC
 
-O contrato `AgentBridge` é definido em `proto/linx_agent.proto` e versionado na
-raiz do repositório. Os stubs Python são gerados em um único lugar:
-`shared/src/linx_shared/grpc/` (pacote `linx_shared`). O `client_agent` consome
-esse pacote via path dependency, sem cópia local (#215).
+Os contratos ficam em `proto/`:
+- `linx_agent.proto` — `AgentBridge` (`:50051`);
+- `linx_docker_provisioner.proto` — `DockerProvisioner` (`:50052`).
+
+Os stubs Python são gerados em um único lugar:
+`shared/src/linx_shared/grpc/` (pacote `linx_shared`). `identity_api`,
+`agent_bridge`, `docker_provisioner` e `client_agent` consomem esse pacote via
+path dependency, sem cópia local (#215).
 
 ```bash
 bash scripts/gen_proto.sh
@@ -167,12 +249,15 @@ bash scripts/gen_proto.sh
 
 ## Docker / Deploy
 
-O `docker-compose.yml` sobe três serviços: `db` (Postgres), `identity_api` e
-`agent_bridge`.
+O `docker-compose.yml` sobe quatro serviços: `db` (Postgres), `identity_api`,
+`agent_bridge` e `docker_provisioner`.
 
 ```bash
+# a partir da raiz: builda a imagem mínima usada no provisionamento
+make build-tenant-image
+
 cd linx_core
-cp .env.example .env   # ajuste POSTGRES_PASSWORD
+cp .env.example .env   # ajuste POSTGRES_PASSWORD, SERVICE_TOKEN e DOCKER_GID
 docker compose up -d --build
 curl -i http://localhost:8000/health
 ```
@@ -197,6 +282,16 @@ Resposta esperada (`200`):
 | `CHIRPSTACK_HOST`    | Endereço gRPC do ChirpStack.                                     | `localhost:8080`                |
 | `CHIRPSTACK_API_TOKEN` | Token Bearer de acesso à API do ChirpStack.                    | *(obrigatório)*                 |
 | `CHIRPSTACK_DEVICE_PROFILE_ID` | UUID do Device Profile usado ao provisionar devices.  | *(vazio)*                       |
+| `SERVICE_TOKEN`      | Token do plano de controle e da chamada gRPC (mín. 32 chars).    | *(obrigatório)*                 |
+| `DOCKER_GID`         | GID do grupo dono de `/var/run/docker.sock`.                     | `990`                           |
+| `PROVISIONER_GRPC_HOST` | Endereço gRPC do provisioner visto pelo `identity_api`.        | `localhost:50052` (Compose: `docker_provisioner:50052`) |
+| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | Timeout da chamada gRPC.                             | `10`                            |
+| `PROVISION_IMAGE`    | Imagem Docker provisionada por aplicação.                        | `linx-tenant-app:latest`        |
+| `PROVISION_PORT_MIN` | Início do range de portas publicado no host.                     | `8100`                          |
+| `PROVISION_PORT_MAX` | Fim do range de portas publicado no host.                        | `9100`                          |
+| `PROVISION_BIND_HOST` | Interface de bind da porta publicada.                          | `0.0.0.0`                       |
+| `PROVISION_NETWORK_PREFIX` | Prefixo da rede Docker por aplicação.                      | `linx-app`                      |
+| `PROVISION_CONTAINER_PORT` | Porta interna do container do tenant.                      | `8000`                          |
 
 > **Atenção (P0):** o gRPC ainda não tem autenticação e `GetAppConfig` devolve
 > usuário/senha do Postgres. Restrinja a porta `50051` no Security Group ao IP

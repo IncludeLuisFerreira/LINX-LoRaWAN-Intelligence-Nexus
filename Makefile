@@ -5,7 +5,8 @@
 	up-core down-core logs-core \
 	up-client down-client logs-client \
 	up-deploy down-deploy logs-deploy \
-	up-client-agent down-client-agent logs-client-agent
+	up-client-agent down-client-agent logs-client-agent \
+	build-tenant-image
 
 # Composes do repositório. O `up`/`down`/`logs`/`build` sem sufixo operam a
 # stack de infraestrutura (retrocompatível com o quickstart do README).
@@ -24,6 +25,7 @@ help:
 	@echo "  up-client       $(CLIENT)"
 	@echo "  up-deploy       $(DEPLOY)"
 	@echo "  up-client-agent $(CLIENT_AGENT)"
+	@echo "  build-tenant-image  imagem mínima linx-tenant-app:latest"
 	@echo "  test-integration  tests/integration/run.sh"
 	@echo "Cada stack tem também down-<stack> e logs-<stack>."
 
@@ -55,6 +57,10 @@ down-base:
 	docker compose -f $(INFRA_BASE) down
 logs-base:
 	docker compose -f $(INFRA_BASE) logs -f
+
+# --- Imagem mínima provisionada por aplicação (issue #58) ---
+build-tenant-image:
+	docker build -t linx-tenant-app:latest client/tenant_app
 
 # --- Plano de controle (linx_core: identity_api + agent_bridge + db) ---
 up-core:
