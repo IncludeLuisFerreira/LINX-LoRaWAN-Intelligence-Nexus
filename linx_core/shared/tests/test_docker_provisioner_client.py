@@ -3,14 +3,14 @@ from contextlib import contextmanager
 
 import grpc
 import pytest
+
+from linx_shared.clients.docker_provisioner import (
+    DockerProvisionerClient,
+    ProvisionerClientError,
+)
 from linx_shared.grpc import (
     linx_docker_provisioner_pb2,
     linx_docker_provisioner_pb2_grpc,
-)
-
-from identity_api.provisioner_client import (
-    DockerProvisionerClient,
-    ProvisionerClientError,
 )
 
 TOKEN = "test-service-token-0123456789abcdef"
@@ -115,6 +115,7 @@ def test_provision_maps_grpc_errors(grpc_code, http_status):
             client.close()
 
     assert exc_info.value.status_code == http_status
+    assert exc_info.value.grpc_code == grpc_code
 
 
 def test_provision_fails_closed_without_service_token():
@@ -130,3 +131,4 @@ def test_provision_fails_closed_without_service_token():
         client.close()
 
     assert exc_info.value.status_code == 503
+    assert exc_info.value.grpc_code is None
