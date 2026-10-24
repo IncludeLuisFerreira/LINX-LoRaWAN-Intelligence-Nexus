@@ -85,8 +85,18 @@ class RabbitMQPublisher:
         self._connection: Any = None
         self._channel: Any = None
 
+    @staticmethod
+    def _is_open(client: Any) -> bool:
+        return bool(getattr(client, "is_open", False))
+
     def _connect(self) -> Any:
-        if self._channel is None:
+        if (
+            self._connection is None
+            or self._channel is None
+            or not self._is_open(self._connection)
+            or not self._is_open(self._channel)
+        ):
+            self._reset()
             self._connection = pika.BlockingConnection(
                 pika.URLParameters(self._url)
             )
@@ -94,12 +104,14 @@ class RabbitMQPublisher:
         return self._channel
 
     def _reset(self) -> None:
-        if self._connection is not None:
-            try:
-                self._connection.close()
-            finally:
-                self._connection = None
+        connection = self._connection
+        self._connection = None
         self._channel = None
+        if connection is not None and self._is_open(connection):
+            try:
+                connection.close()
+            except pika.exceptions.AMQPError:
+                pass
 
     def _publish_once(
         self,
@@ -132,7 +144,10 @@ class RabbitMQPublisher:
         )
         try:
             self._publish_once(exchange, routing_key, body, properties)
-        except pika.exceptions.AMQPConnectionError:
+        except (
+            pika.exceptions.AMQPConnectionError,
+            pika.exceptions.AMQPChannelError,
+        ):
             self._reset()
             self._publish_once(exchange, routing_key, body, properties)
 

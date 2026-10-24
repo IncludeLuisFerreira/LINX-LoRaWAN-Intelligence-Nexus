@@ -12,7 +12,7 @@ from linx_shared.jobs.constants import (
     PROVISIONING_REQUESTED,
     JobStatus,
 )
-from linx_shared.jobs.envelope import JobStatusEvent
+from linx_shared.jobs.envelope import JobError, JobStatusEvent
 from linx_shared.jobs.repository import (
     apply_status_event,
     claim_job,
@@ -58,6 +58,7 @@ def _event(
     *,
     attempt: int | None = None,
     result: dict | None = None,
+    error: JobError | None = None,
     finished_at: datetime | None = None,
     next_attempt_at: datetime | None = None,
 ) -> JobStatusEvent:
@@ -67,6 +68,7 @@ def _event(
         status=status,
         attempt=job.attempts if attempt is None else attempt,
         result=result,
+        error=error,
         finished_at=finished_at,
         next_attempt_at=next_attempt_at,
     )
@@ -198,6 +200,21 @@ def test_claim_job_reclaims_expired_lease(db_session):
     assert job.status == JobStatus.PENDING.value
 
 
+@pytest.mark.parametrize(
+    "status",
+    [JobStatus.SUCCEEDED, JobStatus.FAILED],
+)
+def test_claim_job_refuses_terminal_jobs(db_session, status):
+    tenant = _create_tenant(db_session)
+    job = _create_job(db_session, tenant_id=tenant.id)
+    job.status = status.value
+    db_session.flush()
+
+    assert claim_job(db_session, job.id, lock_seconds=60) is None
+    assert job.attempts == 0
+    assert job.locked_until is None
+
+
 def test_release_job_clears_lease(db_session):
     tenant = _create_tenant(db_session)
     job = _create_job(db_session, tenant_id=tenant.id)
@@ -205,6 +222,23 @@ def test_release_job_clears_lease(db_session):
     next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=30)
 
     released = release_job(db_session, job.id, next_attempt_at=next_attempt_at)
+
+    assert released is job
+    assert job.locked_until is None
+    assert job.next_attempt_at == next_attempt_at
+    assert job.status == JobStatus.PENDING.value
+    assert job.attempts == 1
+
+
+def test_release_job_keeps_next_attempt_when_not_provided(db_session):
+    tenant = _create_tenant(db_session)
+    job = _create_job(db_session, tenant_id=tenant.id)
+    claim_job(db_session, job.id, lock_seconds=60)
+    next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=30)
+    job.next_attempt_at = next_attempt_at
+    db_session.flush()
+
+    released = release_job(db_session, job.id)
 
     assert released is job
     assert job.locked_until is None
@@ -267,6 +301,110 @@ def test_apply_status_event_ignores_stale_attempt(db_session):
     assert job.status == JobStatus.PENDING.value
     assert job.result is None
     assert job.finished_at is None
+
+
+def test_apply_status_event_ignores_running_with_future_next_attempt(
+    db_session,
+):
+    tenant = _create_tenant(db_session)
+    job = _create_job(db_session, tenant_id=tenant.id)
+    claim_job(db_session, job.id, lock_seconds=60)
+    next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+    release_job(db_session, job.id, next_attempt_at=next_attempt_at)
+
+    apply_status_event(db_session, _event(job, JobStatus.RUNNING))
+
+    assert job.status == JobStatus.PENDING.value
+    assert job.next_attempt_at == next_attempt_at
+    assert job.locked_until is None
+
+
+def test_apply_status_event_ignores_running_after_succeeded(db_session):
+    tenant = _create_tenant(db_session)
+    job = _create_job(db_session, tenant_id=tenant.id)
+    claim_job(db_session, job.id, lock_seconds=60)
+    finished_at = datetime.now(timezone.utc)
+    apply_status_event(
+        db_session,
+        _event(
+            job,
+            JobStatus.SUCCEEDED,
+            result={"port": 8200},
+            finished_at=finished_at,
+        ),
+    )
+
+    apply_status_event(db_session, _event(job, JobStatus.RUNNING))
+
+    assert job.status == JobStatus.SUCCEEDED.value
+    assert job.result == {"port": 8200}
+    assert job.finished_at == finished_at
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        (JobStatus.SUCCEEDED, JobStatus.FAILED),
+        (JobStatus.FAILED, JobStatus.SUCCEEDED),
+    ],
+)
+def test_apply_status_event_does_not_overwrite_terminal_state(
+    db_session,
+    first,
+    second,
+):
+    tenant = _create_tenant(db_session)
+    job = _create_job(db_session, tenant_id=tenant.id)
+    claim_job(db_session, job.id, lock_seconds=60)
+    first_result = {"port": 8200} if first is JobStatus.SUCCEEDED else None
+    first_error = (
+        None
+        if first is JobStatus.SUCCEEDED
+        else JobError(
+            code="permanent_error",
+            message="failed",
+            retryable=False,
+        )
+    )
+    finished_at = datetime.now(timezone.utc)
+    apply_status_event(
+        db_session,
+        _event(
+            job,
+            first,
+            result=first_result,
+            error=first_error,
+            finished_at=finished_at,
+        ),
+    )
+
+    second_result = {"port": 9999} if second is JobStatus.SUCCEEDED else None
+    second_error = (
+        None
+        if second is JobStatus.SUCCEEDED
+        else JobError(
+            code="permanent_error",
+            message="late failure",
+            retryable=False,
+        )
+    )
+    apply_status_event(
+        db_session,
+        _event(
+            job,
+            second,
+            result=second_result,
+            error=second_error,
+            finished_at=datetime.now(timezone.utc),
+        ),
+    )
+
+    assert job.status == first.value
+    assert job.result == first_result
+    assert job.error == (
+        first_error.model_dump(mode="json") if first_error else None
+    )
+    assert job.finished_at == finished_at
 
 
 def test_get_job_is_tenant_scoped(db_session):

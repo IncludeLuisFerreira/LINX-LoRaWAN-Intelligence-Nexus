@@ -144,10 +144,7 @@ def apply_status_event(
         return None
     if event.attempt != job.attempts:
         return job
-    if (
-        job.status in _TERMINAL_STATUSES
-        and event.status.value not in _TERMINAL_STATUSES
-    ):
+    if job.status in _TERMINAL_STATUSES and event.status.value != job.status:
         return job
 
     now = _utcnow()
