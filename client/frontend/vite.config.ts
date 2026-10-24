@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_WS_PROXY_TARGET || 'http://localhost:8000',
           changeOrigin: true,
           ws: true,
+          headers: {
+            'X-Service-Token': allEnv.DEV_SERVICE_TOKEN ?? '',
+          },
         },
       },
     },
