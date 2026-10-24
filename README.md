@@ -73,8 +73,14 @@ Cada compose do repositório tem um target `up-<stack>` (e `down-<stack>` /
 | `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + db) |
 | `make up-client` | `client/docker-compose.yml` | Ambiente isolado (frontend + telemetry_consumer + TimescaleDB) |
 | `make up-deploy` | `deploy/docker-compose.yml` | Stack full-stack (nginx + TLS + todos os serviços) |
-| `make up-client-agent` | `deploy/docker-compose.client-agent.yml` | Client Agent isolado |
+| `make up-client-agent` | `deploy/docker-compose.client-agent.yml` | Client Agent isolado (ver nota abaixo) |
 | `make test-integration` | `tests/integration/run.sh` | Testes de integração ponta-a-ponta |
+
+> `make up-client-agent` exige um `AGENT_SERVICE_TOKEN` real (não placeholder)
+> no `deploy/.env` e um `agent_bridge` alcançável. O default
+> `SAAS_GRPC_HOST=agent_bridge:50051` só resolve com a stack de
+> `deploy/docker-compose.yml` em execução; para outro host, defina
+> `SAAS_GRPC_HOST` no ambiente antes de subir o target.
 
 > `make help` lista a matriz completa. Rode `make down-<stack>` para derrubar
 > uma stack específica.

@@ -11,7 +11,7 @@ LINX e o objetivo de cada diretório.
 | **`client/frontend/`** | Aplicação web (Dashboard/Interface) do cliente. Renderiza os painéis consumindo o plano de controle via REST (`/api`) e a telemetria via REST/WebSocket, dependendo da aplicação acessada. O nginx do container injeta o token de serviço nos proxies `/api` e `/ws`. |
 | **`client/services/telemetry_consumer/`** | Serviço por tenant: consome a fila `linx.telemetry.{app_id}` (AMQP) e grava no TimescaleDB; expõe histórico (`GET /telemetry`) e stream (`WS /ws/telemetry/{app_id}`), ambos exigindo o token de serviço. |
 | **`infra/`** | Orquestração da **infraestrutura base** compartilhada. Arquivos Docker Compose e configurações dos serviços de sustentação da nuvem, como o ChirpStack (LoRaWAN Network Server), o broker MQTT e o banco de dados SaaS principal. |
-| **`deploy/`** | Stack full-stack de produção (`docker-compose.yml` com nginx + TLS e todos os serviços), o schema do TimescaleDB (`db/schema.sql`), certificados e exemplos de ambiente. |
+| **`deploy/`** | Stack full-stack de produção (`docker-compose.yml` com nginx + TLS e todos os serviços), Compose dedicado do `client_agent`, certificados e exemplos de ambiente. O schema do TimescaleDB fica em `client/db/schema.sql`. |
 | **`proto/`** | Contrato gRPC compartilhado (`linx_agent.proto`, serviço `AgentBridge`). Fonte única para geração dos stubs em `linx_core/shared`. |
 | **`scripts/`** | Utilitários de operação: geração de stubs gRPC (`gen_proto.sh`), atualização de progresso (`update_progress.py`) e instalação de Docker (`docker_install.sh`). |
 | **`tests/`** | Testes de integração ponta-a-ponta (`tests/integration/`), que sobem a stack real via `deploy/docker-compose.yml`. |

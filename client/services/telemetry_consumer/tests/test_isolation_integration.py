@@ -1,7 +1,8 @@
 """Teste de integração do isolamento por tenant no RabbitMQ.
 
 Requer um broker real com credenciais administrativas via variáveis de
-ambiente; caso ausentes, o teste é pulado. Não roda no CI padrão.
+ambiente; caso ausentes, o teste é pulado. Roda no CI padrão: o workflow
+`telemetry-consumer-ci` sobe um RabbitMQ e define as variáveis abaixo.
 
 Env:
     RABBITMQ_ISOLATION_AMQP_HOST   host:porta AMQP (ex.: localhost:5672)
@@ -28,6 +29,7 @@ MANAGEMENT = os.environ.get("RABBITMQ_ISOLATION_MANAGEMENT")
 ADMIN_USER = os.environ.get("RABBITMQ_ISOLATION_ADMIN_USER")
 ADMIN_PASSWORD = os.environ.get("RABBITMQ_ISOLATION_ADMIN_PASSWORD")
 VHOST = os.environ.get("RABBITMQ_ISOLATION_VHOST", "/")
+PROVISION_OK = frozenset({200, 201, 204})
 
 pytestmark = [
     pytest.mark.integration,
@@ -71,21 +73,29 @@ def _tenant_url(app_id: str) -> str:
     return f"amqp://tenant.{app_id}:{password}@{AMQP_HOST}/{encoded_vhost}"
 
 
+def _assert_provisioned(status: int, target: str) -> None:
+    assert (
+        status in PROVISION_OK
+    ), f"falha ao provisionar {target}: HTTP {status}"
+
+
 def _provision(app_id: str) -> None:
     secret = "isolation-test-secret"
     user = f"tenant.{app_id}"
-    _management_request(
+    status = _management_request(
         "PUT",
         f"/api/users/{user}",
         {"password": _derive_password(app_id, secret), "tags": ""},
     )
+    _assert_provisioned(status, f"usuário {user}")
     regex = rf"^linx\.telemetry\.{app_id}(\.|$)"
     encoded_vhost = VHOST.replace("/", "%2F")
-    _management_request(
+    status = _management_request(
         "PUT",
         f"/api/permissions/{encoded_vhost}/{user}",
         {"configure": regex, "write": regex, "read": regex},
     )
+    _assert_provisioned(status, f"permissões de {user}")
 
 
 @pytest.fixture

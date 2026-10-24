@@ -5,6 +5,7 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   const allEnv = loadEnv(mode, process.cwd(), '');
+  const serviceToken = allEnv.DEV_SERVICE_TOKEN ?? '';
   return {
     plugins: [react()],
     server: {
@@ -13,7 +14,7 @@ export default defineConfig(({ mode }) => {
           target: 'http://localhost:8000',
           changeOrigin: true,
           headers: {
-            'X-Service-Token': allEnv.DEV_SERVICE_TOKEN ?? '',
+            'X-Service-Token': serviceToken,
           },
         },
         '/ws': {
@@ -21,7 +22,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true,
           headers: {
-            'X-Service-Token': allEnv.DEV_SERVICE_TOKEN ?? '',
+            'X-Service-Token': serviceToken,
           },
         },
       },

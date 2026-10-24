@@ -171,13 +171,20 @@ async def live_server(monkeypatch):
     """Sobe um uvicorn real numa porta efêmera e rastreia registros no WS."""
     app = _make_app()
     register_calls = []
+    broadcast_calls = []
     original_register = Broadcaster.register
+    original_broadcast = Broadcaster.broadcast
 
     async def tracking_register(self, websocket):
         register_calls.append(websocket)
         await original_register(self, websocket)
 
+    async def tracking_broadcast(self, message):
+        broadcast_calls.append(message)
+        await original_broadcast(self, message)
+
     monkeypatch.setattr(Broadcaster, "register", tracking_register)
+    monkeypatch.setattr(Broadcaster, "broadcast", tracking_broadcast)
 
     config = uvicorn.Config(
         app,
@@ -198,7 +205,7 @@ async def live_server(monkeypatch):
         else:
             pytest.fail("uvicorn did not start")
         port = server.servers[0].sockets[0].getsockname()[1]
-        yield app, f"ws://127.0.0.1:{port}", register_calls
+        yield app, f"ws://127.0.0.1:{port}", register_calls, broadcast_calls
     finally:
         server.should_exit = True
         try:
@@ -209,47 +216,61 @@ async def live_server(monkeypatch):
                 await serve_task
 
 
-async def _expect_close(url, code, headers=None):
-    with pytest.raises(ConnectionClosed) as exc:
-        ws = await websockets.connect(url, additional_headers=headers)
-        try:
-            await ws.recv()
-        finally:
-            await ws.close()
+async def _expect_close(url, code, headers=None, send=None):
+    ws = await websockets.connect(url, additional_headers=headers)
+    try:
+        if send is not None:
+            with contextlib.suppress(ConnectionClosed):
+                await ws.send(send)
+        with pytest.raises(ConnectionClosed) as exc:
+            await asyncio.wait_for(ws.recv(), timeout=5)
+    finally:
+        await ws.close()
     assert exc.value.rcvd is not None
     assert exc.value.rcvd.code == code
 
 
 async def test_ws_live_rejects_missing_token_with_4401(live_server):
-    app, base_url, register_calls = live_server
-    await _expect_close(f"{base_url}/ws/telemetry/app-abc123", 4401)
+    app, base_url, register_calls, broadcast_calls = live_server
+    await _expect_close(
+        f"{base_url}/ws/telemetry/app-abc123",
+        4401,
+        send="should-not-be-broadcast",
+    )
     assert register_calls == []
+    assert broadcast_calls == []
     assert app.state.broadcaster.count == 0
 
 
 async def test_ws_live_rejects_invalid_token_with_4401(live_server):
-    app, base_url, register_calls = live_server
+    app, base_url, register_calls, broadcast_calls = live_server
     await _expect_close(
         f"{base_url}/ws/telemetry/app-abc123",
         4401,
         headers={SERVICE_TOKEN_HEADER: "wrong-token"},
+        send="should-not-be-broadcast",
     )
     assert register_calls == []
+    assert broadcast_calls == []
     assert app.state.broadcaster.count == 0
 
 
 async def test_ws_live_rejects_wrong_app_id_with_1008(live_server):
-    app, base_url, register_calls = live_server
+    app, base_url, register_calls, broadcast_calls = live_server
     # app_id diferente de settings.app_id (default app-abc123)
     await _expect_close(
-        f"{base_url}/ws/telemetry/outro-app", 1008, headers=AUTH
+        f"{base_url}/ws/telemetry/outro-app",
+        1008,
+        headers=AUTH,
+        send="should-not-be-broadcast",
     )
     assert register_calls == []
+    assert broadcast_calls == []
     assert app.state.broadcaster.count == 0
 
 
 async def test_ws_live_accepts_valid_connection_and_unregisters(live_server):
-    app, base_url, register_calls = live_server
+    app, base_url, register_calls, broadcast_calls = live_server
     broadcaster = app.state.broadcaster
     ws = await websockets.connect(
         f"{base_url}/ws/telemetry/app-abc123", additional_headers=AUTH
@@ -271,3 +292,4 @@ async def test_ws_live_accepts_valid_connection_and_unregisters(live_server):
             break
         await asyncio.sleep(0.01)
     assert broadcaster.count == 0
+    assert broadcast_calls == []

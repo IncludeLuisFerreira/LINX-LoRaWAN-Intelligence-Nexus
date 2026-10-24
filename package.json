@@ -13,7 +13,7 @@
   "lint-staged": {
     "client/frontend/**/*.{js,jsx,ts,tsx}": [
       "prettier --write",
-      "oxlint --fix"
+      "oxlint --fix --config client/frontend/.oxlintrc.json"
     ],
     "client/frontend/**/*.{css,json,md}": [
       "prettier --write"

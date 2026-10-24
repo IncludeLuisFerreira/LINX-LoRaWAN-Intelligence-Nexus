@@ -2,6 +2,13 @@
 # repositório como contexto porque o serviço depende de linx_core/shared
 # (path dependency, #215). Para orquestrar a stack completa use
 # deploy/docker-compose.yml, que já inclui este serviço.
+#
+# Requisitos para `make up-client-agent`:
+# - `AGENT_SERVICE_TOKEN` definido no `deploy/.env` com valor real (não
+#   placeholder). O compose o repassa como `GRPC_SERVICE_TOKEN` ao client_agent.
+# - `agent_bridge` alcançável a partir deste container. O default
+#   `SAAS_GRPC_HOST=agent_bridge:50051` só resolve com a stack do
+#   `deploy/docker-compose.yml` em execução (mesma rede Compose `deploy_default`).
 services:
   client_agent:
     build:
@@ -9,5 +16,11 @@ services:
       dockerfile: middleware/services/client_agent/Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      # O agente lê GRPC_SERVICE_TOKEN; o .env do deploy define o segredo como
+      # AGENT_SERVICE_TOKEN (compartilhado com o agent_bridge).
+      - GRPC_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN must be set}
+      # Nome de serviço do Compose; só alcançável com a stack de deploy no ar.
+      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST:-agent_bridge:50051}
     ports:
       - "8001:8001"

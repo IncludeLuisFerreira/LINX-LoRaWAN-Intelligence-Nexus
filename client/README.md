@@ -149,7 +149,7 @@ task lint   # black + isort + mypy + flake8
 Sobe `timescaledb` + `telemetry_consumer` + `frontend`. O schema é montado no
 container do banco, o serviço só inicia após o healthcheck do TimescaleDB e o
 dashboard é servido por nginx na porta `8080`, com proxy `/api` para
-`BACKEND_URL`.
+`BACKEND_URL` e `/ws` para `WS_BACKEND_URL`.
 
 ```bash
 # a partir de client/
@@ -158,7 +158,7 @@ docker compose up --build
 ```
 
 Variáveis usadas no `.env`: `APP_ID`, `RABBIT_URL`, `DB_USER`,
-`DB_PASSWORD`, `DB_NAME`.
+`DB_PASSWORD`, `DB_NAME`, `SERVICE_TOKEN`, `BACKEND_URL` e `WS_BACKEND_URL`.
 
 ### Stack completa (`deploy/docker-compose.yml`)
 

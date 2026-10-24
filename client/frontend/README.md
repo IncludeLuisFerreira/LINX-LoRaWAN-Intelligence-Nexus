@@ -229,12 +229,14 @@ npx vitest run --coverage   # cobertura (mínimo 70%)
 ## Docker
 
 Build multi-stage (Node → nginx). O `nginx.conf` faz fallback do SPA e proxy
-de `/api/` para `BACKEND_URL`.
+de `/api/` para `BACKEND_URL` e de `/ws/` para `WS_BACKEND_URL`.
 
 ```bash
 docker build -t frontend:dev .
 docker run --rm -p 8080:80 \
   -e BACKEND_URL=http://host.docker.internal:8000 \
+  -e WS_BACKEND_URL=http://host.docker.internal:8000 \
+  -e SERVICE_TOKEN=dev-service-token \
   frontend:dev
 ```
 

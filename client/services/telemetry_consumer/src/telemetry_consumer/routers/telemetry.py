@@ -6,6 +6,7 @@ proxies `/api` e `/ws`, então o browser nunca conhece o segredo. O `app_id`
 continua validado contra o `settings.app_id` do pod (isolamento por pod).
 """
 
+import contextlib
 import secrets
 from typing import Any
 
@@ -75,7 +76,10 @@ async def _reject_ws(websocket: WebSocket, code: int) -> None:
     registrar o socket nem ler mensagens.
     """
     await websocket.accept()
-    await websocket.close(code=code)
+    # O peer pode sumir entre o accept e o close; a rejeição é best-effort e
+    # não deve gerar traceback no log.
+    with contextlib.suppress(RuntimeError, WebSocketDisconnect, OSError):
+        await websocket.close(code=code)
 
 
 @router.websocket("/ws/telemetry/{app_id}")
