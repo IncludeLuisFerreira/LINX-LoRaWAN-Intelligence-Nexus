@@ -1,0 +1,47 @@
+name: Publish Tenant App Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag da imagem"
+        required: true
+        default: latest
+      repository:
+        description: "Repositório Docker Hub"
+        required: true
+        default: includeluisferreira/linx-tenant-app
+
+permissions:
+  contents: read
+
+jobs:
+  dockerhub:
+    name: Build e push (Docker Hub)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validar contexto do tenant_app
+        run: test -f client/tenant_app/Dockerfile
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build, smoke test e push
+        env:
+          PLATFORM: linux/amd64
+        run: >-
+          ./scripts/publish_tenant_app_image.sh
+          --registry dockerhub
+          --repository "${{ inputs.repository }}"
+          --tag "${{ inputs.tag }}"
+
+      - name: Resumo
+        run: |
+          echo "Imagem publicada: ${{ inputs.repository }}:${{ inputs.tag }}" \
+            >> "$GITHUB_STEP_SUMMARY"
