@@ -65,6 +65,16 @@ describe('applicationService', () => {
     expect(status).toBe('RUNNING');
   });
 
+  it('rejects a provisioning status outside the contract', async () => {
+    mocked.get.mockResolvedValue({
+      data: { app_id: 'a1', status: 'created', container_id: 'c1' },
+    });
+
+    await expect(applicationService.getStatus('a1')).rejects.toThrow(
+      /status de provisionamento inválido/i,
+    );
+  });
+
   it('updates an application with PATCH', async () => {
     mocked.patch.mockResolvedValue({ data: { id: 'a1' } });
 

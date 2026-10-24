@@ -9,9 +9,22 @@ export interface ApplicationOutput {
   updated_at: string;
 }
 
+export const PROVISIONING_STATUS_VALUES = [
+  'PENDING',
+  'PROVISIONING',
+  'RUNNING',
+  'ERROR',
+] as const;
+
 /** Estados de provisionamento definidos pelo contrato da aplicação. */
 export type ProvisioningStatusValue =
-  'PENDING' | 'PROVISIONING' | 'RUNNING' | 'ERROR';
+  (typeof PROVISIONING_STATUS_VALUES)[number];
+
+export function isProvisioningStatusValue(
+  value: string,
+): value is ProvisioningStatusValue {
+  return (PROVISIONING_STATUS_VALUES as readonly string[]).includes(value);
+}
 
 export interface ApplicationStatusOutput {
   app_id: string;
@@ -68,13 +81,23 @@ export const applicationService = {
    * Consulta o status do container da aplicação. O polling fica no hook
    * `useProvisioningStatus`, não neste serviço.
    */
+  /**
+   * Consulta o status do container da aplicação. O polling fica no hook
+   * `useProvisioningStatus`, não neste serviço. Valores fora do contrato
+   * (backend ainda não implementado, ou retorno cru do docker inspect) são
+   * rejeitados: o badge nunca recebe um estado não mapeado.
+   */
   getStatus: async (
     applicationId: string,
   ): Promise<ProvisioningStatusValue> => {
     const response = await api.get<ApplicationStatusOutput>(
       `/applications/${applicationId}/status`,
     );
-    return response.data.status;
+    const status = String(response.data?.status);
+    if (!isProvisioningStatusValue(status)) {
+      throw new Error(`Status de provisionamento inválido: "${status}"`);
+    }
+    return status;
   },
 
   update: async (
