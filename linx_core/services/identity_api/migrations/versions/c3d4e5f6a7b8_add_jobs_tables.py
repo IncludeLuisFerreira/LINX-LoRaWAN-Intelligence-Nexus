@@ -106,7 +106,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_jobs_tenant_created",
         "jobs",
-        ["tenant_id", "created_at"],
+        ["tenant_id", sa.text("created_at DESC")],
         unique=False,
     )
     op.create_index(

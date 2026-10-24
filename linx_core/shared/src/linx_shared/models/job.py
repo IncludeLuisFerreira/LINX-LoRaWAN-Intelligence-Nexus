@@ -150,7 +150,11 @@ class Job(Base):
             postgresql_where=text("status IN ('pending','running')"),
         ),
         Index("ix_jobs_status_next_attempt", "status", "next_attempt_at"),
-        Index("ix_jobs_tenant_created", "tenant_id", "created_at"),
+        Index(
+            "ix_jobs_tenant_created",
+            "tenant_id",
+            text("created_at DESC"),
+        ),
         Index("ix_jobs_subject", "subject_id"),
         CheckConstraint(
             "status IN ('pending','running','succeeded','failed')",

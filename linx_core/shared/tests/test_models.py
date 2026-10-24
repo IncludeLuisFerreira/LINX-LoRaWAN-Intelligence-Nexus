@@ -1,7 +1,9 @@
 import subprocess
 import sys
 
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.schema import CreateIndex
 
 from linx_shared.models import (
     Application,
@@ -43,6 +45,14 @@ def test_job_deduplication_key_partial_unique_index():
     assert [column.name for column in index.columns] == ["deduplication_key"]
     where = index.dialect_options["postgresql"]["where"]
     assert "status IN ('pending','running')" in str(where)
+
+
+def test_job_tenant_created_index_is_descending():
+    indexes = {index.name: index for index in Job.__table__.indexes}
+    index = indexes["ix_jobs_tenant_created"]
+    ddl = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
+    assert "tenant_id" in ddl
+    assert "created_at DESC" in ddl
 
 
 def test_job_outbox_job_foreign_key():
