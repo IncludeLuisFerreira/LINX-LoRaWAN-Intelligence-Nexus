@@ -41,7 +41,7 @@ Toda mensagem recebe `ack`.
 | :----: | ---------------------------- | ------------------------------------------------------ |
 | `GET`  | `/health`                    | Estado do consumidor e do banco.                       |
 | `GET`  | `/telemetry`                 | Lista telemetria. Filtros `dev_eui`, `limit`, `before`; retorna `items` e `next_cursor`. Requer `X-Service-Token`. |
-| `WS`   | `/ws/telemetry/{app_id}`     | Stream em tempo real. Requer `X-Service-Token` antes do `accept`; fecha com `4401` sem credencial e com `1008` se `app_id` não bate com `APP_ID`. |
+| `WS`   | `/ws/telemetry/{app_id}`     | Stream em tempo real. Requer `X-Service-Token`; fecha com `4401` sem credencial e com `1008` se `app_id` não bate com `APP_ID`. O socket só é registrado após a autenticação. |
 
 `GET /telemetry` responde `503` quando o banco está indisponível. `limit` é
 limitado ao intervalo `1..1000` (default `100`).

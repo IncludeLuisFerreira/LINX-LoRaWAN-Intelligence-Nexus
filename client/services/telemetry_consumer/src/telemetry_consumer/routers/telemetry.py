@@ -67,18 +67,29 @@ async def get_telemetry(
     return {"items": items, "next_cursor": next_cursor}
 
 
+async def _reject_ws(websocket: WebSocket, code: int) -> None:
+    """Aceita e fecha imediatamente para que o código chegue ao cliente.
+
+    O uvicorn transforma um close antes do accept em rejeição HTTP 403 e
+    descarta o código. Aceitar primeiro preserva o contrato 4401/1008, sem
+    registrar o socket nem ler mensagens.
+    """
+    await websocket.accept()
+    await websocket.close(code=code)
+
+
 @router.websocket("/ws/telemetry/{app_id}")
 async def ws_telemetry(websocket: WebSocket, app_id: str) -> None:
     settings = websocket.app.state.settings
-    # Validação antes do accept: nenhum cliente sem credencial conclui o
-    # handshake, e o app_id é conferido antes de registrar o socket.
+    # Validação antes de registrar o socket e de ler mensagens. O accept vem
+    # antes do close apenas para o uvicorn entregar o código ao cliente.
     if not _token_matches(
         websocket.headers.get(SERVICE_TOKEN_HEADER), settings.service_token
     ):
-        await websocket.close(code=WS_UNAUTHORIZED)
+        await _reject_ws(websocket, WS_UNAUTHORIZED)
         return
     if app_id != settings.app_id:
-        await websocket.close(code=WS_POLICY_VIOLATION)
+        await _reject_ws(websocket, WS_POLICY_VIOLATION)
         return
     await websocket.accept()
     broadcaster = websocket.app.state.broadcaster

@@ -1,8 +1,11 @@
-import time
+import asyncio
+import contextlib
 
 import pytest
+import uvicorn
+import websockets
 from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
 
 from telemetry_consumer.app import create_app
 from telemetry_consumer.broadcaster import Broadcaster
@@ -163,47 +166,108 @@ def test_get_telemetry_rejects_invalid_token():
     assert client.get("/telemetry").status_code == 401
 
 
-def test_ws_rejects_wrong_app_id():
+@pytest.fixture
+async def live_server(monkeypatch):
+    """Sobe um uvicorn real numa porta efêmera e rastreia registros no WS."""
     app = _make_app()
-    app.state.broadcaster = Broadcaster()
-    client = _client(app)
+    register_calls = []
+    original_register = Broadcaster.register
+
+    async def tracking_register(self, websocket):
+        register_calls.append(websocket)
+        await original_register(self, websocket)
+
+    monkeypatch.setattr(Broadcaster, "register", tracking_register)
+
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=0,
+        log_level="warning",
+        lifespan="on",
+    )
+    server = uvicorn.Server(config)
+    serve_task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(500):
+            if server.started:
+                break
+            if serve_task.done():
+                serve_task.result()
+            await asyncio.sleep(0.01)
+        else:
+            pytest.fail("uvicorn did not start")
+        port = server.servers[0].sockets[0].getsockname()[1]
+        yield app, f"ws://127.0.0.1:{port}", register_calls
+    finally:
+        server.should_exit = True
+        try:
+            await asyncio.wait_for(serve_task, timeout=10)
+        except asyncio.TimeoutError:
+            serve_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await serve_task
+
+
+async def _expect_close(url, code, headers=None):
+    with pytest.raises(ConnectionClosed) as exc:
+        ws = await websockets.connect(url, additional_headers=headers)
+        try:
+            await ws.recv()
+        finally:
+            await ws.close()
+    assert exc.value.rcvd is not None
+    assert exc.value.rcvd.code == code
+
+
+async def test_ws_live_rejects_missing_token_with_4401(live_server):
+    app, base_url, register_calls = live_server
+    await _expect_close(f"{base_url}/ws/telemetry/app-abc123", 4401)
+    assert register_calls == []
+    assert app.state.broadcaster.count == 0
+
+
+async def test_ws_live_rejects_invalid_token_with_4401(live_server):
+    app, base_url, register_calls = live_server
+    await _expect_close(
+        f"{base_url}/ws/telemetry/app-abc123",
+        4401,
+        headers={SERVICE_TOKEN_HEADER: "wrong-token"},
+    )
+    assert register_calls == []
+    assert app.state.broadcaster.count == 0
+
+
+async def test_ws_live_rejects_wrong_app_id_with_1008(live_server):
+    app, base_url, register_calls = live_server
     # app_id diferente de settings.app_id (default app-abc123)
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect("/ws/telemetry/outro-app"):
-            pass
-    assert exc.value.code == 1008
+    await _expect_close(
+        f"{base_url}/ws/telemetry/outro-app", 1008, headers=AUTH
+    )
+    assert register_calls == []
+    assert app.state.broadcaster.count == 0
 
 
-def test_ws_rejects_missing_token():
-    app = _make_app()
-    app.state.broadcaster = Broadcaster()
-    client = TestClient(app)
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect("/ws/telemetry/app-abc123"):
-            pass
-    assert exc.value.code == 4401
-
-
-def test_ws_rejects_invalid_token():
-    app = _make_app()
-    app.state.broadcaster = Broadcaster()
-    client = TestClient(app, headers={SERVICE_TOKEN_HEADER: "wrong-token"})
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with client.websocket_connect("/ws/telemetry/app-abc123"):
-            pass
-    assert exc.value.code == 4401
-
-
-def test_ws_accepts_valid_app_id_and_unregisters():
-    app = _make_app()
-    broadcaster = Broadcaster()
-    app.state.broadcaster = broadcaster
-    client = _client(app)
-    with client.websocket_connect("/ws/telemetry/app-abc123") as ws:
+async def test_ws_live_accepts_valid_connection_and_unregisters(live_server):
+    app, base_url, register_calls = live_server
+    broadcaster = app.state.broadcaster
+    ws = await websockets.connect(
+        f"{base_url}/ws/telemetry/app-abc123", additional_headers=AUTH
+    )
+    try:
         for _ in range(100):
             if broadcaster.count == 1:
                 break
-            time.sleep(0.01)
+            await asyncio.sleep(0.01)
         assert broadcaster.count == 1
-        ws.send_text("ping")
+        assert len(register_calls) == 1
+        await ws.send("ping")
+        await asyncio.sleep(0.05)
+        assert broadcaster.count == 1
+    finally:
+        await ws.close()
+    for _ in range(100):
+        if broadcaster.count == 0:
+            break
+        await asyncio.sleep(0.01)
     assert broadcaster.count == 0
