@@ -157,8 +157,9 @@ startup.
 ## Contrato gRPC
 
 O contrato `AgentBridge` é definido em `proto/linx_agent.proto` e versionado na
-raiz do repositório. Os stubs Python são gerados em
-`shared/src/linx_shared/grpc/` (e em `middleware/services/client_agent/src/agent/grpc/`).
+raiz do repositório. Os stubs Python são gerados em um único lugar:
+`shared/src/linx_shared/grpc/` (pacote `linx_shared`). O `client_agent` consome
+esse pacote via path dependency, sem cópia local (#215).
 
 ```bash
 bash scripts/gen_proto.sh

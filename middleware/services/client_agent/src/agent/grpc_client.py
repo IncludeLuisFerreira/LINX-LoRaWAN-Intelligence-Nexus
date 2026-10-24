@@ -4,8 +4,7 @@ import time
 from dataclasses import dataclass
 
 import grpc
-
-from agent.grpc import linx_agent_pb2, linx_agent_pb2_grpc
+from linx_shared.grpc import linx_agent_pb2, linx_agent_pb2_grpc
 
 logger = logging.getLogger(__name__)
 

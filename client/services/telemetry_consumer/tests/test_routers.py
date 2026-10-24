@@ -1,11 +1,18 @@
-import time
+import asyncio
+import contextlib
 
 import pytest
+import uvicorn
+import websockets
 from fastapi.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
 
 from telemetry_consumer.app import create_app
 from telemetry_consumer.broadcaster import Broadcaster
+from telemetry_consumer.routers.telemetry import SERVICE_TOKEN_HEADER
+
+TOKEN = "ci-service-token"
+AUTH = {SERVICE_TOKEN_HEADER: TOKEN}
 
 
 class FakeConsumer:
@@ -38,6 +45,10 @@ def _make_app():
     )
 
 
+def _client(app):
+    return TestClient(app, headers=AUTH)
+
+
 class FakePool:
     def __init__(self, rows):
         self.rows = rows
@@ -63,7 +74,7 @@ class FakePool:
 def test_get_telemetry_returns_items():
     app = _make_app()
     app.state.db_pool = FakePool([{"dev_eui": "dev1"}])
-    client = TestClient(app)
+    client = _client(app)
     response = client.get("/telemetry?dev_eui=dev1&limit=10")
     assert response.status_code == 200
     assert response.json()["items"] == [{"dev_eui": "dev1"}]
@@ -86,7 +97,7 @@ def test_get_telemetry_next_cursor_from_last_item():
             },
         ]
     )
-    client = TestClient(app)
+    client = _client(app)
     response = client.get("/telemetry")
     assert response.status_code == 200
     assert response.json()["next_cursor"] == "2026-10-08T11:00:00Z|dev1|up"
@@ -95,7 +106,7 @@ def test_get_telemetry_next_cursor_from_last_item():
 def test_get_telemetry_invalid_before_returns_422():
     app = _make_app()
     app.state.db_pool = FakePool([])
-    client = TestClient(app)
+    client = _client(app)
     response = client.get("/telemetry?before=not-a-date")
     assert response.status_code == 422
 
@@ -104,7 +115,7 @@ def test_get_telemetry_accepts_composite_before():
     app = _make_app()
     pool = FakePool([])
     app.state.db_pool = pool
-    client = TestClient(app)
+    client = _client(app)
     response = client.get("/telemetry?before=2026-10-08T12:00:00Z|dev1|up")
     assert response.status_code == 200
     assert pool.calls[0][2] == "app-abc123"
@@ -117,7 +128,7 @@ def test_get_telemetry_scopes_query_to_settings_app_id():
     app = _make_app()
     pool = FakePool([])
     app.state.db_pool = pool
-    client = TestClient(app)
+    client = _client(app)
     assert client.get("/telemetry").status_code == 200
     assert pool.calls[0][1] == 100
     assert pool.calls[0][2] == "app-abc123"
@@ -127,7 +138,7 @@ def test_get_telemetry_clamps_limit():
     app = _make_app()
     pool = FakePool([])
     app.state.db_pool = pool
-    client = TestClient(app)
+    client = _client(app)
     assert client.get("/telemetry?limit=5000").status_code == 200
     assert pool.calls[0][1] == 1000
     assert client.get("/telemetry?limit=0").status_code == 200
@@ -136,32 +147,149 @@ def test_get_telemetry_clamps_limit():
 
 def test_get_telemetry_returns_503_without_pool():
     app = _make_app()
-    client = TestClient(app)
+    client = _client(app)
     response = client.get("/telemetry")
     assert response.status_code == 503
 
 
-def test_ws_rejects_wrong_app_id():
+def test_get_telemetry_requires_token():
     app = _make_app()
-    app.state.broadcaster = Broadcaster()
+    app.state.db_pool = FakePool([])
     client = TestClient(app)
+    assert client.get("/telemetry").status_code == 401
+
+
+def test_get_telemetry_rejects_invalid_token():
+    app = _make_app()
+    app.state.db_pool = FakePool([])
+    client = TestClient(app, headers={SERVICE_TOKEN_HEADER: "wrong-token"})
+    assert client.get("/telemetry").status_code == 401
+
+
+@pytest.fixture
+async def live_server(monkeypatch):
+    """Sobe um uvicorn real numa porta efêmera e rastreia registros no WS."""
+    app = _make_app()
+    register_calls = []
+    broadcast_calls = []
+    original_register = Broadcaster.register
+    original_broadcast = Broadcaster.broadcast
+
+    async def tracking_register(self, websocket):
+        register_calls.append(websocket)
+        await original_register(self, websocket)
+
+    async def tracking_broadcast(self, message):
+        broadcast_calls.append(message)
+        await original_broadcast(self, message)
+
+    monkeypatch.setattr(Broadcaster, "register", tracking_register)
+    monkeypatch.setattr(Broadcaster, "broadcast", tracking_broadcast)
+
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=0,
+        log_level="warning",
+        lifespan="on",
+    )
+    server = uvicorn.Server(config)
+    serve_task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(500):
+            if server.started:
+                break
+            if serve_task.done():
+                serve_task.result()
+            await asyncio.sleep(0.01)
+        else:
+            pytest.fail("uvicorn did not start")
+        port = server.servers[0].sockets[0].getsockname()[1]
+        yield app, f"ws://127.0.0.1:{port}", register_calls, broadcast_calls
+    finally:
+        server.should_exit = True
+        try:
+            await asyncio.wait_for(serve_task, timeout=10)
+        except asyncio.TimeoutError:
+            serve_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await serve_task
+
+
+async def _expect_close(url, code, headers=None, send=None):
+    ws = await websockets.connect(url, additional_headers=headers)
+    try:
+        if send is not None:
+            with contextlib.suppress(ConnectionClosed):
+                await ws.send(send)
+        with pytest.raises(ConnectionClosed) as exc:
+            await asyncio.wait_for(ws.recv(), timeout=5)
+    finally:
+        await ws.close()
+    assert exc.value.rcvd is not None
+    assert exc.value.rcvd.code == code
+
+
+async def test_ws_live_rejects_missing_token_with_4401(live_server):
+    app, base_url, register_calls, broadcast_calls = live_server
+    await _expect_close(
+        f"{base_url}/ws/telemetry/app-abc123",
+        4401,
+        send="should-not-be-broadcast",
+    )
+    assert register_calls == []
+    assert broadcast_calls == []
+    assert app.state.broadcaster.count == 0
+
+
+async def test_ws_live_rejects_invalid_token_with_4401(live_server):
+    app, base_url, register_calls, broadcast_calls = live_server
+    await _expect_close(
+        f"{base_url}/ws/telemetry/app-abc123",
+        4401,
+        headers={SERVICE_TOKEN_HEADER: "wrong-token"},
+        send="should-not-be-broadcast",
+    )
+    assert register_calls == []
+    assert broadcast_calls == []
+    assert app.state.broadcaster.count == 0
+
+
+async def test_ws_live_rejects_wrong_app_id_with_1008(live_server):
+    app, base_url, register_calls, broadcast_calls = live_server
     # app_id diferente de settings.app_id (default app-abc123)
-    with client.websocket_connect("/ws/telemetry/outro-app") as ws:
-        with pytest.raises(WebSocketDisconnect) as exc:
-            ws.receive_json()
-        assert exc.value.code == 1008
+    await _expect_close(
+        f"{base_url}/ws/telemetry/outro-app",
+        1008,
+        headers=AUTH,
+        send="should-not-be-broadcast",
+    )
+    assert register_calls == []
+    assert broadcast_calls == []
+    assert app.state.broadcaster.count == 0
 
 
-def test_ws_accepts_valid_app_id_and_unregisters():
-    app = _make_app()
-    broadcaster = Broadcaster()
-    app.state.broadcaster = broadcaster
-    client = TestClient(app)
-    with client.websocket_connect("/ws/telemetry/app-abc123") as ws:
+async def test_ws_live_accepts_valid_connection_and_unregisters(live_server):
+    app, base_url, register_calls, broadcast_calls = live_server
+    broadcaster = app.state.broadcaster
+    ws = await websockets.connect(
+        f"{base_url}/ws/telemetry/app-abc123", additional_headers=AUTH
+    )
+    try:
         for _ in range(100):
             if broadcaster.count == 1:
                 break
-            time.sleep(0.01)
+            await asyncio.sleep(0.01)
         assert broadcaster.count == 1
-        ws.send_text("ping")
+        assert len(register_calls) == 1
+        await ws.send("ping")
+        await asyncio.sleep(0.05)
+        assert broadcaster.count == 1
+    finally:
+        await ws.close()
+    for _ in range(100):
+        if broadcaster.count == 0:
+            break
+        await asyncio.sleep(0.01)
     assert broadcaster.count == 0
+    assert broadcast_calls == []

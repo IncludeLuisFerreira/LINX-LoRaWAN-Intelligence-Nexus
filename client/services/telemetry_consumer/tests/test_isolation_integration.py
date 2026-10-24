@@ -1,7 +1,8 @@
 """Teste de integração do isolamento por tenant no RabbitMQ.
 
 Requer um broker real com credenciais administrativas via variáveis de
-ambiente; caso ausentes, o teste é pulado. Não roda no CI padrão.
+ambiente; caso ausentes, o teste é pulado. Roda no CI padrão: o workflow
+`telemetry-consumer-ci` sobe um RabbitMQ e define as variáveis abaixo.
 
 Env:
     RABBITMQ_ISOLATION_AMQP_HOST   host:porta AMQP (ex.: localhost:5672)
@@ -28,6 +29,7 @@ MANAGEMENT = os.environ.get("RABBITMQ_ISOLATION_MANAGEMENT")
 ADMIN_USER = os.environ.get("RABBITMQ_ISOLATION_ADMIN_USER")
 ADMIN_PASSWORD = os.environ.get("RABBITMQ_ISOLATION_ADMIN_PASSWORD")
 VHOST = os.environ.get("RABBITMQ_ISOLATION_VHOST", "/")
+PROVISION_OK = frozenset({200, 201, 204})
 
 pytestmark = [
     pytest.mark.integration,
@@ -71,21 +73,29 @@ def _tenant_url(app_id: str) -> str:
     return f"amqp://tenant.{app_id}:{password}@{AMQP_HOST}/{encoded_vhost}"
 
 
+def _assert_provisioned(status: int, target: str) -> None:
+    assert (
+        status in PROVISION_OK
+    ), f"falha ao provisionar {target}: HTTP {status}"
+
+
 def _provision(app_id: str) -> None:
     secret = "isolation-test-secret"
     user = f"tenant.{app_id}"
-    _management_request(
+    status = _management_request(
         "PUT",
         f"/api/users/{user}",
         {"password": _derive_password(app_id, secret), "tags": ""},
     )
+    _assert_provisioned(status, f"usuário {user}")
     regex = rf"^linx\.telemetry\.{app_id}(\.|$)"
     encoded_vhost = VHOST.replace("/", "%2F")
-    _management_request(
+    status = _management_request(
         "PUT",
         f"/api/permissions/{encoded_vhost}/{user}",
         {"configure": regex, "write": regex, "read": regex},
     )
+    _assert_provisioned(status, f"permissões de {user}")
 
 
 @pytest.fixture
@@ -126,10 +136,41 @@ def test_tenant_cannot_read_audit_queue(two_apps):
     connection.close()
 
 
+def test_tenant_b_cannot_access_tenant_a_queue(two_apps):
+    """Isola o cenário crítico: A publica na própria fila; B não a alcança."""
+    app_a, app_b = two_apps
+
+    conn_a = rabbitpy.Connection(_tenant_url(app_a))
+    ch_a = conn_a.channel()
+    ch_a.enable_publisher_confirms()
+    exchange = rabbitpy.Exchange(
+        ch_a, f"linx.telemetry.{app_a}", exchange_type="topic", durable=True
+    )
+    exchange.declare()
+    queue = rabbitpy.Queue(
+        ch_a, f"linx.telemetry.{app_a}", durable=True, auto_delete=False
+    )
+    queue.declare()
+    queue.bind(exchange, routing_key=f"application.{app_a}.#")
+    message = rabbitpy.Message(ch_a, json.dumps({"app_id": app_a}).encode())
+    assert message.publish(exchange, f"application.{app_a}.device.dev1.up")
+    conn_a.close()
+
+    conn_b = rabbitpy.Connection(_tenant_url(app_b))
+    ch_b = conn_b.channel()
+    foreign_queue = rabbitpy.Queue(
+        ch_b, f"linx.telemetry.{app_a}", durable=True, auto_delete=False
+    )
+    with pytest.raises(Exception):
+        foreign_queue.declare()
+    conn_b.close()
+
+
 def test_tenant_publishes_and_consumes_own_namespace(two_apps):
     app_a, _ = two_apps
     connection = rabbitpy.Connection(_tenant_url(app_a))
     channel = connection.channel()
+    channel.enable_publisher_confirms()
     exchange = rabbitpy.Exchange(
         channel, f"linx.telemetry.{app_a}", exchange_type="topic", durable=True
     )
@@ -148,6 +189,7 @@ def test_tenant_dead_letters_via_named_dlx(two_apps):
     app_a, _ = two_apps
     connection = rabbitpy.Connection(_tenant_url(app_a))
     channel = connection.channel()
+    channel.enable_publisher_confirms()
     dlx = rabbitpy.Exchange(
         channel,
         f"linx.telemetry.{app_a}.dlx",
@@ -178,6 +220,7 @@ def test_tenant_cannot_publish_via_default_exchange(two_apps):
     app_b, _ = two_apps
     connection = rabbitpy.Connection(_tenant_url(app_b))
     channel = connection.channel()
+    channel.enable_publisher_confirms()
     message = rabbitpy.Message(channel, b"x")
     with pytest.raises(Exception):
         message.publish("", f"linx.telemetry.{app_b}.dlq")

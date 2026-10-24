@@ -30,7 +30,7 @@ Quatro protocolos sustentam a comunicação:
 | :---------------- | :-------------------- | :-------------- | :--------------------------------------------------------------------------------- |
 | `identity_api`    | FastAPI (REST)        | `8000` (host)   | API do plano de controle: CRUD de tenants e aplicações. Único serviço que publica a porta `8000` no host. |
 | `agent_bridge`    | gRPC (`grpcio`)       | `50051`         | **Servidor** do contrato `AgentBridge` — responde `GetAppConfig`.                   |
-| `client_agent`    | FastAPI               | `8001`          | Middleware compartilhado: cliente gRPC (`GetAppConfig`) e `GET /health`.            |
+| `client_agent`    | FastAPI               | `8001`          | Agente por tenant: cliente gRPC (`GetAppConfig`) e `GET /health`.                  |
 | `routing`         | Python (paho-mqtt + rabbitpy) | —        | Ingestão: consome uplinks MQTT, valida e publica envelopes no RabbitMQ.            |
 | `rabbitmq`        | RabbitMQ 3 (AMQP)     | `5672`/`15672`  | Exchange `topic` durável por tenant `linx.telemetry.{app_id}`; usuário e permissões isoladas por aplicação. |
 | `telemetry_consumer` | FastAPI            | `8000` (interna, não publicada) | Ambiente isolado por aplicação: consome a fila `linx.telemetry.{app_id}` com credencial do tenant, persiste no TimescaleDB e serve `GET /telemetry`/WebSocket. Acessível apenas pela rede do Compose. |
@@ -96,8 +96,9 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 ## 3. Contrato gRPC — `AgentBridge`
 
 O contrato é versionado na raiz do repositório em [`proto/linx_agent.proto`](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/blob/main/proto/linx_agent.proto)
-e é **compartilhado** entre o Linx Core e o Client Agent. Os stubs Python são gerados
-por `scripts/gen_proto.sh` para os pacotes `linx.grpc` e `agent.grpc`.
+e é **compartilhado** entre o Linx Core e o Client Agent. Os stubs Python são
+gerados por `scripts/gen_proto.sh` no pacote compartilhado `linx_shared.grpc`;
+o Client Agent consome esse pacote via path dependency (#215).
 
 - **Pacote:** `linx`
 - **Proto:** `proto3`

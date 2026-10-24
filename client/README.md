@@ -40,11 +40,18 @@ Toda mensagem recebe `ack`.
 | Método | Rota                         | Descrição                                              |
 | :----: | ---------------------------- | ------------------------------------------------------ |
 | `GET`  | `/health`                    | Estado do consumidor e do banco.                       |
-| `GET`  | `/telemetry`                 | Lista telemetria. Filtros `dev_eui`, `limit`, `before`; retorna `items` e `next_cursor`. |
-| `WS`   | `/ws/telemetry/{app_id}`     | Stream em tempo real. Fecha com `1008` se `app_id` não bate com `APP_ID`. |
+| `GET`  | `/telemetry`                 | Lista telemetria. Filtros `dev_eui`, `limit`, `before`; retorna `items` e `next_cursor`. Requer `X-Service-Token`. |
+| `WS`   | `/ws/telemetry/{app_id}`     | Stream em tempo real. Requer `X-Service-Token`; fecha com `4401` sem credencial e com `1008` se `app_id` não bate com `APP_ID`. O socket só é registrado após a autenticação. |
 
 `GET /telemetry` responde `503` quando o banco está indisponível. `limit` é
 limitado ao intervalo `1..1000` (default `100`).
+
+> **Credencial (#211):** o plano de dados por tenant exige o header
+> `X-Service-Token` (env `SERVICE_TOKEN`, o mesmo do plano de controle) em
+> `/telemetry` e no handshake do WebSocket. O nginx do dashboard é quem injeta o
+> header server-side nos proxies `/api` e `/ws` — o browser nunca conhece o
+> segredo. Chamadas diretas ao serviço (testes, curl interno) precisam enviar o
+> header; sem ele o REST responde `401` e o WS fecha com `4401`.
 
 ## 🗄️ Banco de dados (TimescaleDB)
 
@@ -76,7 +83,7 @@ via `WS /ws/telemetry/{app_id}`. Detalhes de telas, rotas e variáveis em
 ```bash
 # a partir de client/frontend/
 npm install
-npm run dev     # dev server (proxy /api)
+npm run dev     # dev server (proxies /api e /ws)
 ```
 
 ## 📁 Estrutura
@@ -142,7 +149,7 @@ task lint   # black + isort + mypy + flake8
 Sobe `timescaledb` + `telemetry_consumer` + `frontend`. O schema é montado no
 container do banco, o serviço só inicia após o healthcheck do TimescaleDB e o
 dashboard é servido por nginx na porta `8080`, com proxy `/api` para
-`BACKEND_URL`.
+`BACKEND_URL` e `/ws` para `WS_BACKEND_URL`.
 
 ```bash
 # a partir de client/
@@ -151,7 +158,7 @@ docker compose up --build
 ```
 
 Variáveis usadas no `.env`: `APP_ID`, `RABBIT_URL`, `DB_USER`,
-`DB_PASSWORD`, `DB_NAME`.
+`DB_PASSWORD`, `DB_NAME`, `SERVICE_TOKEN`, `BACKEND_URL` e `WS_BACKEND_URL`.
 
 ### Stack completa (`deploy/docker-compose.yml`)
 

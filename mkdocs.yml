@@ -32,7 +32,6 @@ nav:
       - Análise de Segurança ChirpStack: analise_seguranca_chirpstack/chirpstack_security_analysis.md
       - Estrutura de Pastas: estrutura_de_pastas/estrutura.md
       - Guia de Reprodução: manuais_de_config_e_impl/guia_reproducao_fase_inicial.md
-  - Sprints e Backlog: SPRINTS_BACKLOG.md
 
 exclude_docs: |
   superpowers/*

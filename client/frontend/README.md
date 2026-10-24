@@ -77,14 +77,21 @@ frontend/
 
 O front consome o `identity_api` via `baseURL` `/api/v1`:
 
-| Recurso | Endpoints |
-| --- | --- |
-| Tenant | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}` |
-| Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}` |
-| Device | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
-| Telemetry | `GET /telemetry?dev_eui=&limit=&before=` |
+| Recurso     | Endpoints                                                                              |
+| ----------- | -------------------------------------------------------------------------------------- |
+| Tenant      | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}`                                    |
+| Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}`       |
+| Device      | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
+| Telemetry   | `GET /telemetry?dev_eui=&limit=&before=`                                               |
 
 > O `PATCH /devices/{id}` aceita apenas `nickname`.
+
+> **Contratos OpenAPI (#217):** há dois artefatos com papéis distintos:
+> `client/frontend/openapi-stub.yaml` é o subconjunto REST que o front consome,
+> validado por `@redocly/cli` no `frontend-ci`; `docs/openapi-stub.json` é o
+> `app.openapi()` do `identity_api` materializado, mantido em sincronia por teste
+> (`identity_api/tests/test_openapi.py`). O `yaml` orienta o front; o `json` é a
+> fonte de verdade em runtime.
 
 ## Dashboard de Telemetria
 
@@ -109,8 +116,10 @@ recebido ao gráfico em ≤ 2s, sem refresh. A conexão é fechada no unmount ou
 troca de aplicação, e eventos de outro app/device são ignorados.
 
 Em desenvolvimento, o dev server faz proxy de `/ws` para
-`VITE_WS_PROXY_TARGET`. Com `VITE_ENABLE_MOCKS=true`, o MSW ativa um mock de
-WebSocket que emite eventos a cada 2s.
+`VITE_WS_PROXY_TARGET` e injeta `X-Service-Token: $DEV_SERVICE_TOKEN` no
+handshake, porque o browser não consegue enviar headers em conexões WebSocket.
+Com `VITE_ENABLE_MOCKS=true`, o MSW ativa um mock de WebSocket que emite
+eventos a cada 2s.
 
 ### Fallback de polling (WebSocket offline)
 
@@ -168,7 +177,7 @@ O envio chama `POST /devices` com o contrato real (`dev_eui`, `join_eui`,
 `app_key`, `app_id`, `device_profile_id`, `nickname`) e redireciona para
 `/devices` em caso de sucesso.
 
-A câmera exige *secure context* — funciona em `localhost` ou HTTPS, não
+A câmera exige _secure context_ — funciona em `localhost` ou HTTPS, não
 em HTTP via IP de LAN. Para testar sem QR físico, cole um código como:
 
 ```
@@ -183,9 +192,17 @@ npm install
 npm run dev
 ```
 
-O dev server faz **proxy de `/api` e de `/ws` para `http://localhost:8000`**
-(configurado em `vite.config.ts`; o proxy `/ws` usa `VITE_WS_PROXY_TARGET`),
-então não há CORS envolvido. Suba o `identity_api` na porta 8000.
+O dev server faz **proxy de `/api` para `http://localhost:8000` e de `/ws` para
+`VITE_WS_PROXY_TARGET`** (configurado em `vite.config.ts`), então não há CORS
+envolvido. Ambos os proxies injetam
+`X-Service-Token: $DEV_SERVICE_TOKEN`; defina `DEV_SERVICE_TOKEN` no `.env.local`
+com o mesmo valor de `SERVICE_TOKEN` do backend, senão o `/api` responde `401` e
+o `/ws` fecha com `4401`. Suba o `identity_api` no host em `http://localhost:8000`
+para o `/api`. O `/ws` usa `VITE_WS_PROXY_TARGET`, que precisa apontar para um
+`telemetry_consumer` alcançável a partir do host: publique ou encaminhe a porta
+interna `8000` dele para outra porta local (por exemplo `8001`) e defina
+`VITE_WS_PROXY_TARGET=http://localhost:8001` no `.env.local`. No Compose o
+`telemetry_consumer` não publica porta no host.
 
 ### Scripts
 
@@ -201,22 +218,25 @@ npx vitest run --coverage   # cobertura (mínimo 70%)
 
 ### Variáveis
 
-| Variável | Default | Descrição |
-| --- | --- | --- |
-| `VITE_API_URL` | `/api/v1` | Base URL da API (relativo; resolvido pelo proxy). |
-| `VITE_WS_URL` | vazio | Base URL do WebSocket de telemetria. Vazio resolve para a mesma origem (`ws`/`wss`). |
-| `VITE_WS_PROXY_TARGET` | `http://localhost:8000` | Alvo do proxy `/ws` no dev server. |
-| `VITE_ENABLE_MOCKS` | `false` | Liga o MSW no bundle. Use `true` para demos sem backend. |
+| Variável               | Default                 | Descrição                                                                                                                          |
+| ---------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_URL`         | `/api/v1`               | Base URL da API (relativo; resolvido pelo proxy).                                                                                  |
+| `VITE_WS_URL`          | vazio                   | Base URL do WebSocket de telemetria. Vazio resolve para a mesma origem (`ws`/`wss`).                                               |
+| `VITE_WS_PROXY_TARGET` | `http://localhost:8000` | Alvo do proxy `/ws` no dev server. Aponte para um `telemetry_consumer` alcançável (o default `localhost:8000` é o `identity_api`). |
+| `DEV_SERVICE_TOKEN`    | vazio                   | Token injetado como `X-Service-Token` nos proxies `/api` e `/ws` do dev server. Obrigatório no dev.                                |
+| `VITE_ENABLE_MOCKS`    | `false`                 | Liga o MSW no bundle. Use `true` para demos sem backend.                                                                           |
 
 ## Docker
 
 Build multi-stage (Node → nginx). O `nginx.conf` faz fallback do SPA e proxy
-de `/api/` para `BACKEND_URL`.
+de `/api/` para `BACKEND_URL` e de `/ws/` para `WS_BACKEND_URL`.
 
 ```bash
 docker build -t frontend:dev .
 docker run --rm -p 8080:80 \
   -e BACKEND_URL=http://host.docker.internal:8000 \
+  -e WS_BACKEND_URL=http://host.docker.internal:8000 \
+  -e SERVICE_TOKEN=dev-service-token \
   frontend:dev
 ```
 

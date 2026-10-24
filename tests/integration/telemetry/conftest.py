@@ -59,6 +59,12 @@ def _read_env(path: str) -> dict[str, str]:
 
 _ENV = _read_env(TEST_ENV_FILE)
 
+# Credencial do plano de dados de telemetria (#211): o REST/WS do
+# telemetry_consumer exige o header X-Service-Token, definido no test.env.
+SERVICE_TOKEN = os.environ.get("IT_SERVICE_TOKEN") or _ENV.get(
+    "SERVICE_TOKEN", "test-token"
+)
+
 APP_ID = _ENV.get("APP_ID", "integration-app")
 AMQP_URL = os.environ.get("IT_AMQP_URL") or (
     f"amqp://{_ENV.get('RABBITMQ_DEFAULT_USER', 'linx')}:"
@@ -429,7 +435,11 @@ def ws_open() -> Any:
 
     def _open(timeout: float = 10.0) -> Any:
         url = f"{CONSUMER_HTTP.replace('http', 'ws')}/ws/telemetry/{APP_ID}"
-        return ws_connect(url, open_timeout=timeout)
+        return ws_connect(
+            url,
+            additional_headers={"X-Service-Token": SERVICE_TOKEN},
+            open_timeout=timeout,
+        )
 
     return _open
 
@@ -485,6 +495,10 @@ def dlq_messages() -> Any:
 @pytest.fixture
 def rest_get() -> Any:
     def _get(path: str) -> Any:
-        return httpx.get(f"{CONSUMER_HTTP}{path}", timeout=10)
+        return httpx.get(
+            f"{CONSUMER_HTTP}{path}",
+            headers={"X-Service-Token": SERVICE_TOKEN},
+            timeout=10,
+        )
 
     return _get

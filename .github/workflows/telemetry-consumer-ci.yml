@@ -24,6 +24,25 @@ jobs:
     defaults:
       run:
         working-directory: client/services/telemetry_consumer
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Deixa os testes de isolamento multi-tenant de rodarem de fato (#213):
+      # sem estas variáveis o pytestmark skipif os pulava silenciosamente.
+      RABBITMQ_ISOLATION_AMQP_HOST: localhost:5672
+      RABBITMQ_ISOLATION_MANAGEMENT: http://localhost:15672
+      RABBITMQ_ISOLATION_ADMIN_USER: guest
+      RABBITMQ_ISOLATION_ADMIN_PASSWORD: guest
+      RABBITMQ_ISOLATION_VHOST: /
     steps:
       - name: Checkout
         uses: actions/checkout@v4

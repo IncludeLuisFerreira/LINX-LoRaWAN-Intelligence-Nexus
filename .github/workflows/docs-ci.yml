@@ -8,6 +8,10 @@ on:
       - "pyproject.toml"
       - "poetry.lock"
       - "SPRINTS_BACKLOG.md"
+      - "linx_core/README.md"
+      - "client/README.md"
+      - "middleware/README.md"
+      - "PRD_PLATAFORMA_IOT.md"
       - ".github/workflows/docs-ci.yml"
   push:
     branches:
@@ -19,6 +23,10 @@ on:
       - "pyproject.toml"
       - "poetry.lock"
       - "SPRINTS_BACKLOG.md"
+      - "linx_core/README.md"
+      - "client/README.md"
+      - "middleware/README.md"
+      - "PRD_PLATAFORMA_IOT.md"
       - ".github/workflows/docs-ci.yml"
 
 env:

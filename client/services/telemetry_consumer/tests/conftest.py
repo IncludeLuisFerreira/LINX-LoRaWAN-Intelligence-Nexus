@@ -7,3 +7,4 @@ os.environ.setdefault(
     "RABBIT_URL", "amqp://tenant:ci-rabbit-pass@localhost:5672/%2f"
 )
 os.environ.setdefault("DB_PASSWORD", "ci-tenant-db-pass")
+os.environ.setdefault("SERVICE_TOKEN", "ci-service-token")

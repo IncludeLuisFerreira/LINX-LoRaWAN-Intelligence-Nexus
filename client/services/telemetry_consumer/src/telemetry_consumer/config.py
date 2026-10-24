@@ -54,6 +54,7 @@ def _require_url(env_var: str, value: str | None) -> str:
 
 class ConsumerSettings(BaseSettings):
     app_id: str = "app-abc123"
+    service_token: str = ""
     rabbit_url: str = ""
     rabbit_prefetch_count: int = 10
     rabbit_connect_max_attempts: int = 5
@@ -77,6 +78,11 @@ class ConsumerSettings(BaseSettings):
     @classmethod
     def _validate_rabbit_url(cls, value: str) -> str:
         return _require_url("RABBIT_URL", value)
+
+    @field_validator("service_token")
+    @classmethod
+    def _validate_service_token(cls, value: str) -> str:
+        return _require_secret("SERVICE_TOKEN", value)
 
     @field_validator("db_password")
     @classmethod
