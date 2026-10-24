@@ -44,6 +44,11 @@ def test_openapi_exposes_applications_crud():
     )
 
 
+def test_openapi_exposes_job_status_endpoint():
+    paths = _openapi()["paths"]
+    assert "get" in paths["/api/v1/tenant/{tenant_id}/jobs/{job_id}"]
+
+
 def test_openapi_schemas_have_id_uuid_and_name():
     schemas = _openapi()["components"]["schemas"]
 

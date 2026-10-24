@@ -675,7 +675,7 @@
           "Application"
         ],
         "summary": "Provision Application",
-        "description": "Provisiona (ou reaproveita) o container Docker da aplicação.\n\nO identity_api valida o vínculo tenant/application no banco e delega a\ncriação do container ao serviço `docker_provisioner` via gRPC. O\nprovisioner é idempotente por label; quando o container já existe a\nresposta HTTP passa de `201` para `200`.",
+        "description": "Enfileira o provisionamento ass\u00edncrono do container da aplica\u00e7\u00e3o.\n\nO identity_api valida o v\u00ednculo tenant/application no banco e grava o\njob e a mensagem de outbox na mesma transa\u00e7\u00e3o. A execu\u00e7\u00e3o fica a cargo\ndo worker de provisionamento, consumindo a fila pelo broker.",
         "operationId": "provision_application_api_v1_tenant__tenant_id__applications__application_id__provision_post",
         "parameters": [
           {
@@ -716,40 +716,85 @@
           }
         ],
         "responses": {
-          "201": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProvisionResponse"
+                  "$ref": "#/components/schemas/JobAcceptedResponse"
                 }
               }
             }
           },
-          "200": {
-            "description": "Container já existia e foi reaproveitado.",
+          "422": {
+            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProvisionResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/tenant/{tenant_id}/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Job"
+        ],
+        "summary": "Get Job Status",
+        "description": "Retorna o estado atual de um job do tenant informado.",
+        "operationId": "get_job_status_api_v1_tenant__tenant_id__jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
           },
-          "404": {
-            "description": "Tenant/app não encontrada."
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
           },
-          "409": {
-            "description": "Estado inconsistente no provisioner."
-          },
-          "502": {
-            "description": "Falha do provisioner ou do Docker."
-          },
-          "503": {
-            "description": "Provisioner ou Docker indisponível."
-          },
-          "504": {
-            "description": "Timeout na chamada ao provisioner."
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -1675,49 +1720,180 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "ProvisionResponse": {
+      "JobAcceptedResponse": {
         "properties": {
-          "container_id": {
+          "job_id": {
             "type": "string",
-            "title": "Container Id"
+            "format": "uuid",
+            "title": "Job Id"
           },
-          "port": {
-            "type": "integer",
-            "title": "Port"
-          },
-          "network": {
+          "application_id": {
             "type": "string",
-            "title": "Network"
-          },
-          "image": {
-            "type": "string",
-            "title": "Image"
+            "format": "uuid",
+            "title": "Application Id"
           },
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/JobStatus"
           },
-          "created": {
-            "type": "boolean",
-            "title": "Created"
-          },
-          "mqtt_topic": {
+          "created_at": {
             "type": "string",
-            "title": "Mqtt Topic"
+            "format": "date-time",
+            "title": "Created At"
           }
         },
         "type": "object",
         "required": [
-          "container_id",
-          "port",
-          "network",
-          "image",
+          "job_id",
+          "application_id",
           "status",
-          "created",
-          "mqtt_topic"
+          "created_at"
         ],
-        "title": "ProvisionResponse",
-        "description": "Resposta pública do endpoint de provisionamento Docker."
+        "title": "JobAcceptedResponse"
+      },
+      "JobErrorResponse": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable"
+          },
+          "grpc_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grpc Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "title": "JobErrorResponse"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "JobStatus"
+      },
+      "JobStatusResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Tenant Id"
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Subject Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "max_attempts": {
+            "type": "integer",
+            "title": "Max Attempts"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobErrorResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "type",
+          "tenant_id",
+          "subject_id",
+          "status",
+          "attempts",
+          "max_attempts",
+          "result",
+          "error",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "JobStatusResponse"
       },
       "TenantCreate": {
         "properties": {
