@@ -83,7 +83,9 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      # Bind SOMENTE em loopback (#208): ChirpStack e routing alcançam o
+      # broker pela rede interna, não pela porta publicada no host.
+      - "127.0.0.1:1883:1883"
     volumes:
       # config/ traz mosquitto.conf + mosquitto.passwd + mosquitto.acl
       # (gerados por infra/scripts/gen-mosquitto-passwd.sh). Read-only.
