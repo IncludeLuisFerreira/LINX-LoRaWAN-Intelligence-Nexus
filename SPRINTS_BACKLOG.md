@@ -91,7 +91,7 @@ O MVP é considerado completo quando:
 - [ ] Deploy em EC2 `t3.small` com Docker Compose (app + PostgreSQL local para MVP).
 - [ ] Security Group AWS: inbound 8000 (REST), 50051 (gRPC), 22 (SSH).
 - [ ] Nginx com TLS (Let's Encrypt ou certificado autoassinado para dev).
-- [x] Tabela `device_routes` (`dev_eui`, `app_id`, endpoint do agente) para roteamento futuro.
+- [x] Tabela `device_routes` (`dev_eui`, `app_id`, endpoint do agente) para roteamento futuro. (removida na #236; routing usa RabbitMQ)
 
 ### Aluno 3 — Client Agent
 - [ ] gRPC Client em `middleware/services/client_agent/grpc_client.py`: conecta ao Linx Core porta 50051 e resolve `GetAppConfig` sob demanda (com cache TTL).
@@ -159,7 +159,7 @@ O MVP é considerado completo quando:
 - [ ] Trigger automático: ao criar Aplicação via `POST /api/v1/applications`, chamar provision em background (FastAPI `BackgroundTasks`).
 - [ ] Endpoint `GET /api/v1/applications/{app_id}/status` retornando status do container (`docker inspect`).
 - [ ] Garantir que **100% dos recursos** usam UUID v4: constraint `UNIQUE` + validação em middleware.
-- [ ] Atualizar `device_routes` com endpoint real do container provisionado.
+- [x] Atualizar `device_routes` com endpoint real do container provisionado. (obsoleta; tabela removida na #236)
 
 ### Aluno 3 — Client Agent + Tenant Template
 - [ ] Imagem Docker do `client` publicada no ECR (ou Docker Hub para MVP).
