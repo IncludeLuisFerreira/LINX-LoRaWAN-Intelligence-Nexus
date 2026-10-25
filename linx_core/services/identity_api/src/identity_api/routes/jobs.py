@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/v1/tenant", tags=["Job"])
     "/{tenant_id}/jobs/{job_id}",
     status_code=status.HTTP_200_OK,
     response_model=JobStatusResponse,
+    responses={status.HTTP_404_NOT_FOUND: {"description": "Job not found."}},
 )
 def get_job_status(
     tenant_id: UUID,

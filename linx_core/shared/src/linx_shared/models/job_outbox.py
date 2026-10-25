@@ -46,6 +46,16 @@ class JobOutbox(Base):
         nullable=True,
     )
 
+    failed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    last_error: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
     attempts: Mapped[int] = mapped_column(
         Integer,
         default=0,

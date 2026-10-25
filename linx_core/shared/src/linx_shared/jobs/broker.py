@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, Protocol
 
 import pika
@@ -15,6 +16,8 @@ from linx_shared.jobs.constants import (
     PROVISIONING_STATUS_QUEUE,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class JobPublisher(Protocol):
     def publish(
@@ -27,7 +30,10 @@ class JobPublisher(Protocol):
     ) -> None: ...
 
 
-def declare_topology(channel: Any) -> None:
+def declare_topology(
+    channel: Any,
+    queue: str = PROVISIONING_QUEUE,
+) -> None:
     channel.exchange_declare(
         exchange=JOB_EXCHANGE,
         exchange_type="topic",
@@ -45,7 +51,7 @@ def declare_topology(channel: Any) -> None:
     )
 
     channel.queue_declare(
-        queue=PROVISIONING_QUEUE,
+        queue=queue,
         durable=True,
         arguments={
             "x-dead-letter-exchange": JOB_DLX,
@@ -53,7 +59,7 @@ def declare_topology(channel: Any) -> None:
         },
     )
     channel.queue_bind(
-        queue=PROVISIONING_QUEUE,
+        queue=queue,
         exchange=JOB_EXCHANGE,
         routing_key=PROVISIONING_REQUESTED,
     )
@@ -101,6 +107,7 @@ class RabbitMQPublisher:
                 pika.URLParameters(self._url)
             )
             self._channel = self._connection.channel()
+            self._channel.confirm_delivery()
         return self._channel
 
     def _reset(self) -> None:
@@ -126,6 +133,7 @@ class RabbitMQPublisher:
             routing_key=routing_key,
             body=body,
             properties=properties,
+            mandatory=True,
         )
 
     def publish(
@@ -144,6 +152,18 @@ class RabbitMQPublisher:
         )
         try:
             self._publish_once(exchange, routing_key, body, properties)
+        except (
+            pika.exceptions.UnroutableError,
+            pika.exceptions.NackError,
+        ):
+            logger.error(
+                "broker did not confirm message exchange=%s routing_key=%s "
+                "message_id=%s",
+                exchange,
+                routing_key,
+                message_id,
+            )
+            raise
         except (
             pika.exceptions.AMQPConnectionError,
             pika.exceptions.AMQPChannelError,

@@ -189,6 +189,8 @@ exchange TEXT NOT NULL
 routing_key TEXT NOT NULL
 payload JSONB NOT NULL
 published_at TIMESTAMPTZ NULL
+failed_at TIMESTAMPTZ NULL
+last_error TEXT NULL
 attempts INT NOT NULL DEFAULT 0
 next_attempt_at TIMESTAMPTZ NOT NULL
 created_at TIMESTAMPTZ NOT NULL
@@ -196,6 +198,11 @@ created_at TIMESTAMPTZ NOT NULL
 
 Índice parcial `ix_job_outbox_pending` em `(published_at, next_attempt_at)`
 com `WHERE published_at IS NULL`.
+
+O relay usa o relógio do banco para agendar e checar mensagens devidas,
+aplica backoff exponencial com jitter entre falhas de publicação e, após
+`OUTBOX_MAX_ATTEMPTS` (default 10), marca `failed_at`/`last_error` e para de
+retentar. Mensagens em quarentena não são republicadas automaticamente.
 
 ## Mensageria
 

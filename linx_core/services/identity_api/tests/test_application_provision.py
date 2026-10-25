@@ -1,8 +1,9 @@
 from collections.abc import Generator
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from linx_shared.models.job import Job
 from linx_shared.models.job_outbox import JobOutbox
 from sqlalchemy.orm import Session
 
@@ -172,3 +173,41 @@ def test_job_status_route_unknown_job_returns_404():
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Job not found!"}
+
+
+def test_provision_uses_configured_max_attempts(db_session, monkeypatch):
+    from identity_api.config import settings
+
+    monkeypatch.setattr(settings, "job_max_attempts", 7)
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.post(_provision_url(tenant_id, app_id))
+
+    assert response.status_code == 202
+    job = db_session.get(Job, UUID(response.json()["job_id"]))
+    assert job is not None
+    assert job.max_attempts == 7
+
+
+def test_completed_job_allows_new_job(db_session):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    first = client.post(_provision_url(tenant_id, app_id))
+    first_job = db_session.get(Job, UUID(first.json()["job_id"]))
+    assert first_job is not None
+    first_job.status = "succeeded"
+    db_session.commit()
+
+    second = client.post(_provision_url(tenant_id, app_id))
+
+    assert second.status_code == 202
+    assert second.json()["job_id"] != first.json()["job_id"]
+    jobs = (
+        db_session.query(Job)
+        .filter(Job.tenant_id == UUID(tenant_id))
+        .order_by(Job.created_at)
+        .all()
+    )
+    assert len(jobs) == 2

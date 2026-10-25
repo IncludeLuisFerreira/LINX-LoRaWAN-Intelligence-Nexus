@@ -1,6 +1,9 @@
 import threading
 
+import pytest
+
 from jobs_worker import runtime
+from jobs_worker.main import _parse_envelope, _parse_status_event
 
 
 class FakeMethod:
@@ -20,6 +23,12 @@ class FakeChannel:
 
     def queue_declare(self, **kwargs) -> None:
         self.queue_declares.append(kwargs)
+
+    def exchange_declare(self, **kwargs) -> None:
+        pass
+
+    def queue_bind(self, **kwargs) -> None:
+        pass
 
     def basic_qos(self, **kwargs) -> None:
         self.qos.append(kwargs)
@@ -135,3 +144,71 @@ def test_run_consumer_reconnects_after_connection_failure(monkeypatch):
     assert first.closed is True
     assert second.closed is True
     assert len(second_channel.consumes) == 1
+
+
+def test_invalid_message_is_nacked_without_requeue(monkeypatch):
+    stop = threading.Event()
+    channel = FakeChannel()
+    connection = StoppingConnection(channel, stop)
+    _patch_connection(monkeypatch, [connection])
+
+    def callback(body: bytes) -> None:
+        raise runtime.InvalidMessageError("bad envelope")
+
+    runtime.run_consumer(
+        "linx.jobs.provisioning",
+        callback,
+        "amqp://127.0.0.1:5672/",
+        1,
+        stop,
+    )
+
+    channel.consumer_callback(channel, FakeMethod(7), None, b"{not-json")
+
+    assert channel.acks == []
+    assert channel.nacks == [(7, False)]
+
+
+def test_consumer_declares_topology_on_each_reconnect(monkeypatch):
+    from linx_shared.jobs.broker import declare_topology
+
+    stop = threading.Event()
+    first_channel = FakeChannel()
+    first = FailingConnection(first_channel, stop)
+    second_channel = FakeChannel()
+    second = StoppingConnection(second_channel, stop)
+    _patch_connection(monkeypatch, [first, second])
+    monkeypatch.setattr(runtime, "RECONNECT_DELAY_SECONDS", 0.0)
+
+    runtime.run_consumer(
+        "linx.jobs.custom",
+        lambda body: None,
+        "amqp://127.0.0.1:5672/",
+        1,
+        stop,
+        declare=lambda channel: declare_topology(channel, "linx.jobs.custom"),
+    )
+
+    for channel in (first_channel, second_channel):
+        assert {item["queue"] for item in channel.queue_declares} == {
+            "linx.jobs.custom",
+            "linx.jobs.provisioning.dlq",
+            "linx.jobs.status",
+        }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"{not-json",
+        b'{"job_id": "00000000-0000-0000-0000-000000000000"}',
+    ],
+)
+def test_malformed_job_envelope_is_invalid_message(payload):
+    with pytest.raises(runtime.InvalidMessageError):
+        _parse_envelope(payload)
+
+
+def test_malformed_status_event_is_invalid_message():
+    with pytest.raises(runtime.InvalidMessageError):
+        _parse_status_event(b'{"job_id": "not-a-uuid"}')

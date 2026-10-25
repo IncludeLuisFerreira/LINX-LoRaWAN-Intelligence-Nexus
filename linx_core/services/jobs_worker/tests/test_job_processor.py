@@ -267,10 +267,11 @@ def test_unknown_type_becomes_permanent_failure(
     rows = _outbox(db_session, job.id)
     by_key = _by_routing_key(rows)
     failed_key = "unknown.job.failed"
+    dead_key = "unknown.job.dead"
     assert failed_key in by_key
     assert by_key[failed_key].payload["status"] == JobStatus.FAILED.value
     assert by_key[failed_key].payload["error"]["retryable"] is False
-    assert by_key[PROVISIONING_DEAD].exchange == JOB_DLX
+    assert by_key[dead_key].exchange == JOB_DLX
 
 
 def test_exhausted_lease_fails_without_invoking_handler(
@@ -332,3 +333,27 @@ def test_commit_failure_leaves_no_uncommitted_outbox_row(
 
     assert _outbox(db_session, job.id) == []
     assert handler.calls == 0
+
+
+def test_not_due_message_is_rescheduled_instead_of_lost(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+    job = job_factory(next_attempt_at=next_attempt_at)
+    handler = StubHandler(result={"container_id": "container-1"})
+    processor = _processor(session_factory, _registry(handler))
+
+    processor.process(_envelope(job))
+
+    rows = _outbox(db_session, job.id)
+    by_key = _by_routing_key(rows)
+    assert handler.calls == 0
+    assert PROVISIONING_REQUESTED in by_key
+    assert by_key[PROVISIONING_REQUESTED].next_attempt_at == next_attempt_at
+    assert by_key[PROVISIONING_REQUESTED].payload["job_id"] == str(job.id)
+
+    db_session.expire_all()
+    assert job.attempts == 0
+    assert job.next_attempt_at == next_attempt_at

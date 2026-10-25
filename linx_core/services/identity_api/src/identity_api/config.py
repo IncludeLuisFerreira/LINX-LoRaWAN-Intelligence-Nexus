@@ -21,6 +21,8 @@ class IdentitySettings(Settings):
     rabbitmq_tenant_secret: str = ""
     rabbitmq_amqp_host: str = "rabbitmq:5672"
 
+    job_max_attempts: int = 3
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: str) -> str:
@@ -36,6 +38,13 @@ class IdentitySettings(Settings):
     @classmethod
     def _validate_rabbitmq_tenant_secret(cls, value: str) -> str:
         return require_secret("RABBITMQ_TENANT_SECRET", value)
+
+    @field_validator("job_max_attempts")
+    @classmethod
+    def _validate_job_max_attempts(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("JOB_MAX_ATTEMPTS deve ser maior que zero")
+        return value
 
 
 settings = IdentitySettings()

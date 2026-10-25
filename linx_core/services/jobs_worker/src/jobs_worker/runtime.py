@@ -7,7 +7,10 @@ from typing import Any
 import pika
 from linx_shared.jobs.broker import JobPublisher
 from linx_shared.jobs.handlers import HandlerRegistry
-from linx_shared.jobs.outbox import relay_pending_outbox
+from linx_shared.jobs.outbox import (
+    OUTBOX_MAX_ATTEMPTS,
+    relay_pending_outbox,
+)
 from sqlalchemy.orm import Session
 
 from jobs_worker.handlers.provision_application import (
@@ -19,16 +22,25 @@ logger = logging.getLogger(__name__)
 RECONNECT_DELAY_SECONDS = 5.0
 
 
+class InvalidMessageError(Exception):
+    """Mensagem inválida/venenosa: não deve voltar para a fila principal."""
+
+
 def run_outbox_relay(
     stop_event: threading.Event,
     session_factory: Callable[[], Session],
     publisher: JobPublisher,
     poll_interval: float = 1.0,
+    max_attempts: int = OUTBOX_MAX_ATTEMPTS,
 ) -> None:
     while not stop_event.is_set():
         session = session_factory()
         try:
-            relay_pending_outbox(session, publisher)
+            relay_pending_outbox(
+                session,
+                publisher,
+                max_attempts=max_attempts,
+            )
             session.commit()
         except Exception:
             session.rollback()
@@ -53,6 +65,8 @@ def run_consumer(
     url: str,
     prefetch: int,
     stop_event: threading.Event | None = None,
+    *,
+    declare: Callable[[Any], None] | None = None,
 ) -> None:
     while stop_event is None or not stop_event.is_set():
         connection: Any = None
@@ -60,6 +74,8 @@ def run_consumer(
         try:
             connection = pika.BlockingConnection(pika.URLParameters(url))
             channel = connection.channel()
+            if declare is not None:
+                declare(channel)
             channel.basic_qos(prefetch_count=prefetch)
 
             def on_message(
@@ -70,6 +86,12 @@ def run_consumer(
             ) -> None:
                 try:
                     callback(body)
+                except InvalidMessageError:
+                    logger.exception("discarding invalid message")
+                    channel.basic_nack(
+                        delivery_tag=method.delivery_tag,
+                        requeue=False,
+                    )
                 except Exception:
                     logger.exception("consumer failed to process message")
                     channel.basic_nack(

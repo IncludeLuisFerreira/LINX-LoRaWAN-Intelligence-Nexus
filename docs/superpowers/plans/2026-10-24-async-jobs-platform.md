@@ -575,7 +575,10 @@ schedules an outbox retry.
 `relay_pending_outbox` selects pending rows with
 `.with_for_update(skip_locked=True)`, publishes to `row.exchange` with
 `row.routing_key` and `message_id=str(row.job_id)`, marks `published_at`, and
-on failure increments `attempts` and sets `next_attempt_at`.
+on failure increments `attempts`, stores `last_error`, and sets
+`next_attempt_at` with exponential backoff plus jitter. After
+`OUTBOX_MAX_ATTEMPTS` (default 10) it sets `failed_at`/`last_error` and stops
+retrying. Scheduling and due checks use the database clock.
 
 - [ ] **Step 6: Run tests and lint**
 
@@ -954,11 +957,13 @@ Expected: FAIL with missing modules.
 
 `jobs_worker/config.py` subclasses `linx_shared.core.config.Settings` and
 defines `rabbitmq_amqp_url`, `worker_queue`, `worker_concurrency`,
-`worker_prefetch`, `job_max_attempts`, `job_lock_seconds`,
-`job_reaper_interval_seconds`, `provisioner_grpc_host` and
+`worker_prefetch`, `job_lock_seconds`, `job_reaper_interval_seconds`,
+`outbox_max_attempts`, `provisioner_grpc_host` and
 `provisioner_grpc_timeout_seconds`. Validate `rabbitmq_amqp_url` with
-`require_connection_string("RABBITMQ_AMQP_URL", value, ("guest:guest",))` and
-reject non-positive worker/timeout values.
+`require_connection_string("RABBITMQ_AMQP_URL", value, ("guest:guest",))`,
+validate `SERVICE_TOKEN` with `require_secret`, require a non-empty
+`PROVISIONER_GRPC_HOST` and reject non-positive worker/timeout values.
+`JOB_MAX_ATTEMPTS` pertence ao `identity_api`, que grava `max_attempts` no job.
 
 `shared/src/linx_shared/jobs/handlers.py`:
 
@@ -1122,10 +1127,10 @@ jobs_worker:
     - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
     - PROVISIONER_GRPC_HOST=docker_provisioner:50052
     - PROVISIONER_GRPC_TIMEOUT_SECONDS=${PROVISIONER_GRPC_TIMEOUT_SECONDS:-10}
-    - WORKER_QUEUE=linx.jobs.provisioning
+    - WORKER_QUEUE=${WORKER_QUEUE:-linx.jobs.provisioning}
     - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-4}
     - WORKER_PREFETCH=${WORKER_PREFETCH:-4}
-    - JOB_MAX_ATTEMPTS=${JOB_MAX_ATTEMPTS:-3}
+    - OUTBOX_MAX_ATTEMPTS=${OUTBOX_MAX_ATTEMPTS:-10}
     - JOB_LOCK_SECONDS=${JOB_LOCK_SECONDS:-60}
     - JOB_REAPER_INTERVAL_SECONDS=${JOB_REAPER_INTERVAL_SECONDS:-60}
   depends_on:
@@ -1157,7 +1162,7 @@ RABBITMQ_AMQP_URL=amqp://linx:change-me-in-production@localhost:5672/
 WORKER_QUEUE=linx.jobs.provisioning
 WORKER_CONCURRENCY=4
 WORKER_PREFETCH=4
-JOB_MAX_ATTEMPTS=3
+OUTBOX_MAX_ATTEMPTS=10
 JOB_LOCK_SECONDS=60
 JOB_REAPER_INTERVAL_SECONDS=60
 ```

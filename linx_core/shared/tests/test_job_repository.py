@@ -414,3 +414,33 @@ def test_get_job_is_tenant_scoped(db_session):
 
     assert get_job(db_session, tenant.id, job.id) is job
     assert get_job(db_session, other.id, job.id) is None
+
+
+def test_apply_status_event_same_terminal_status_is_noop(db_session):
+    tenant = _create_tenant(db_session)
+    job = _create_job(db_session, tenant_id=tenant.id)
+    first_finished_at = datetime.now(timezone.utc)
+    apply_status_event(
+        db_session,
+        _event(
+            job,
+            JobStatus.SUCCEEDED,
+            result={"port": 8200},
+            finished_at=first_finished_at,
+        ),
+    )
+
+    apply_status_event(
+        db_session,
+        _event(
+            job,
+            JobStatus.SUCCEEDED,
+            result={"port": 9999},
+            finished_at=datetime.now(timezone.utc),
+        ),
+    )
+
+    assert job.status == JobStatus.SUCCEEDED.value
+    assert job.result == {"port": 8200}
+    assert job.error is None
+    assert job.finished_at == first_finished_at

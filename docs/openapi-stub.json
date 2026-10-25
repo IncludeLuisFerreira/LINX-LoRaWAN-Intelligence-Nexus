@@ -726,6 +726,9 @@
               }
             }
           },
+          "404": {
+            "description": "Tenant or application not found."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -795,6 +798,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Job not found."
           },
           "422": {
             "description": "Validation Error",

@@ -1,6 +1,7 @@
 import json
 
 import pika
+import pytest
 
 from linx_shared.jobs import broker
 from linx_shared.jobs.broker import (
@@ -25,7 +26,11 @@ class FakeChannel:
         self.queues: list[dict] = []
         self.bindings: list[dict] = []
         self.published: list[dict] = []
+        self.confirm_calls = 0
         self.is_open = True
+
+    def confirm_delivery(self) -> None:
+        self.confirm_calls += 1
 
     def exchange_declare(self, **kwargs) -> None:
         self.exchanges.append(kwargs)
@@ -133,11 +138,23 @@ def test_publish_sets_persistent_message_and_message_id(monkeypatch):
     assert published["properties"].delivery_mode == 2
     assert published["properties"].content_type == "application/json"
     assert published["properties"].message_id == "job-1"
+    assert published["mandatory"] is True
+    assert channel.confirm_calls == 1
 
 
 class FailingChannel(FakeChannel):
     def basic_publish(self, **kwargs) -> None:
         raise pika.exceptions.AMQPConnectionError("connection lost")
+
+
+class NackChannel(FakeChannel):
+    def basic_publish(self, **kwargs) -> None:
+        raise pika.exceptions.NackError([1])
+
+
+class UnroutableChannel(FakeChannel):
+    def basic_publish(self, **kwargs) -> None:
+        raise pika.exceptions.UnroutableError([1])
 
 
 class CloseRaisesConnection(FakeConnection):
@@ -199,3 +216,62 @@ def test_publish_replaces_closed_cached_connection(monkeypatch):
     assert first_connection.closed is False
     assert len(second_channel.published) == 1
     assert publisher._channel is second_channel
+
+
+def test_publish_propagates_nack_without_marking_success(monkeypatch):
+    channel = NackChannel()
+    connection = FakeConnection(channel)
+    monkeypatch.setattr(
+        broker.pika,
+        "BlockingConnection",
+        lambda parameters: connection,
+    )
+    publisher = RabbitMQPublisher("amqp://guest:guest@localhost:5672/")
+
+    with pytest.raises(pika.exceptions.NackError):
+        publisher.publish(
+            JOB_EXCHANGE, PROVISIONING_REQUESTED, {"job_id": "x"}
+        )
+
+    assert channel.published == []
+    assert channel.confirm_calls == 1
+
+
+def test_publish_propagates_unroutable_without_reconnecting(monkeypatch):
+    channel = UnroutableChannel()
+    connection = FakeConnection(channel)
+    connections = [connection]
+    monkeypatch.setattr(
+        broker.pika,
+        "BlockingConnection",
+        lambda parameters: connections.pop(0),
+    )
+    publisher = RabbitMQPublisher("amqp://guest:guest@localhost:5672/")
+
+    with pytest.raises(pika.exceptions.UnroutableError):
+        publisher.publish(
+            JOB_EXCHANGE, PROVISIONING_REQUESTED, {"job_id": "x"}
+        )
+
+    assert channel.confirm_calls == 1
+
+
+def test_declare_topology_uses_custom_queue():
+    channel = FakeChannel()
+
+    declare_topology(channel, "linx.jobs.custom")
+
+    queues = {item["queue"]: item for item in channel.queues}
+    assert "linx.jobs.custom" in queues
+    assert queues["linx.jobs.custom"]["arguments"] == {
+        "x-dead-letter-exchange": JOB_DLX,
+        "x-dead-letter-routing-key": PROVISIONING_DEAD,
+    }
+    assert (
+        "linx.jobs.custom",
+        JOB_EXCHANGE,
+        PROVISIONING_REQUESTED,
+    ) in {
+        (item["queue"], item["exchange"], item["routing_key"])
+        for item in channel.bindings
+    }

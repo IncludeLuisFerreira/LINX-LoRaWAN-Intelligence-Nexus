@@ -35,18 +35,17 @@ def test_openapi_exposes_applications_crud():
     assert {"get", "patch", "delete"} <= set(
         paths["/api/v1/tenant/{tenant_id}/applications/{application_id}"]
     )
-    assert (
-        "post"
-        in paths[
-            "/api/v1/tenant/{tenant_id}/applications/{application_id}"
-            "/provision"
-        ]
-    )
+    provision = paths[
+        "/api/v1/tenant/{tenant_id}/applications/{application_id}" "/provision"
+    ]
+    assert "post" in provision
+    assert "404" in provision["post"]["responses"]
 
 
 def test_openapi_exposes_job_status_endpoint():
     paths = _openapi()["paths"]
-    assert "get" in paths["/api/v1/tenant/{tenant_id}/jobs/{job_id}"]
+    status = paths["/api/v1/tenant/{tenant_id}/jobs/{job_id}"]["get"]
+    assert "404" in status["responses"]
 
 
 def test_openapi_schemas_have_id_uuid_and_name():

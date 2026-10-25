@@ -14,13 +14,19 @@ from linx_shared.models.job import Job
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from identity_api.config import settings
+
 
 def create_provisioning_job(
     db: Session,
     tenant_id: UUID,
     application_id: UUID,
+    max_attempts: int | None = None,
 ) -> Job:
     """Cria (ou reaproveita) o job de provisionamento da aplicação."""
+    attempts = (
+        settings.job_max_attempts if max_attempts is None else max_attempts
+    )
     deduplication_key = f"provisioning.application:{application_id}"
 
     active = get_active_job(db, deduplication_key)
@@ -37,6 +43,7 @@ def create_provisioning_job(
             deduplication_key=deduplication_key,
             exchange=JOB_EXCHANGE,
             routing_key=PROVISIONING_REQUESTED,
+            max_attempts=attempts,
         )
         db.commit()
     except IntegrityError:

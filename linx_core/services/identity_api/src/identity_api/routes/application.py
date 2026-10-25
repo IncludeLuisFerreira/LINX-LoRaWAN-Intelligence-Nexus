@@ -189,6 +189,11 @@ def get_application(
     "/{tenant_id}/applications/{application_id}/provision",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=JobAcceptedResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Tenant or application not found."
+        }
+    },
 )
 def provision_application(
     tenant_id: UUID,
@@ -216,7 +221,12 @@ def provision_application(
             detail="Application not found!",
         )
 
-    job = create_provisioning_job(db, tenant_id, application_id)
+    job = create_provisioning_job(
+        db,
+        tenant_id,
+        application_id,
+        settings.job_max_attempts,
+    )
     response.headers["Location"] = f"/api/v1/tenant/{tenant_id}/jobs/{job.id}"
 
     return JobAcceptedResponse(

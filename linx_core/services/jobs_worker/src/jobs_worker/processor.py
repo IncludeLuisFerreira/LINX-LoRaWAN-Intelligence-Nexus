@@ -7,7 +7,6 @@ from typing import Any
 from linx_shared.jobs.constants import (
     JOB_DLX,
     JOB_EVENTS_EXCHANGE,
-    PROVISIONING_DEAD,
     JobStatus,
 )
 from linx_shared.jobs.envelope import JobEnvelope, JobError, JobStatusEvent
@@ -16,9 +15,10 @@ from linx_shared.jobs.handlers import (
     PermanentJobError,
     TransientJobError,
 )
-from linx_shared.jobs.repository import claim_job
+from linx_shared.jobs.repository import claim_job, reschedule_not_due_job
 from linx_shared.models.job import Job
 from linx_shared.models.job_outbox import JobOutbox
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _db_now(session: Session) -> datetime:
+    return session.scalar(select(func.clock_timestamp())) or _utcnow()
 
 
 class JobProcessor:
@@ -60,7 +64,12 @@ class JobProcessor:
                 lock_seconds=self._lock_seconds,
             )
             if job is None:
-                session.rollback()
+                replayed = reschedule_not_due_job(session, envelope.job_id)
+                if replayed is not None:
+                    session.commit()
+                    outcome = "rescheduled"
+                else:
+                    session.rollback()
                 return
 
             attempt = job.attempts
@@ -197,7 +206,7 @@ class JobProcessor:
             exchange=exchange,
             routing_key=routing_key,
             payload=command.model_dump(mode="json"),
-            next_attempt_at=next_attempt_at or _utcnow(),
+            next_attempt_at=next_attempt_at or _db_now(session),
         )
         session.add(outbox)
         return outbox
@@ -217,7 +226,7 @@ class JobProcessor:
         envelope: JobEnvelope,
         result: dict[str, Any],
     ) -> None:
-        finished_at = _utcnow()
+        finished_at = _db_now(session)
         job.locked_until = None
         job.next_attempt_at = None
         self._event(
@@ -242,7 +251,7 @@ class JobProcessor:
 
         index = min(job.attempts - 1, len(self._retry_delays) - 1)
         delay = self._retry_delays[index] if self._retry_delays else 0
-        next_attempt_at = _utcnow() + timedelta(seconds=delay)
+        next_attempt_at = _db_now(session) + timedelta(seconds=delay)
 
         job.next_attempt_at = next_attempt_at
         job.locked_until = None
@@ -288,12 +297,12 @@ class JobProcessor:
                 retryable=False,
                 grpc_code=error.grpc_code,
             ),
-            finished_at=_utcnow(),
+            finished_at=_db_now(session),
         )
         self._command(
             session,
             job,
             envelope,
             exchange=JOB_DLX,
-            routing_key=PROVISIONING_DEAD,
+            routing_key=f"{job.type}.dead",
         )

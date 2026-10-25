@@ -10,7 +10,7 @@ from linx_shared.jobs.constants import (
 from linx_shared.jobs.envelope import JobEnvelope, JobError, JobStatusEvent
 from linx_shared.models.job import Job
 from linx_shared.models.job_outbox import JobOutbox
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,10 @@ EXPIRED_LEASE_CODE = "lease_expired"
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _db_now(session: Session) -> datetime:
+    return session.scalar(select(func.clock_timestamp())) or _utcnow()
 
 
 class JobReaper:
@@ -38,7 +42,7 @@ class JobReaper:
         session = self._session_factory()
         try:
             jobs = self._expired_jobs(session)
-            now = _utcnow()
+            now = _db_now(session)
             for job in jobs:
                 self._recover(session, job, now)
             session.commit()
@@ -64,12 +68,11 @@ class JobReaper:
 
     @staticmethod
     def _expired_jobs(session: Session) -> list[Job]:
-        now = _utcnow()
         statement = (
             select(Job)
             .where(
                 Job.locked_until.is_not(None),
-                Job.locked_until < now,
+                Job.locked_until < func.clock_timestamp(),
                 Job.status.in_(
                     (JobStatus.PENDING.value, JobStatus.RUNNING.value)
                 ),

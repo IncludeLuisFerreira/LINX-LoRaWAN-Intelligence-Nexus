@@ -137,3 +137,9 @@ def test_db_base_import_registers_models():
         "'tenant', 'tenant_user', 'user']"
     )
     assert result.stdout.strip() == expected
+
+
+def test_job_outbox_has_quarantine_columns():
+    columns = JobOutbox.__table__.c
+    assert columns.failed_at.nullable is True
+    assert columns.last_error.nullable is True

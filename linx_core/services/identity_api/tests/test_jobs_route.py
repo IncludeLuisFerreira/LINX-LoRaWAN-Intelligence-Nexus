@@ -21,6 +21,7 @@ def _seed_job(
     *,
     status: str,
     result: dict | None = None,
+    error: dict | None = None,
 ) -> Job:
     tenant = Tenant(name="Tenant Jobs")
     db_session.add(tenant)
@@ -37,6 +38,7 @@ def _seed_job(
         command_routing_key=PROVISIONING_REQUESTED,
         deduplication_key=f"seed:{uuid4()}",
         result=result,
+        error=error,
     )
     db_session.add(job)
     db_session.commit()
@@ -73,3 +75,20 @@ def test_get_unknown_job_returns_404(db_session):
     response = client.get(_job_url(job.tenant_id, uuid4()))
 
     assert response.status_code == 404
+
+
+def test_failed_job_returns_error(db_session):
+    error = {
+        "code": "provisioner_unavailable",
+        "message": "Provisioner error: unavailable",
+        "retryable": True,
+        "grpc_code": "UNAVAILABLE",
+    }
+    job = _seed_job(db_session, status="failed", error=error)
+
+    response = client.get(_job_url(job.tenant_id, job.id))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["error"] == error

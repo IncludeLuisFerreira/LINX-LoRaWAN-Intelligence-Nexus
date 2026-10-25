@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from linx_shared.jobs.constants import JobStatus
@@ -17,6 +17,10 @@ _TERMINAL_STATUSES = frozenset(
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _db_now(session: Session) -> datetime:
+    return session.scalar(select(func.clock_timestamp())) or _utcnow()
 
 
 def _lock_job(session: Session, job_id: UUID) -> Job | None:
@@ -101,7 +105,7 @@ def claim_job(
     *,
     lock_seconds: int,
 ) -> Job | None:
-    now = _utcnow()
+    now = _db_now(session)
     job = _lock_job(session, job_id)
     if job is None:
         return None
@@ -116,6 +120,32 @@ def claim_job(
     if job.started_at is None:
         job.started_at = now
     job.locked_until = now + timedelta(seconds=lock_seconds)
+    return job
+
+
+def reschedule_not_due_job(
+    session: Session,
+    job_id: UUID,
+) -> Job | None:
+    """Reagenda um comando entregue cedo demais, evitando perda no ack."""
+    job = _lock_job(session, job_id)
+    if job is None or job.status in _TERMINAL_STATUSES:
+        return None
+    now = _db_now(session)
+    if job.locked_until is not None and job.locked_until > now:
+        return None
+    if job.next_attempt_at is None or job.next_attempt_at <= now:
+        return None
+
+    session.add(
+        JobOutbox(
+            job_id=job.id,
+            exchange=job.command_exchange,
+            routing_key=job.command_routing_key,
+            payload=_envelope_payload(job, None),
+            next_attempt_at=job.next_attempt_at,
+        )
+    )
     return job
 
 
@@ -146,8 +176,10 @@ def apply_status_event(
         return job
     if job.status in _TERMINAL_STATUSES and event.status.value != job.status:
         return job
+    if job.status in _TERMINAL_STATUSES and event.status.value == job.status:
+        return job
 
-    now = _utcnow()
+    now = _db_now(session)
     if event.status == JobStatus.RUNNING:
         if job.next_attempt_at is not None and job.next_attempt_at > now:
             return job

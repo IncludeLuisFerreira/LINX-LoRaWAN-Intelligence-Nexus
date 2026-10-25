@@ -363,7 +363,8 @@ Resposta esperada (`200`):
 | `WORKER_QUEUE`       | Fila de comandos de provisionamento.                             | `linx.jobs.provisioning`        |
 | `WORKER_CONCURRENCY` | Threads de consumo do worker.                                    | `4`                             |
 | `WORKER_PREFETCH`    | Prefetch QoS por consumidor.                                     | `4`                             |
-| `JOB_MAX_ATTEMPTS`   | Tentativas antes de mandar o job para a DLQ.                     | `3`                             |
+| `JOB_MAX_ATTEMPTS`   | Tentativas máximas gravadas no job pelo `identity_api`.          | `3`                             |
+| `OUTBOX_MAX_ATTEMPTS` | Tentativas de publicação antes da quarentena da outbox.         | `10`                            |
 | `JOB_LOCK_SECONDS`   | Duração do lease de um job em execução.                          | `60`                            |
 | `JOB_REAPER_INTERVAL_SECONDS` | Intervalo de varredura de leases expirados.             | `60`                            |
 | `PROVISIONER_GRPC_HOST` | Endereço gRPC do provisioner visto pelo `jobs_worker`.        | `localhost:50052` (Compose: `docker_provisioner:50052`) |
