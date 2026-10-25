@@ -26,8 +26,8 @@ export interface ProvisioningStatusState {
  * O polling continua enquanto o status for `PENDING` ou `PROVISIONING` e para
  * ao atingir `RUNNING` ou `ERROR`. O intervalo é limpo ao desmontar ou quando
  * o `appId` muda. Falhas de rede são toleradas individualmente, mas falhas
- * consecutivas (`MAX_CONSECUTIVE_FAILURES`) interrompem o polling e são
- * sinalizadas em `error`.
+ * consecutivas (`MAX_CONSECUTIVE_FAILURES`) interrompem o polling, limpam o
+ * intervalo e são sinalizadas em `error`.
  */
 export function useProvisioningStatus(
   appId: string,
@@ -61,7 +61,9 @@ export function useProvisioningStatus(
 
       inFlight = true;
       setState((prev) =>
-        prev.appId === appId ? { ...prev, loading: true } : prev,
+        prev.appId === appId
+          ? { ...prev, loading: true }
+          : { appId, status: null, loading: true, error: null },
       );
 
       try {
@@ -85,7 +87,10 @@ export function useProvisioningStatus(
             ? { appId, status: prev.status, loading: false, error: getErrorMessage(error) }
             : prev,
         );
-        if (failures >= MAX_CONSECUTIVE_FAILURES) stopped = true;
+        if (failures >= MAX_CONSECUTIVE_FAILURES) {
+          stopped = true;
+          stop();
+        }
       } finally {
         inFlight = false;
       }

@@ -133,6 +133,7 @@ describe('useProvisioningStatus', () => {
     await advance(PROVISIONING_POLL_INTERVAL_MS * 2);
 
     expect(mockedGetStatus).toHaveBeenCalledTimes(MAX_CONSECUTIVE_FAILURES);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('discards a resolved request after unmount', async () => {
