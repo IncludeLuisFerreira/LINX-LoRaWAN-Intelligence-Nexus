@@ -4,12 +4,14 @@
 # - publica as portas em offsets de teste (loopback);
 # - fixa o APP_ID de teste e aponta o consumer para as credenciais
 #   administrativas do broker (sem provisionamento por-tenant);
+# - o Mosquitto vem do stack infra (ver conftest.py), compartilhado via
+#   `linx-network`;
 # - a stack é subida com:
 #     docker compose -p lynx-integration \
 #       --env-file telemetry/test.env \
 #       -f ../../deploy/docker-compose.yml \
 #       -f telemetry/docker-compose.override.yml \
-#       up -d --build --wait mosquitto rabbitmq timescaledb telemetry_consumer routing
+#       up -d --build --wait rabbitmq timescaledb telemetry_consumer routing
 
 services:
   rabbitmq:
@@ -17,10 +19,6 @@ services:
     ports: !override
       - "127.0.0.1:5673:5672"
       - "127.0.0.1:15673:15672"
-
-  mosquitto:
-    ports: !override
-      - "127.0.0.1:11883:1883"
 
   telemetry_consumer:
     environment:

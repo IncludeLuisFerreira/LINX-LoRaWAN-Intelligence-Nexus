@@ -1,0 +1,10 @@
+# Override da stack infra para os testes de integração.
+#
+# Publica o Mosquitto em uma porta de teste, evitando conflito com uma stack
+# infra já em execução no host. O routing e os probes internos continuam usando
+# `mosquitto:1883` dentro da rede `linx-network`.
+
+services:
+  mosquitto:
+    ports: !override
+      - "127.0.0.1:11883:1883"
