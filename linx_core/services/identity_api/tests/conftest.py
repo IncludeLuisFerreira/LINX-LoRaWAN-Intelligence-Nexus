@@ -10,6 +10,10 @@ import pytest
 os.environ.setdefault(
     "DATABASE_URL", "postgresql+psycopg://linx:ci-db-pass@localhost:5432/linx"
 )
+os.environ.setdefault(
+    "RABBITMQ_AMQP_URL",
+    "amqp://linx:ci-rabbit-pass@localhost:5672/",
+)
 os.environ.setdefault("RABBITMQ_ADMIN_PASSWORD", "ci-rabbit-admin-pass")
 os.environ.setdefault("RABBITMQ_TENANT_SECRET", "ci-rabbit-tenant-secret")
 

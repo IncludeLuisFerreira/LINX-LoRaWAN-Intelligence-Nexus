@@ -22,10 +22,15 @@ linx_core/
 │   │   ├── Dockerfile
 │   │   ├── src/agent_bridge/  # server.py + config.py
 │   │   └── tests/
-│   └── docker_provisioner/    # microserviço gRPC (DockerProvisioner) → :50052
+│   ├── docker_provisioner/    # microserviço gRPC (DockerProvisioner) → :50052
+│   │   ├── pyproject.toml
+│   │   ├── Dockerfile
+│   │   ├── src/docker_provisioner/  # server.py + docker_service.py
+│   │   └── tests/
+│   └── jobs_worker/           # worker assíncrono (RabbitMQ) — sem porta HTTP
 │       ├── pyproject.toml
 │       ├── Dockerfile
-│       ├── src/docker_provisioner/  # server.py + docker_service.py
+│       ├── src/jobs_worker/   # main.py + processor.py + handlers/
 │       └── tests/
 │
 ├── shared/                    # biblioteca compartilhada (linx_shared)
@@ -38,10 +43,27 @@ linx_core/
 │       └── grpc/              # stubs dos contratos AgentBridge/DockerProvisioner
 │
 ├── alembic.ini
-├── docker-compose.yml         # sobe db + identity_api + agent_bridge + docker_provisioner
+├── docker-compose.yml         # db + rabbitmq + identity_api + agent_bridge + docker_provisioner + jobs_worker
 ├── scripts/deploy.sh
 └── .env.example
 ```
+
+Arquitetura do fluxo assíncrono de provisionamento:
+
+```
+identity_api ──(job + outbox)──> Postgres
+      │                              │
+      │                              └── outbox relay ──> RabbitMQ (linx.jobs.provisioning)
+      │                                                        │
+      └── GET /jobs/{id} <── Postgres <── status events <── jobs_worker
+                                                                 │
+                                                                 └── gRPC ──> docker_provisioner ──> Docker
+```
+
+O `identity_api` responde `202 Accepted` sem esperar o container. O
+`jobs_worker` consome a fila, executa o handler e publica eventos de status,
+que ele mesmo persiste no Postgres. Mensagens carregam apenas IDs e payload
+mínimo — nunca senhas ou tokens.
 
 > O código que antes ficava em `src/linx/` foi redistribuído: o que era comum
 > virou `linx_shared`, o REST virou `identity_api` e o gRPC virou
@@ -69,7 +91,8 @@ Serviço FastAPI com os recursos de identidade/catálogo:
 |  `GET`  | `/api/v1/tenant/{id}/applications/{app_id}` | Busca uma application.                |
 | `PATCH` | `/api/v1/tenant/{id}/applications/{app_id}` | Atualiza parcialmente uma application.|
 | `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}` | Remove uma application (`204`).       |
-| `POST`  | `/api/v1/tenant/{id}/applications/{app_id}/provision` | Provisiona o container Docker da application via gRPC. |
+| `POST`  | `/api/v1/tenant/{id}/applications/{app_id}/provision` | Enfileira o provisionamento assíncrono do container (`202 Accepted`). |
+|  `GET`  | `/api/v1/tenant/{id}/jobs/{job_id}`        | Consulta o status do job de provisionamento.      |
 | `POST`  | `/api/v1/devices`                          | Cria um device (`201`) e provisiona no ChirpStack. |
 |  `GET`  | `/api/v1/devices?app_id={id}`              | Lista os devices de uma application.               |
 | `DELETE`| `/api/v1/devices/{id}`                     | Remove um device (`204`) e deleta no ChirpStack.   |
@@ -93,67 +116,106 @@ Serviço interno que cria e reaproveita containers Docker por aplicação. É o
 
 | RPC | Direção | Uso |
 | --- | ------- | --- |
-| `ProvisionApplication` | identity_api → docker_provisioner | Cria/reaproveita o container da aplicação e devolve porta/rede. |
+| `ProvisionApplication` | jobs_worker → docker_provisioner | Cria/reaproveita o container da aplicação e devolve porta/rede. |
 
 Contrato em `proto/linx_docker_provisioner.proto`. A chamada exige o metadado
 `authorization: Bearer <SERVICE_TOKEN>` e a porta não é publicada no host.
 
-## Provisionamento Docker (issue #58)
+## Provisionamento assíncrono (issue #58)
 
-Fluxo do endpoint:
+O endpoint `POST .../provision` não executa mais o provisioner de forma
+síncrona. Ele cria um **job durável** e uma linha de **outbox** na mesma
+transação, responde `202 Accepted` com `Location` e deixa a execução para o
+`jobs_worker`.
+
+Fluxo:
 
 1. `identity_api` valida o `tenant_id` e a `application_id` no Postgres.
-2. Chama o `docker_provisioner` por gRPC com apenas o `app_id`.
-3. O provisioner:
-   - reutiliza o container se já existir label `linx.application.id`;
-   - cria/reutiliza a rede `linx-app-<app_id>`;
-   - sorteia uma porta no range `8100–9100` (`secrets.SystemRandom`), consulta
-     portas publicadas no Docker e re-tenta se o daemon rejeitar uma porta já
-     alocada;
-   - sobe a imagem `PROVISION_IMAGE` em `0.0.0.0:<porta>`;
-   - injeta `APP_ID`, `DB_PASSWORD`, `MQTT_TOPIC` e `SERVICE_TOKEN`.
-4. A resposta HTTP devolve `container_id`, `port`, `network`, `image`,
-   `status`, `created` e `mqtt_topic`. `DB_PASSWORD` nunca é retornado.
+2. Cria (ou reaproveita um job ativo com a mesma `deduplication_key`) e grava a
+   mensagem na tabela `job_outbox`.
+3. O relay da outbox publica o comando em `linx.jobs.provisioning` no RabbitMQ.
+4. O `jobs_worker` faz o claim do job com lease, chama o
+   `docker_provisioner` por gRPC e grava eventos de status na outbox.
+5. O mesmo worker consome `linx.jobs.status` e persiste o estado final no
+   Postgres. O cliente consulta `GET /api/v1/tenant/{id}/jobs/{job_id}`.
+
+Máquina de estados:
+
+```
+pending ──claim──> running ──sucesso──> succeeded
+   ^                  │
+   └──retry (5s/30s/120s)──┘
+                      │
+                      └──falha permanente/max_attempts──> failed
+```
+
+- `pending`: aguardando consumo (ou agendado para retry).
+- `running`: job com lease ativo; o reaper devolve leases expirados para
+  `pending` e agenda retry.
+- `succeeded`: resultado gravado em `result`.
+- `failed`: erro estruturado em `error` (`code`, `message`, `retryable`,
+  `grpc_code`); a mensagem vai para a DLQ.
+
+O provisioner:
+
+- reutiliza o container se já existir label `linx.application.id`;
+- cria/reutiliza a rede `linx-app-<app_id>`;
+- sorteia uma porta no range `8100–9100` (`secrets.SystemRandom`), consulta
+  portas publicadas no Docker e re-tenta se o daemon rejeitar uma porta já
+  alocada;
+- sobe a imagem `PROVISION_IMAGE` em `0.0.0.0:<porta>`;
+- injeta `APP_ID`, `DB_PASSWORD`, `MQTT_TOPIC` e `SERVICE_TOKEN`.
 
 Request de exemplo:
 
 ```bash
 TOKEN="$(grep '^SERVICE_TOKEN=' .env | cut -d= -f2-)"
-curl -X POST \
+curl -i -X POST \
   "http://localhost:8000/api/v1/tenant/$TENANT_ID/applications/$APP_ID/provision" \
   -H "X-Service-Token: $TOKEN"
 ```
 
-Resposta (`201` na criação, `200` quando o container já existia):
+Resposta (`202 Accepted`):
 
 ```json
 {
-  "container_id": "3f1c...",
-  "port": 8421,
-  "network": "linx-app-<app_id>",
-  "image": "linx-tenant-app:latest",
-  "status": "running",
-  "created": true,
-  "mqtt_topic": "application/<app_id>/device/+/event/up"
+  "job_id": "0f8f...",
+  "application_id": "3f1c...",
+  "status": "pending",
+  "created_at": "2026-10-24T12:00:00Z"
 }
 ```
 
-Códigos de erro: `401` sem token, `404` tenant/app inexistente, `409` estado
-inconsistente no provisioner, `502` falha do Docker/provisioner, `503`
-indisponível ou sem porta livre e `504` timeout gRPC.
+Consulta de status:
 
-### Segurança do socket Docker
+```bash
+curl "http://localhost:8000/api/v1/tenant/$TENANT_ID/jobs/$JOB_ID" \
+  -H "X-Service-Token: $TOKEN"
+```
 
-O `docker_provisioner` monta `/var/run/docker.sock`, o que dá poder equivalente
-a root no host. Use apenas em ambiente controlado. O `DOCKER_GID` deve ser o
-GID do grupo dono do socket:
+Códigos de erro do endpoint: `401` sem token, `404` tenant/app inexistente.
+Falhas do worker aparecem como `status: "failed"` e no campo `error`; o
+provisioner pode devolver `409` (estado inconsistente), `503` (indisponível ou
+sem porta livre) e `504` (timeout gRPC), que o worker classifica como
+transitório ou permanente.
+
+### Segurança do socket Docker e das mensagens
+
+O `docker_provisioner` é o **único** serviço que monta `/var/run/docker.sock`,
+o que dá poder equivalente a root no host. Use apenas em ambiente controlado.
+O `DOCKER_GID` deve ser o GID do grupo dono do socket:
 
 ```bash
 stat -c '%g' /var/run/docker.sock
 ```
 
 Preencha `DOCKER_GID` no `.env` do `linx_core/`. O `identity_api` **não** monta
-o socket.
+o socket. O `jobs_worker` também **não** monta o socket: ele só fala com o
+provisioner via gRPC autenticado por `SERVICE_TOKEN`.
+
+As mensagens do RabbitMQ carregam apenas IDs, tipo de job e payload mínimo.
+Nunca incluem senhas, tokens ou credenciais de banco. O `SERVICE_TOKEN` é lido
+do ambiente do worker, não da mensagem.
 
 ## Desenvolvimento local
 
@@ -168,10 +230,15 @@ poetry -C shared install
 poetry -C services/identity_api install
 poetry -C services/agent_bridge install
 poetry -C services/docker_provisioner install
+poetry -C services/jobs_worker install
 ```
 
-Subir os três serviços de uma vez (carrega o `.env` da raiz e sobe REST + os
-dois servidores gRPC; `Ctrl+C` encerra todos):
+Antes de subir o worker em modo host, inicie um RabbitMQ acessível em
+`RABBITMQ_AMQP_URL` (por exemplo, `docker compose up -d rabbitmq`; a UI de
+gestão fica em `http://localhost:15672`).
+
+Subir os quatro serviços de uma vez (carrega o `.env` da raiz e sobe REST, os
+dois servidores gRPC e o worker; `Ctrl+C` encerra todos):
 
 ```bash
 poetry run task run
@@ -183,6 +250,7 @@ Ou individualmente:
 poetry -C services/identity_api run uvicorn identity_api.main:app --reload
 poetry -C services/agent_bridge run python -m agent_bridge.server
 poetry -C services/docker_provisioner run python -m docker_provisioner.server
+poetry -C services/jobs_worker run python -m jobs_worker.main
 ```
 
 > `poetry -C <serviço>` executa o comando com o diretório de trabalho do
@@ -193,13 +261,13 @@ poetry -C services/docker_provisioner run python -m docker_provisioner.server
 
 | Task         | Ação                                                          |
 | ------------ | ------------------------------------------------------------- |
-| `run`        | Sobe `identity_api` + `agent_bridge` + `docker_provisioner`.  |
+| `run`        | Sobe `identity_api` + `agent_bridge` + `docker_provisioner` + `jobs_worker`. |
 | `run-docker` | `docker compose up --build` (foreground).                     |
 | `up`         | `docker compose up -d --build`.                               |
 | `down`       | `docker compose down`.                                        |
 | `migrate`    | Aplica as migrations do Alembic (`upgrade head`).             |
 | `migration`  | Gera nova migration (`revision --autogenerate -m "<msg>"`).   |
-| `test`       | Roda os testes dos quatro pacotes.                            |
+| `test`       | Roda os testes dos cinco pacotes.                             |
 
 ### Testes
 
@@ -211,6 +279,7 @@ poetry -C shared run pytest
 poetry -C services/identity_api run pytest   # exige Postgres em localhost:5432
 poetry -C services/agent_bridge run pytest   # exige Postgres em localhost:5432
 poetry -C services/docker_provisioner run pytest  # não exige Docker real
+poetry -C services/jobs_worker run pytest    # exige Postgres; RabbitMQ é fake nos testes
 ```
 
 ## Banco de dados e migrações
@@ -249,18 +318,22 @@ bash scripts/gen_proto.sh
 
 ## Docker / Deploy
 
-O `docker-compose.yml` sobe quatro serviços: `db` (Postgres), `identity_api`,
-`agent_bridge` e `docker_provisioner`.
+O `docker-compose.yml` sobe seis serviços: `db` (Postgres), `rabbitmq`,
+`identity_api`, `agent_bridge`, `docker_provisioner` e `jobs_worker`. O worker
+depende do Postgres saudável, do RabbitMQ saudável e do provisioner iniciado.
 
 ```bash
 # a partir da raiz: builda a imagem mínima usada no provisionamento
 make build-tenant-image
 
 cd linx_core
-cp .env.example .env   # ajuste POSTGRES_PASSWORD, SERVICE_TOKEN e DOCKER_GID
+cp .env.example .env   # ajuste POSTGRES_PASSWORD, RABBITMQ_ADMIN_PASSWORD, SERVICE_TOKEN e DOCKER_GID
 docker compose up -d --build
 curl -i http://localhost:8000/health
 ```
+
+A UI de gestão do RabbitMQ fica em `http://localhost:15672` (usuário
+`RABBITMQ_ADMIN_USER`). Não publique as portas `5672`/`15672` na internet.
 
 Resposta esperada (`200`):
 
@@ -284,8 +357,17 @@ Resposta esperada (`200`):
 | `CHIRPSTACK_DEVICE_PROFILE_ID` | UUID do Device Profile usado ao provisionar devices.  | *(vazio)*                       |
 | `SERVICE_TOKEN`      | Token do plano de controle e da chamada gRPC (mín. 32 chars).    | *(obrigatório)*                 |
 | `DOCKER_GID`         | GID do grupo dono de `/var/run/docker.sock`.                     | `990`                           |
-| `PROVISIONER_GRPC_HOST` | Endereço gRPC do provisioner visto pelo `identity_api`.        | `localhost:50052` (Compose: `docker_provisioner:50052`) |
-| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | Timeout da chamada gRPC.                             | `10`                            |
+| `RABBITMQ_ADMIN_USER` | Usuário admin do broker (Compose).                              | `linx`                          |
+| `RABBITMQ_ADMIN_PASSWORD` | Senha admin do broker (obrigatória no Compose).             | `change-me-in-production`       |
+| `RABBITMQ_AMQP_URL`  | URL AMQP consumida pelo `jobs_worker`.                           | `amqp://linx:...@localhost:5672/` |
+| `WORKER_QUEUE`       | Fila de comandos de provisionamento.                             | `linx.jobs.provisioning`        |
+| `WORKER_CONCURRENCY` | Threads de consumo do worker.                                    | `4`                             |
+| `WORKER_PREFETCH`    | Prefetch QoS por consumidor.                                     | `4`                             |
+| `JOB_MAX_ATTEMPTS`   | Tentativas antes de mandar o job para a DLQ.                     | `3`                             |
+| `JOB_LOCK_SECONDS`   | Duração do lease de um job em execução.                          | `60`                            |
+| `JOB_REAPER_INTERVAL_SECONDS` | Intervalo de varredura de leases expirados.             | `60`                            |
+| `PROVISIONER_GRPC_HOST` | Endereço gRPC do provisioner visto pelo `jobs_worker`.        | `localhost:50052` (Compose: `docker_provisioner:50052`) |
+| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | Timeout da chamada gRPC do worker.                   | `10`                            |
 | `PROVISION_IMAGE`    | Imagem Docker provisionada por aplicação.                        | `linx-tenant-app:latest`        |
 | `PROVISION_PORT_MIN` | Início do range de portas publicado no host.                     | `8100`                          |
 | `PROVISION_PORT_MAX` | Fim do range de portas publicado no host.                        | `9100`                          |

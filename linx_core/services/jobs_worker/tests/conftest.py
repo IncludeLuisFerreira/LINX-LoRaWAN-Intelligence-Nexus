@@ -12,7 +12,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault(
     "RABBITMQ_AMQP_URL",
-    "amqp://rabbit@127.0.0.1:5672/",
+    "amqp://linx:ci-rabbit-pass@localhost:5672/",
 )
 os.environ.setdefault(
     "SERVICE_TOKEN",
