@@ -91,6 +91,11 @@ services:
     depends_on:
       mosquitto-init:
         condition: service_completed_successfully
+    networks:
+      # O routing do stack deploy entra nesta rede externa para consumir os
+      # uplinks publicados pelo ChirpStack (#188).
+      - default
+      - linx-network
 
   # One-shot: garante que mosquitto.passwd exista antes de subir o broker
   # (allow_anonymous false exige password_file). Em dev, gera com as mesmas
@@ -123,6 +128,12 @@ services:
       - MQTT_HEALTHCHECK_PASSWORD=${MQTT_HEALTHCHECK_PASSWORD:?defina em infra/.env (veja .env.example)}
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+
+networks:
+  # Rede compartilhada com o stack deploy. Criada por
+  # deploy/scripts/bootstrap-network.sh antes de subir os stacks.
+  linx-network:
+    external: true
 
 volumes:
   postgresqldata:

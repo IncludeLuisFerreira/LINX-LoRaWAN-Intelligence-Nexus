@@ -77,14 +77,14 @@ make up
 ou
 
 ```bash
-cd infra
-docker compose up -d
+bash deploy/scripts/bootstrap-network.sh   # cria a rede compartilhada
+docker compose -f infra/docker-compose.yml up -d
 ```
 
 Verifique se todos os contêineres estão saudáveis:
 
 ```bash
-docker compose ps
+docker compose -f infra/docker-compose.yml ps
 ```
 
 Acesse a UI em `http://localhost:8080` — login: `admin` / senha: `admin`.
@@ -167,6 +167,11 @@ volumes:
 ```
 
 > Os topic templates do gateway bridge usam o prefixo `au915_0` (região AU915).
+
+> O `mosquitto` do `infra` também entra na rede nomeada `linx-network`. O stack
+> `deploy` não sobe broker próprio: o `routing` consome esse Mosquitto pela rede
+> compartilhada (#188). Suba `infra` antes de `deploy`; `make up-infra` e
+> `make up-deploy` garantem a rede com `deploy/scripts/bootstrap-network.sh`.
 
 #### Referência: `configuration/chirpstack/chirpstack.toml`
 

@@ -32,9 +32,11 @@ help:
 # --- Infraestrutura base (ChirpStack v4 + MQTT + PostgreSQL) ---
 # `up`/`build`/`down`/`logs` mantêm o comportamento histórico (stack `infra/`).
 up: stop-all
+	bash deploy/scripts/bootstrap-network.sh
 	docker compose -f $(INFRA) up -d
 
 build:
+	bash deploy/scripts/bootstrap-network.sh
 	docker compose -f $(INFRA) up -d --build
 
 down:
@@ -44,6 +46,7 @@ logs:
 	docker compose -f $(INFRA) logs -f
 
 up-infra:
+	bash deploy/scripts/bootstrap-network.sh
 	docker compose -f $(INFRA) up -d
 down-infra:
 	docker compose -f $(INFRA) down
@@ -79,7 +82,9 @@ logs-client:
 	docker compose -f $(CLIENT) logs -f
 
 # --- Stack full-stack de produção (nginx + TLS + todos os serviços) ---
+# Garante a rede compartilhada com o stack infra antes de subir o routing.
 up-deploy:
+	bash deploy/scripts/bootstrap-network.sh
 	docker compose -f $(DEPLOY) up -d
 down-deploy:
 	docker compose -f $(DEPLOY) down
