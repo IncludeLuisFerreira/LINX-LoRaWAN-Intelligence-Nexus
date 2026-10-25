@@ -9,6 +9,17 @@ export interface ApplicationOutput {
   updated_at: string;
 }
 
+export const PROVISIONING_STATUS_VALUES = [
+  'PENDING',
+  'PROVISIONING',
+  'RUNNING',
+  'ERROR',
+] as const;
+
+/** Estados de provisionamento definidos pelo contrato da aplicação. */
+export type ProvisioningStatusValue =
+  (typeof PROVISIONING_STATUS_VALUES)[number];
+
 export interface CreateApplicationInput {
   name: string;
   description?: string;

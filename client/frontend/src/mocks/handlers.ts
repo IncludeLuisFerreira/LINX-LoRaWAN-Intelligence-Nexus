@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import type { ProvisioningStatusValue } from '../services/app';
 
 interface MockTenant {
   id: string;
@@ -49,6 +50,39 @@ const mockAppsByTenant: Record<string, MockApplication[]> = {
   ],
 };
 
+/**
+ * Simula a evolução do provisionamento no MSW. Sem override, cada consulta
+ * avança PENDING -> PROVISIONING -> RUNNING. Use a chave abaixo no
+ * localStorage para forçar um estado específico, inclusive ERROR.
+ */
+const MOCK_PROVISIONING_OVERRIDE_KEY = 'linx:mock-provisioning-status';
+const MOCK_PROVISIONING_SEQUENCE: ProvisioningStatusValue[] = [
+  'PENDING',
+  'PROVISIONING',
+  'RUNNING',
+];
+const mockProvisioningStep: Record<string, number> = {};
+
+function nextMockProvisioningStatus(appId: string): ProvisioningStatusValue {
+  const override = globalThis.localStorage?.getItem(
+    MOCK_PROVISIONING_OVERRIDE_KEY,
+  );
+  if (
+    override === 'PENDING' ||
+    override === 'PROVISIONING' ||
+    override === 'RUNNING' ||
+    override === 'ERROR'
+  ) {
+    return override;
+  }
+
+  const step = mockProvisioningStep[appId] ?? 0;
+  mockProvisioningStep[appId] = step + 1;
+  return MOCK_PROVISIONING_SEQUENCE[
+    Math.min(step, MOCK_PROVISIONING_SEQUENCE.length - 1)
+  ];
+}
+
 interface MockDevice {
   id: string;
   dev_eui: string;
@@ -62,9 +96,7 @@ interface MockDevice {
 
 const mockDevices: MockDevice[] = [];
 
-const mockDeviceProfiles = [
-  { id: crypto.randomUUID(), name: 'Perfil Teste' },
-];
+const mockDeviceProfiles = [{ id: crypto.randomUUID(), name: 'Perfil Teste' }];
 
 function findTenant(tenantId: string): MockTenant | undefined {
   return mockTenants.find((tenant) => tenant.id === tenantId);
@@ -175,34 +207,37 @@ export const handlers = [
     return HttpResponse.json(mockAppsByTenant[tenant.id] ?? []);
   }),
 
-  http.post('*/api/v1/tenant/:tenant_id/applications', async ({ params, request }) => {
-    const tenant = findTenant(String(params.tenant_id));
-    if (!tenant) return tenantNotFound();
+  http.post(
+    '*/api/v1/tenant/:tenant_id/applications',
+    async ({ params, request }) => {
+      const tenant = findTenant(String(params.tenant_id));
+      if (!tenant) return tenantNotFound();
 
-    const body = (await request.json()) as {
-      name: string;
-      description?: string;
-    };
-    const newApp: MockApplication = {
-      id: crypto.randomUUID(),
-      name: body.name,
-      description: body.description ?? '',
-      created_at: now(),
-      updated_at: now(),
-    };
-    const apps = mockAppsByTenant[tenant.id] ?? [];
-    apps.push(newApp);
-    mockAppsByTenant[tenant.id] = apps;
-    return HttpResponse.json(newApp, {
-      status: 201,
-      headers: {
-        Location: createdLocation(
-          request,
-          `/api/v1/tenant/${tenant.id}/applications/${newApp.id}`,
-        ),
-      },
-    });
-  }),
+      const body = (await request.json()) as {
+        name: string;
+        description?: string;
+      };
+      const newApp: MockApplication = {
+        id: crypto.randomUUID(),
+        name: body.name,
+        description: body.description ?? '',
+        created_at: now(),
+        updated_at: now(),
+      };
+      const apps = mockAppsByTenant[tenant.id] ?? [];
+      apps.push(newApp);
+      mockAppsByTenant[tenant.id] = apps;
+      return HttpResponse.json(newApp, {
+        status: 201,
+        headers: {
+          Location: createdLocation(
+            request,
+            `/api/v1/tenant/${tenant.id}/applications/${newApp.id}`,
+          ),
+        },
+      });
+    },
+  ),
 
   http.get(
     '*/api/v1/tenant/:tenant_id/applications/:application_id',
@@ -250,6 +285,15 @@ export const handlers = [
       return new HttpResponse(null, { status: 204 });
     },
   ),
+
+  http.get('*/api/v1/applications/:application_id/status', ({ params }) => {
+    const appId = String(params.application_id);
+    return HttpResponse.json({
+      app_id: appId,
+      status: nextMockProvisioningStatus(appId),
+      container_id: `mock-container-${appId}`,
+    });
+  }),
 
   // --- DEVICE PROFILES ---
   http.get('*/api/v1/device-profile/', ({ request }) => {

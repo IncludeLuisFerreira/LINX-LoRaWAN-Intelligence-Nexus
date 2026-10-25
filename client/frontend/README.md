@@ -93,6 +93,34 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 > (`identity_api/tests/test_openapi.py`). O `yaml` orienta o front; o `json` é a
 > fonte de verdade em runtime.
 
+## Status de provisionamento
+
+O componente `ProvisioningStatus` (`src/components/ProvisioningStatus.tsx`) é um
+badge de apresentação puro para os estados `PENDING`, `PROVISIONING`, `RUNNING`
+e `ERROR`, com os rótulos "Pendente", "Provisionando", "Em execução" e "Erro".
+O estado `PROVISIONING` usa `animate-pulse`; todos os estados exibem o rótulo
+textual, além da cor. O componente anuncia mudanças com `role="status"` e
+`aria-live="polite"`.
+
+O endpoint do backend ainda depende da issue #61 e o hook de polling
+(`useProvisioningStatus`, issue #55) ainda não está integrado à tela. Com o MSW
+habilitado (`VITE_ENABLE_MOCKS=true`), o handler simula a sequência
+`PENDING -> PROVISIONING -> RUNNING`. Para forçar um estado no desenvolvimento,
+defina no console do navegador:
+
+```js
+localStorage.setItem('linx:mock-provisioning-status', 'ERROR');
+```
+
+Recarregue a página para aplicar. Remova a chave para voltar à sequência:
+
+```js
+localStorage.removeItem('linx:mock-provisioning-status');
+```
+
+Sem MSW e sem o endpoint real, o hook de polling (issue #55) recebe 404 e o
+badge permanece oculto.
+
 ## Dashboard de Telemetria
 
 A rota `/dashboard/:appId` busca o histórico via

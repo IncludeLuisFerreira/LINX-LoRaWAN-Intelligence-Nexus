@@ -100,8 +100,9 @@ describe('loadApplicationsByTenant', () => {
   });
 
   it('treats a non-array response as an empty list', async () => {
-    const result = await loadApplicationsByTenant([tenant('a')], async () =>
-      null as never,
+    const result = await loadApplicationsByTenant(
+      [tenant('a')],
+      async () => null as never,
     );
 
     expect(result).toEqual({ a: [] });
