@@ -166,6 +166,27 @@ Limitação de escopo: o fallback só cobre o **device selecionado**. No modo
 **"Todos os devices"** o polling fica desativado, para não disparar N requisições
 globais por tick.
 
+## Status e última telemetria na aba Devices
+
+A aba **Devices** da aplicação mostra o status operacional de cada sensor. O
+front busca a telemetria mais recente por device com
+`GET /telemetry?dev_eui=<dev_eui>&limit=1` e mantém um polling único de 30s
+para todos os devices da tabela. Um device é exibido como **Online** quando a
+última telemetria tem menos de 60s; sem telemetria, com timestamp inválido ou
+com leitura mais antiga, aparece como **Offline**. A coluna **Última
+telemetria** exibe o timestamp formatado e os valores escalares do payload
+(`temperature: 24.5`, por exemplo).
+
+Falhas em uma consulta de telemetria são isoladas: o device continua na tabela
+como offline e a página não é substituída por um erro global. Cada atualização
+faz uma requisição por device; para aplicações com muitos sensores, um endpoint
+de telemetria em lote seria necessário.
+
+Limitação de infraestrutura: o `telemetry_consumer` responde apenas pela
+aplicação configurada no seu `APP_ID` e exige `X-Service-Token` injetado pelo
+proxy. Até o roteamento por aplicação das issues de provisionamento estar
+completo, devices de outra aplicação podem aparecer sempre offline.
+
 ## Nickname de device
 
 Cada device aceita um `nickname` opcional (até 50 caracteres), útil para
