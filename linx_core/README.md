@@ -38,7 +38,7 @@ linx_core/
 │   └── src/linx_shared/
 │       ├── core/config.py     # Settings (DATABASE_URL, DB_CONNECT_TIMEOUT)
 │       ├── db/                # engine, SessionLocal, get_db, Base
-│       ├── models/            # tenant, application, user, tenant_user, device_routes, devices
+│       ├── models/            # tenant, application, user, tenant_user, devices, jobs
 │       ├── schemas/           # schemas Pydantic da API
 │       └── grpc/              # stubs dos contratos AgentBridge/DockerProvisioner
 │
