@@ -5,40 +5,61 @@ import { latestTelemetry } from '../utils/deviceTelemetry';
 
 export const LATEST_TELEMETRY_POLL_INTERVAL_MS = 30_000;
 
+interface LatestTelemetryState {
+  key: string;
+  items: Record<string, TelemetryItem | null>;
+}
+
 const EMPTY_LATEST_TELEMETRY: Record<string, TelemetryItem | null> = {};
+const INITIAL_STATE: LatestTelemetryState = {
+  key: '',
+  items: EMPTY_LATEST_TELEMETRY,
+};
 
 export function useLatestTelemetry(
   devices: DeviceOutput[],
   intervalMs: number = LATEST_TELEMETRY_POLL_INTERVAL_MS,
 ): Record<string, TelemetryItem | null> {
-  const deviceKey = [...new Set(devices.map((device) => device.dev_eui))]
-    .sort()
-    .join('|');
-  const [latest, setLatest] = useState<Record<string, TelemetryItem | null>>(
-    {},
-  );
+  const devEuis = [...new Set(devices.map((device) => device.dev_eui))].sort();
+  const deviceKey = JSON.stringify(devEuis);
+  const [state, setState] = useState<LatestTelemetryState>(INITIAL_STATE);
 
   useEffect(() => {
-    const devEuis = deviceKey ? deviceKey.split('|') : [];
-    if (devEuis.length === 0) return;
+    const currentDevEuis = JSON.parse(deviceKey) as string[];
+    if (currentDevEuis.length === 0) return;
 
     let active = true;
+    let inFlight = false;
 
     const fetchAll = async () => {
-      const results = await Promise.allSettled(
-        devEuis.map((devEui) => telemetryService.history(devEui, { limit: 1 })),
-      );
-      if (!active) return;
+      if (inFlight) return;
+      inFlight = true;
 
-      const next: Record<string, TelemetryItem | null> = {};
-      devEuis.forEach((devEui, index) => {
-        const result = results[index];
-        next[devEui] =
-          result.status === 'fulfilled'
-            ? latestTelemetry(result.value.items)
-            : null;
-      });
-      setLatest(next);
+      try {
+        const results = await Promise.allSettled(
+          currentDevEuis.map((devEui) =>
+            telemetryService.history(devEui, { limit: 1 }),
+          ),
+        );
+        if (!active) return;
+
+        setState((previous) => {
+          const base = previous.key === deviceKey ? previous.items : {};
+          const items: Record<string, TelemetryItem | null> = {};
+
+          currentDevEuis.forEach((devEui, index) => {
+            const result = results[index];
+            items[devEui] =
+              result.status === 'fulfilled'
+                ? latestTelemetry(result.value.items)
+                : (base[devEui] ?? null);
+          });
+
+          return { key: deviceKey, items };
+        });
+      } finally {
+        inFlight = false;
+      }
     };
 
     void fetchAll();
@@ -52,5 +73,5 @@ export function useLatestTelemetry(
     };
   }, [deviceKey, intervalMs]);
 
-  return deviceKey ? latest : EMPTY_LATEST_TELEMETRY;
+  return state.key === deviceKey ? state.items : EMPTY_LATEST_TELEMETRY;
 }

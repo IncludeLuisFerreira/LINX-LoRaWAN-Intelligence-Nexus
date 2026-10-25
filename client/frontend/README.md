@@ -174,13 +174,16 @@ front busca a telemetria mais recente por device com
 para todos os devices da tabela. Um device é exibido como **Online** quando a
 última telemetria tem menos de 60s; sem telemetria, com timestamp inválido ou
 com leitura mais antiga, aparece como **Offline**. A coluna **Última
-telemetria** exibe o timestamp formatado e os valores escalares do payload
-(`temperature: 24.5`, por exemplo).
+telemetria** exibe o timestamp formatado e os valores escalares do payload em
+formato pt-BR (`temperature: 24,5`, por exemplo). Enquanto a primeira resposta
+de telemetria de um device não chega, as colunas novas exibem `…`.
 
-Falhas em uma consulta de telemetria são isoladas: o device continua na tabela
-como offline e a página não é substituída por um erro global. Cada atualização
-faz uma requisição por device; para aplicações com muitos sensores, um endpoint
-de telemetria em lote seria necessário.
+Falhas em uma consulta de telemetria são isoladas por device. Se uma atualização
+falhar, a última leitura conhecida é preservada e expira sozinha pela janela de
+60s; a página não é substituída por um erro global. Cada onda de polling faz
+uma requisição por device e não inicia outra enquanto a anterior estiver em
+andamento. Para aplicações com muitos sensores, um endpoint de telemetria em
+lote seria necessário.
 
 Limitação de infraestrutura: o `telemetry_consumer` responde apenas pela
 aplicação configurada no seu `APP_ID` e exige `X-Service-Token` injetado pelo

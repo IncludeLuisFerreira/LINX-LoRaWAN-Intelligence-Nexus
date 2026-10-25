@@ -164,7 +164,17 @@ export default function ApplicationDetailPage() {
       key: 'status',
       header: 'Status',
       render: (device) => {
-        const last = latestTelemetryByDevEui[device.dev_eui] ?? null;
+        const last = latestTelemetryByDevEui[device.dev_eui];
+        if (last === undefined) {
+          return (
+            <span
+              aria-label="Carregando status do device"
+              className="text-muted"
+            >
+              …
+            </span>
+          );
+        }
         const online = isDeviceOnline(last);
         return (
           <Badge color={online ? 'green' : 'red'}>
@@ -177,7 +187,17 @@ export default function ApplicationDetailPage() {
       key: 'last_telemetry',
       header: 'Última telemetria',
       render: (device) => {
-        const last = latestTelemetryByDevEui[device.dev_eui] ?? null;
+        const last = latestTelemetryByDevEui[device.dev_eui];
+        if (last === undefined) {
+          return (
+            <span
+              aria-label="Carregando última telemetria"
+              className="text-muted"
+            >
+              …
+            </span>
+          );
+        }
         if (!last) return '—';
         return (
           <div className="space-y-1">

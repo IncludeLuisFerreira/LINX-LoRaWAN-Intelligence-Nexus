@@ -152,7 +152,7 @@ describe('ApplicationDetailPage', () => {
       await within(row as HTMLElement).findByText('Online'),
     ).toBeInTheDocument();
     expect(
-      within(row as HTMLElement).getByText(/temperature: 24\.5/),
+      within(row as HTMLElement).getByText(/temperature: 24,5/),
     ).toBeInTheDocument();
   });
 
@@ -234,5 +234,59 @@ describe('ApplicationDetailPage', () => {
     ).toBeInTheDocument();
     expect(within(row as HTMLElement).getByText('—')).toBeInTheDocument();
     expect(screen.queryByText('telemetry down')).not.toBeInTheDocument();
+  });
+
+  it('shows a loading affordance before the first telemetry response', async () => {
+    const { tenantId, appId } = await firstTenantAndApp();
+    const devEui = 'aabbccddeeff1808';
+    await createDevice(appId, devEui, 'Sensor Carregando');
+    let releaseTelemetry: (() => void) | undefined;
+
+    server.use(
+      http.get('*/api/v1/telemetry', ({ request }) => {
+        const requested = new URL(request.url).searchParams.get('dev_eui');
+        if (requested !== devEui) {
+          return HttpResponse.json({ items: [], next_cursor: null });
+        }
+        return new Promise<Response>((resolve) => {
+          releaseTelemetry = () =>
+            resolve(
+              HttpResponse.json({
+                items: [
+                  {
+                    time: new Date().toISOString(),
+                    dev_eui: devEui,
+                    payload: { temperature: 24.5 },
+                    rssi: -70,
+                    snr: 7,
+                    app_id: appId,
+                    event_type: 'up',
+                  },
+                ],
+                next_cursor: null,
+              }),
+            );
+        });
+      }),
+    );
+
+    renderDetail(tenantId, appId);
+    const row = (await screen.findByText(devEui)).closest('tr');
+    expect(row).not.toBeNull();
+
+    expect(
+      await within(row as HTMLElement).findByLabelText(
+        'Carregando status do device',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(row as HTMLElement).getByLabelText('Carregando última telemetria'),
+    ).toBeInTheDocument();
+    expect(releaseTelemetry).toBeDefined();
+
+    releaseTelemetry?.();
+    expect(
+      await within(row as HTMLElement).findByText('Online'),
+    ).toBeInTheDocument();
   });
 });

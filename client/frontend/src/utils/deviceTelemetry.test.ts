@@ -87,7 +87,16 @@ describe('formatTelemetryValue', () => {
         status: 'ok',
         alarm: false,
       }),
-    ).toBe('temperature: 24.5 · humidity: 55 · status: ok · alarm: false');
+    ).toBe('temperature: 24,5 · humidity: 55 · status: ok · alarm: false');
+  });
+
+  it('rounds floating point noise with pt-BR formatting', () => {
+    expect(
+      formatTelemetryValue({
+        temperature: 24.100000001,
+        humidity: 55.25,
+      }),
+    ).toBe('temperature: 24,1 · humidity: 55,25');
   });
 
   it('ignores nested objects and arrays', () => {
@@ -96,6 +105,15 @@ describe('formatTelemetryValue', () => {
         nested: { value: 1 },
         list: [1, 2],
       }),
+    ).toBe('—');
+  });
+
+  it('returns a dash for a non-object payload', () => {
+    expect(
+      formatTelemetryValue('oops' as unknown as Record<string, unknown>),
+    ).toBe('—');
+    expect(
+      formatTelemetryValue([1, 2] as unknown as Record<string, unknown>),
     ).toBe('—');
   });
 
