@@ -102,14 +102,9 @@ O estado `PROVISIONING` usa `animate-pulse`; todos os estados exibem o rótulo
 textual, além da cor. O componente anuncia mudanças com `role="status"` e
 `aria-live="polite"`.
 
-A tela da Aplicação exibe o badge no cabeçalho usando o hook
-`useProvisioningStatus`, que consulta `GET /api/v1/applications/{app_id}/status`
-a cada 3s. O polling continua em `PENDING`/`PROVISIONING` e para em
-`RUNNING`/`ERROR`; o intervalo é limpo ao desmontar ou trocar de aplicação. O
-badge fica oculto enquanto o hook ainda não recebeu o primeiro status.
-
-O endpoint do backend ainda depende da issue #61. Com o MSW habilitado
-(`VITE_ENABLE_MOCKS=true`), o handler simula a sequência
+O endpoint do backend ainda depende da issue #61 e o hook de polling
+(`useProvisioningStatus`, issue #55) ainda não está integrado à tela. Com o MSW
+habilitado (`VITE_ENABLE_MOCKS=true`), o handler simula a sequência
 `PENDING -> PROVISIONING -> RUNNING`. Para forçar um estado no desenvolvimento,
 defina no console do navegador:
 
@@ -123,7 +118,8 @@ Recarregue a página para aplicar. Remova a chave para voltar à sequência:
 localStorage.removeItem('linx:mock-provisioning-status');
 ```
 
-Sem MSW e sem o endpoint real, o polling recebe 404 e o badge permanece oculto.
+Sem MSW e sem o endpoint real, o hook de polling (issue #55) recebe 404 e o
+badge permanece oculto.
 
 ## Dashboard de Telemetria
 

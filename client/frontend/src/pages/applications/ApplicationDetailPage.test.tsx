@@ -1,16 +1,7 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { handlers } from '../../mocks/handlers';
 import ApplicationDetailPage from './ApplicationDetailPage';
@@ -19,10 +10,7 @@ const server = setupServer(...handlers);
 const base = 'http://localhost:8000/api/v1';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => {
-  server.resetHandlers();
-  vi.useRealTimers();
-});
+afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 async function firstTenantAndApp(): Promise<{
@@ -109,79 +97,5 @@ describe('ApplicationDetailPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
 
     expect(await screen.findByText('Sensor B')).toBeInTheDocument();
-  });
-
-  it('updates the provisioning badge as the polled status changes', async () => {
-    const { tenantId, appId, appName } = await firstTenantAndApp();
-    const statuses = ['PENDING', 'PROVISIONING', 'RUNNING'] as const;
-    let statusIndex = 0;
-
-    server.use(
-      http.get(`*/api/v1/applications/${appId}/status`, () => {
-        const status = statuses[Math.min(statusIndex, statuses.length - 1)];
-        statusIndex += 1;
-        return HttpResponse.json({
-          app_id: appId,
-          status,
-          container_id: `mock-container-${appId}`,
-        });
-      }),
-    );
-
-    vi.useFakeTimers();
-    renderDetail(tenantId, appId);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(screen.getByRole('heading', { name: appName })).toBeInTheDocument();
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
-    });
-    expect(screen.getByRole('status')).toHaveTextContent('Pendente');
-    expect(screen.getByRole('status')).not.toHaveClass('animate-pulse');
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
-    });
-    expect(screen.getByRole('status')).toHaveTextContent('Provisionando');
-    expect(screen.getByRole('status')).toHaveClass('animate-pulse');
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
-    });
-    expect(screen.getByRole('status')).toHaveTextContent('Em execução');
-    expect(screen.getByRole('status')).not.toHaveClass('animate-pulse');
-  });
-
-  it('renders the ERROR badge when polling fails the provisioning', async () => {
-    const { tenantId, appId } = await firstTenantAndApp();
-
-    server.use(
-      http.get(`*/api/v1/applications/${appId}/status`, () =>
-        HttpResponse.json({
-          app_id: appId,
-          status: 'ERROR',
-          container_id: `mock-container-${appId}`,
-        }),
-      ),
-    );
-
-    vi.useFakeTimers();
-    renderDetail(tenantId, appId);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
-    });
-
-    const badge = screen.getByRole('status');
-    expect(badge).toHaveTextContent('Erro');
-    expect(badge).toHaveClass('bg-red-100', 'text-red-700');
   });
 });
