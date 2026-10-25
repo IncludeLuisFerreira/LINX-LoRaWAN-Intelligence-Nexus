@@ -54,6 +54,27 @@ describe('applicationService', () => {
     expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications/a1');
   });
 
+  it('gets the provisioning status of an application', async () => {
+    mocked.get.mockResolvedValue({
+      data: { app_id: 'a1', status: 'RUNNING', container_id: 'c1' },
+    });
+
+    const status = await applicationService.getStatus('a1');
+
+    expect(mocked.get).toHaveBeenCalledWith('/applications/a1/status');
+    expect(status).toBe('RUNNING');
+  });
+
+  it('rejects a status outside the provisioning contract', async () => {
+    mocked.get.mockResolvedValue({
+      data: { app_id: 'a1', status: 'exit 137' },
+    });
+
+    await expect(applicationService.getStatus('a1')).rejects.toThrow(
+      'Status de provisionamento inválido: "exit 137"',
+    );
+  });
+
   it('updates an application with PATCH', async () => {
     mocked.patch.mockResolvedValue({ data: { id: 'a1' } });
 
