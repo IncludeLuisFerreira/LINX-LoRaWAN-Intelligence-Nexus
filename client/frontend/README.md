@@ -93,6 +93,11 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 > (`identity_api/tests/test_openapi.py`). O `yaml` orienta o front; o `json` é a
 > fonte de verdade em runtime.
 
+Sem MSW e sem o endpoint real (issue #61), o hook de polling (issue #55) recebe
+404 e, após falhas consecutivas, interrompe o polling e expõe `error`. Como o
+badge (`ProvisioningStatus`) ainda não está integrado ao hook, nenhum estado
+aparece na tela até essa integração.
+
 ## Status de provisionamento
 
 O componente `ProvisioningStatus` (`src/components/ProvisioningStatus.tsx`) é um
@@ -118,8 +123,19 @@ Recarregue a página para aplicar. Remova a chave para voltar à sequência:
 localStorage.removeItem('linx:mock-provisioning-status');
 ```
 
-Sem MSW e sem o endpoint real, o hook de polling (issue #55) recebe 404 e o
-badge permanece oculto.
+## Polling de status de provisionamento
+
+O hook `useProvisioningStatus` (`src/hooks/useProvisioningStatus.ts`) consulta
+`GET /api/v1/applications/{app_id}/status` a cada 3s (a primeira consulta é
+imediata, no mount). O polling continua enquanto o status for `PENDING` ou
+`PROVISIONING` e para ao atingir `RUNNING` ou `ERROR`. O intervalo é limpo ao
+desmontar o componente e ao trocar de aplicação.
+
+O serviço `applicationService.getStatus` valida o valor contra o contrato
+(`PROVISIONING_STATUS_VALUES`): valores fora de `PENDING`/`PROVISIONING`/
+`RUNNING`/`ERROR` são rejeitados, e o hook trata a rejeição como erro
+transiente, mantendo o polling. Após falhas consecutivas (404, 500, rede ou
+valor fora do contrato), o hook para, limpa o intervalo e expõe `error` para a UI.
 
 ## Dashboard de Telemetria
 
