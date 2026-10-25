@@ -1,6 +1,8 @@
+import re
 import subprocess
 import sys
 
+from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.schema import CreateIndex
@@ -143,3 +145,22 @@ def test_job_outbox_has_quarantine_columns():
     columns = JobOutbox.__table__.c
     assert columns.failed_at.nullable is True
     assert columns.last_error.nullable is True
+
+
+def test_jobs_status_check_constraint_matches_enum():
+    from linx_shared.jobs.constants import JobStatus
+
+    check = next(
+        (
+            c
+            for c in Job.__table__.constraints
+            if isinstance(c, CheckConstraint) and c.name == "ck_jobs_status"
+        ),
+        None,
+    )
+    assert check is not None, "ck_jobs_status não encontrado"
+    sqltext = str(check.sqltext)
+    for status in JobStatus:
+        assert f"'{status.value}'" in sqltext
+    literals = set(re.findall(r"'([a-z_]+)'", sqltext))
+    assert literals == {status.value for status in JobStatus}
