@@ -12,6 +12,7 @@ O `client/` contém:
 | ------------------------------ | ------------------------------------------------------- |
 | `frontend/`                    | Dashboard web React (REST + WebSocket).                 |
 | `services/telemetry_consumer/` | Serviço FastAPI (ingestão AMQP + leitura REST/WS).     |
+| `tenant_app/`                  | Imagem mínima provisionada por aplicação (issue #58).   |
 | `db/schema.sql`                | Schema TimescaleDB (hypertable `telemetry`).            |
 | `docker-compose.yml`           | Compose local: TimescaleDB + `telemetry_consumer` + `frontend`. |
 | `README.md`                    | Este documento.                                         |
@@ -52,6 +53,19 @@ limitado ao intervalo `1..1000` (default `100`).
 > header server-side nos proxies `/api` e `/ws` — o browser nunca conhece o
 > segredo. Chamadas diretas ao serviço (testes, curl interno) precisam enviar o
 > header; sem ele o REST responde `401` e o WS fecha com `4401`.
+
+## 📦 Imagem mínima provisionada (`tenant_app/`)
+
+A imagem `linx-tenant-app:latest` é um alvo mínimo para validar o
+provisionamento Docker do Linx Core (issue #58). Ela expõe `/health` público e
+`/info` protegido por `X-Service-Token`, e o provisioner injeta `APP_ID`,
+`DB_PASSWORD`, `MQTT_TOPIC` e `SERVICE_TOKEN` no container.
+
+```bash
+make build-tenant-image
+```
+
+Detalhes em `client/tenant_app/README.md`.
 
 ## 🗄️ Banco de dados (TimescaleDB)
 

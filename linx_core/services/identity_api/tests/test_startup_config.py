@@ -18,6 +18,7 @@ def test_startup_accepts_full_config(monkeypatch):
     assert settings.database_url == _VALID_DB
     assert settings.rabbitmq_admin_password == "real-admin-pass"
     assert settings.rabbitmq_tenant_secret == "real-tenant-secret"
+    assert settings.job_max_attempts == 3
 
 
 def test_startup_rejects_missing_rabbitmq_admin_password(monkeypatch):
@@ -55,4 +56,12 @@ def test_startup_rejects_default_database_credentials(monkeypatch):
         "postgresql+psycopg://linx:linx@localhost:5432/linx",
     )
     with pytest.raises(ValidationError, match="DATABASE_URL"):
+        IdentitySettings(_env_file=None)
+
+
+def test_startup_rejects_non_positive_job_max_attempts(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("JOB_MAX_ATTEMPTS", "0")
+
+    with pytest.raises(ValidationError, match="JOB_MAX_ATTEMPTS"):
         IdentitySettings(_env_file=None)

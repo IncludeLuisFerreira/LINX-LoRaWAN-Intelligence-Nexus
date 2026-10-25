@@ -1,7 +1,7 @@
 [project]
 name = "linx-core"
 version = "0.1.0"
-description = "Task runner do Linx Core (identity_api + agent_bridge)."
+description = "Task runner do Linx Core (identity_api + agent_bridge + docker_provisioner)."
 requires-python = ">=3.12,<4.0"
 
 [tool.poetry]
@@ -19,4 +19,4 @@ up = "docker compose up -d --build"
 down = "docker compose down"
 migrate = "env -u VIRTUAL_ENV poetry -C services/identity_api run alembic -c ../../alembic.ini upgrade head"
 migration = "env -u VIRTUAL_ENV poetry -C services/identity_api run alembic -c ../../alembic.ini revision --autogenerate -m"
-test = "env -u VIRTUAL_ENV poetry -C shared run pytest && env -u VIRTUAL_ENV poetry -C services/identity_api run pytest && env -u VIRTUAL_ENV poetry -C services/agent_bridge run pytest"
+test = "env -u VIRTUAL_ENV poetry -C shared run pytest && env -u VIRTUAL_ENV poetry -C services/identity_api run pytest && env -u VIRTUAL_ENV poetry -C services/agent_bridge run pytest && env -u VIRTUAL_ENV poetry -C services/docker_provisioner run pytest && env -u VIRTUAL_ENV poetry -C services/jobs_worker run pytest"

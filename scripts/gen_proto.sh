@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Gera os stubs Python gRPC (linx_agent_pb2.py / linx_agent_pb2_grpc.py) a
-# partir de proto/linx_agent.proto para o pacote compartilhado `linx_shared`,
-# dono único do contrato do AgentBridge (#215).
+# Gera os stubs Python gRPC dos contratos em proto/ para o pacote
+# compartilhado `linx_shared`, dono único dos contratos gRPC da plataforma.
+#
+# Contratos:
+#   - linx_agent.proto              -> AgentBridge
+#   - linx_docker_provisioner.proto -> DockerProvisioner
 #
 # Uso:
 #     bash scripts/gen_proto.sh
@@ -14,16 +17,23 @@ cd "$ROOT"
 
 OUT="linx_core/shared/src/linx_shared/grpc"
 
-poetry -C linx_core/shared run python -m grpc_tools.protoc \
-  -I "$ROOT/proto" \
-  --python_out="$ROOT/$OUT" \
-  --grpc_python_out="$ROOT/$OUT" \
-  "$ROOT/proto/linx_agent.proto"
+generate_stub() {
+  local proto_name="$1"
 
-# grpc_tools.protoc gera `import linx_agent_pb2` (absoluto), o que quebra
-# quando o arquivo vive dentro do pacote linx_shared.grpc. Corrige para
-# import relativo.
-sed -i 's/^import linx_agent_pb2 as linx__agent__pb2$/from . import linx_agent_pb2 as linx__agent__pb2/' \
-  "$OUT/linx_agent_pb2_grpc.py"
+  poetry -C linx_core/shared run python -m grpc_tools.protoc \
+    -I "$ROOT/proto" \
+    --python_out="$ROOT/$OUT" \
+    --grpc_python_out="$ROOT/$OUT" \
+    "$ROOT/proto/${proto_name}.proto"
+
+  # grpc_tools.protoc gera imports absolutos (`import <proto>_pb2`), o que
+  # quebra quando o arquivo vive dentro do pacote linx_shared.grpc. Corrige
+  # para import relativo.
+  sed -i "s/^import ${proto_name}_pb2 as /from . import ${proto_name}_pb2 as /" \
+    "$OUT/${proto_name}_pb2_grpc.py"
+}
+
+generate_stub "linx_agent"
+generate_stub "linx_docker_provisioner"
 
 echo "Stubs gRPC gerados em $OUT"

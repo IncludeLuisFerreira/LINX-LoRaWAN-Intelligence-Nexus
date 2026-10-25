@@ -1,13 +1,19 @@
+import re
 import subprocess
 import sys
 
+from sqlalchemy import CheckConstraint
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.schema import CreateIndex
 
 from linx_shared.models import (
     Application,
     Base,
     Device,
     DeviceRoute,
+    Job,
+    JobOutbox,
     Tenant,
     TenantUser,
     User,
@@ -19,6 +25,8 @@ def test_all_tables_registered():
         "application",
         "device_routes",
         "devices",
+        "job_outbox",
+        "jobs",
         "tenant",
         "tenant_user",
         "user",
@@ -26,10 +34,33 @@ def test_all_tables_registered():
 
 
 def test_models_have_uuid_pk():
-    for model in (Tenant, Application, User, DeviceRoute, Device):
+    for model in (Tenant, Application, User, DeviceRoute, Device, Job):
         pk = list(model.__table__.primary_key.columns)[0]
         assert pk.name == "id"
         assert isinstance(pk.type, PGUUID)
+
+
+def test_job_deduplication_key_partial_unique_index():
+    indexes = {index.name: index for index in Job.__table__.indexes}
+    index = indexes["uq_jobs_active_dedup"]
+    assert index.unique is True
+    assert [column.name for column in index.columns] == ["deduplication_key"]
+    where = index.dialect_options["postgresql"]["where"]
+    assert "status IN ('pending','running')" in str(where)
+
+
+def test_job_tenant_created_index_is_descending():
+    indexes = {index.name: index for index in Job.__table__.indexes}
+    index = indexes["ix_jobs_tenant_created"]
+    ddl = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
+    assert "tenant_id" in ddl
+    assert "created_at DESC" in ddl
+
+
+def test_job_outbox_job_foreign_key():
+    fk = list(JobOutbox.__table__.foreign_keys)[0]
+    assert fk.target_fullname == "jobs.id"
+    assert fk.ondelete == "CASCADE"
 
 
 def test_tenant_user_has_composite_pk():
@@ -104,7 +135,32 @@ def test_db_base_import_registers_models():
         check=True,
     )
     expected = (
-        "['application', 'device_routes', 'devices', 'tenant', "
-        "'tenant_user', 'user']"
+        "['application', 'device_routes', 'devices', 'job_outbox', 'jobs', "
+        "'tenant', 'tenant_user', 'user']"
     )
     assert result.stdout.strip() == expected
+
+
+def test_job_outbox_has_quarantine_columns():
+    columns = JobOutbox.__table__.c
+    assert columns.failed_at.nullable is True
+    assert columns.last_error.nullable is True
+
+
+def test_jobs_status_check_constraint_matches_enum():
+    from linx_shared.jobs.constants import JobStatus
+
+    check = next(
+        (
+            c
+            for c in Job.__table__.constraints
+            if isinstance(c, CheckConstraint) and c.name == "ck_jobs_status"
+        ),
+        None,
+    )
+    assert check is not None, "ck_jobs_status não encontrado"
+    sqltext = str(check.sqltext)
+    for status in JobStatus:
+        assert f"'{status.value}'" in sqltext
+    literals = set(re.findall(r"'([a-z_]+)'", sqltext))
+    assert literals == {status.value for status in JobStatus}

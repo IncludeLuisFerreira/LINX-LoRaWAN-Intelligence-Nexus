@@ -12,7 +12,8 @@ dependencies = [
     "psycopg[binary] (>=3.3.4,<4.0.0)",
     "pydantic (>=2.13.5,<3.0.0)",
     "grpcio (>=1.84.0,<2.0.0)",
-    "protobuf (>=7.36.1,<8.0.0)"
+    "protobuf (>=7.36.1,<8.0.0)",
+    "pika (>=1.4.4,<2.0.0)"
 ]
 
 [build-system]
@@ -59,6 +60,10 @@ exclude = ["src/linx_shared/grpc/"]
 
 [[tool.mypy.overrides]]
 module = ["grpc", "grpc.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pika", "pika.*"]
 ignore_missing_imports = true
 
 [tool.taskipy.tasks]

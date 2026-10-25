@@ -12,6 +12,7 @@ from identity_api.dependencies import close_chirpstack_client
 from identity_api.routes.application import router as application_router
 from identity_api.routes.device_profile import router as device_profile_router
 from identity_api.routes.devices import router as devices_router
+from identity_api.routes.jobs import router as jobs_router
 from identity_api.routes.tenant import router
 from identity_api.routes.user import router as user_router
 from identity_api.security import (
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
 
     application.include_router(router, dependencies=auth)
     application.include_router(application_router, dependencies=auth)
+    application.include_router(jobs_router, dependencies=auth)
     application.include_router(devices_router, dependencies=auth)
     application.include_router(user_router, dependencies=auth)
     application.include_router(device_profile_router, dependencies=auth)

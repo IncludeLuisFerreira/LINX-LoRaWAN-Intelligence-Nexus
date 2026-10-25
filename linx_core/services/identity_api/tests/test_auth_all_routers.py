@@ -57,6 +57,8 @@ def db_session() -> Generator[None, None, None]:
         ("get", "/api/v1/tenant/{tenant_id}/applications/{app_id}"),
         ("patch", "/api/v1/tenant/{tenant_id}/applications/{app_id}"),
         ("delete", "/api/v1/tenant/{tenant_id}/applications/{app_id}"),
+        ("post", "/api/v1/tenant/{tenant_id}/applications/{app_id}/provision"),
+        ("get", "/api/v1/tenant/{tenant_id}/jobs/{job_id}"),
         ("get", "/api/v1/devices"),
         ("post", "/api/v1/devices"),
         ("patch", "/api/v1/devices/{device_id}"),
@@ -75,6 +77,7 @@ def test_protected_route_without_token_returns_401(method, path):
         app_id=uuid4(),
         device_id=uuid4(),
         user_id=uuid4(),
+        job_id=uuid4(),
     )
     params = {"app_id": uuid4()} if path == "/api/v1/devices" else None
     kwargs: dict = {}

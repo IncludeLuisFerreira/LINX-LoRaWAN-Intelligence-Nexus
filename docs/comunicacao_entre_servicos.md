@@ -18,7 +18,7 @@ Quatro protocolos sustentam a comunicação:
 
 | Protocolo     | Uso                                                                               |
 | :------------ | :-------------------------------------------------------------------------------- |
-| **gRPC**      | Contrato binário `AgentBridge` — descoberta da configuração do tenant (`GetAppConfig`). |
+| **gRPC**      | Contratos binários `AgentBridge` (config do tenant) e `DockerProvisioner` (provisionamento Docker). |
 | **HTTP/REST** | API do plano de controle (`identity_api`) e leitura de telemetria (`GET /telemetry`). |
 | **MQTT**      | Ingestão de uplinks LoRaWAN publicados pelo ChirpStack (ChirpStack → `routing`).  |
 | **AMQP**      | Ingestão de telemetria normalizada: exchange `topic` `linx.telemetry` do RabbitMQ → `telemetry_consumer`. |
@@ -30,6 +30,7 @@ Quatro protocolos sustentam a comunicação:
 | :---------------- | :-------------------- | :-------------- | :--------------------------------------------------------------------------------- |
 | `identity_api`    | FastAPI (REST)        | `8000` (host)   | API do plano de controle: CRUD de tenants e aplicações. Único serviço que publica a porta `8000` no host. |
 | `agent_bridge`    | gRPC (`grpcio`)       | `50051`         | **Servidor** do contrato `AgentBridge` — responde `GetAppConfig`.                   |
+| `docker_provisioner` | gRPC (`grpcio`)    | `50052` (interna) | **Servidor** do contrato `DockerProvisioner` — cria/reaproveita containers por aplicação. Único com acesso ao socket Docker. |
 | `client_agent`    | FastAPI               | `8001`          | Agente por tenant: cliente gRPC (`GetAppConfig`) e `GET /health`.                  |
 | `routing`         | Python (paho-mqtt + rabbitpy) | —        | Ingestão: consome uplinks MQTT, valida e publica envelopes no RabbitMQ.            |
 | `rabbitmq`        | RabbitMQ 3 (AMQP)     | `5672`/`15672`  | Exchange `topic` durável por tenant `linx.telemetry.{app_id}`; usuário e permissões isoladas por aplicação. |
@@ -50,9 +51,12 @@ flowchart LR
     subgraph SaaS["Linx Core (plano de controle)"]
         ID["identity_api<br/>REST :8000"]
         AB["agent_bridge<br/>gRPC :50051"]
+        DP["docker_provisioner<br/>gRPC :50052"]
         DB[("db<br/>PostgreSQL 15")]
         ID --> DB
         AB --> DB
+        ID -- "gRPC ProvisionApplication" --> DP
+        DP -- "Docker API" --> DK[["Docker daemon"]]
     end
 
     MQTT[["Broker MQTT<br/>:1883"]]
@@ -79,6 +83,8 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 | Origem                          | Destino                          | Protocolo             | Porta   | Propósito                                              | Momento       |
 | :------------------------------ | :------------------------------- | :-------------------- | :------ | :----------------------------------------------------- | :------------ |
 | `client_agent`                  | `agent_bridge`                   | gRPC                  | `50051` | `GetAppConfig` sob demanda (com cache) e health check  | startup / on-demand |
+| `identity_api`                  | `docker_provisioner`             | gRPC                  | `50052` | `ProvisionApplication` (cria/reaproveita container)    | criação/requisição de provisionamento |
+| `docker_provisioner`            | Docker daemon                    | Docker API            | socket  | Criar rede, publicar porta e subir container           | sob demanda   |
 | Broker MQTT                     | `routing`                        | MQTT                  | `1883`  | Receber uplinks LoRaWAN do ChirpStack                  | contínuo      |
 | `routing`                       | `rabbitmq` (exchange `linx.telemetry.{app_id}`) | AMQP            | `5672`  | Publicar envelope normalizado (routing key por tópico) | por uplink    |
 | `rabbitmq` (fila do tenant)     | `telemetry_consumer`             | AMQP                  | `5672`  | Entregar envelope na fila `linx.telemetry.{app_id}` (credencial do tenant) | por evento    |
@@ -405,6 +411,12 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 | `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `telemetry_consumer`, `timescaledb` | `tenant` / `...` / `tenantdb` | Credenciais do banco do tenant.                        |
 | `HTTP_HOST` / `HTTP_PORT` | `telemetry_consumer`      | `0.0.0.0` / `8000`                         | Bind do FastAPI de leitura.                                      |
 | `DATABASE_URL`           | `agent_bridge`, `identity_api` | `postgresql+psycopg://...@db:5432/linx` | Banco do plano de controle.                                      |
+| `PROVISIONER_GRPC_HOST`  | `identity_api`             | `localhost:50052` (Compose: `docker_provisioner:50052`) | Endereço gRPC do provisioner.                        |
+| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | `identity_api`    | `10`                                       | Timeout da chamada `ProvisionApplication`.                       |
+| `SERVICE_TOKEN`          | `identity_api`, `docker_provisioner` | `openssl rand -hex 32`           | Token Bearer da chamada gRPC e do header `X-Service-Token`.      |
+| `DOCKER_GID`             | `docker_provisioner`       | `990`                                      | GID do grupo dono de `/var/run/docker.sock`.                     |
+| `PROVISION_IMAGE`        | `docker_provisioner`       | `linx-tenant-app:latest`                   | Imagem provisionada por aplicação.                               |
+| `PROVISION_PORT_MIN` / `PROVISION_PORT_MAX` | `docker_provisioner` | `8100` / `9100`                    | Range de portas publicado no host.                               |
 
 > Em containers, os hosts são **nomes de serviço do Compose** (`db`, `agent_bridge`,
 > `telemetry_consumer`, `mosquitto`, `rabbitmq`), não `localhost`.

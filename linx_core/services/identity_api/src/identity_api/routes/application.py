@@ -9,6 +9,7 @@ from linx_shared.core.rabbitmq import (
     tenant_user,
 )
 from linx_shared.db.base import get_db
+from linx_shared.jobs.constants import JobStatus
 from linx_shared.models.application import Application
 from linx_shared.models.tenant import Tenant
 from linx_shared.schemas.application import (
@@ -25,7 +26,9 @@ from identity_api.dependencies import (
     get_chirpstack_client,
     get_rabbitmq_client,
 )
+from identity_api.jobs import create_provisioning_job
 from identity_api.rabbitmq_client import RabbitMQClient
+from identity_api.schemas import JobAcceptedResponse
 
 router = APIRouter(prefix="/api/v1/tenant", tags=["Application"])
 
@@ -180,6 +183,58 @@ def get_application(
             detail="Application not found!",
         )
     return application
+
+
+@router.post(
+    "/{tenant_id}/applications/{application_id}/provision",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=JobAcceptedResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Tenant or application not found."
+        }
+    },
+)
+def provision_application(
+    tenant_id: UUID,
+    application_id: UUID,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Enfileira o provisionamento assíncrono do container da aplicação.
+
+    O identity_api valida o vínculo tenant/application no banco e grava o
+    job e a mensagem de outbox na mesma transação. A execução fica a cargo
+    do worker de provisionamento, consumindo a fila pelo broker.
+    """
+    tenant = db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found!",
+        )
+
+    application = db.get(Application, application_id)
+    if not application or application.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found!",
+        )
+
+    job = create_provisioning_job(
+        db,
+        tenant_id,
+        application_id,
+        settings.job_max_attempts,
+    )
+    response.headers["Location"] = f"/api/v1/tenant/{tenant_id}/jobs/{job.id}"
+
+    return JobAcceptedResponse(
+        job_id=job.id,
+        application_id=application_id,
+        status=JobStatus(job.status),
+        created_at=job.created_at,
+    )
 
 
 @router.patch(

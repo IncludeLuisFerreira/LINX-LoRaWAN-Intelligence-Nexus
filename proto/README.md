@@ -1,4 +1,9 @@
-# Contrato gRPC — `proto/linx_agent.proto`
+# Contratos gRPC
+
+Os contratos gRPC da plataforma ficam em `proto/` e os stubs Python são
+versionados no pacote compartilhado `linx_shared.grpc`.
+
+## `proto/linx_agent.proto`
 
 Contrato compartilhado entre o **Linx Core** (servidor) e o **Client Agent
 API** (middleware compartilhado). Define o serviço `AgentBridge`, que sustenta
@@ -84,13 +89,35 @@ A geração dos stubs Python é feita na issue #20.
 | `ok`    | bool   | 1 | `true` se a operação foi aceita               |
 | `error` | string | 2 | Mensagem de erro (vazia em caso de sucesso)   |
 
+## `proto/linx_docker_provisioner.proto`
+
+Contrato interno entre o `jobs_worker` (cliente gRPC) e o
+`docker_provisioner` (servidor). No fluxo assíncrono, o `identity_api`
+valida tenant/application no Postgres e enfileira um job; quem chama este RPC
+enviando apenas o `app_id` é o `jobs_worker`. O provisioner concentra a
+política de imagem, porta, rede e variáveis de ambiente.
+
+| Item | Valor |
+| ---- | ----- |
+| Serviço | `DockerProvisioner` |
+| RPC | `ProvisionApplication` |
+| Porta | `50052` (rede interna do Compose) |
+| Autenticação | metadado `authorization: Bearer <SERVICE_TOKEN>` |
+| Request | `ProvisionApplicationRequest { string app_id = 1; }` |
+| Response | `container_id`, `port`, `network`, `image`, `status`, `created`, `mqtt_topic` |
+
+> `DB_PASSWORD` é gerado pelo provisioner e injetado apenas no container do
+> tenant; ele não trafega no gRPC nem é retornado ao `identity_api`.
+
 ## Como compilar / verificar
 
 ```bash
 protoc --descriptor_set_out=/dev/null --proto_path=proto proto/linx_agent.proto
+protoc --descriptor_set_out=/dev/null --proto_path=proto \
+  proto/linx_docker_provisioner.proto
 ```
 
-## Gerar stubs Python (issue #20)
+## Gerar stubs Python
 
 Os stubs são versionados em um único lugar:
 `linx_core/shared/src/linx_shared/grpc/` (pacote `linx_shared`). O
@@ -102,7 +129,8 @@ regenerar:
 bash scripts/gen_proto.sh
 ```
 
-O script usa `grpc_tools.protoc` e corrige o import absoluto gerado para
-import relativo (`from . import linx_agent_pb2`), necessário dentro de pacote.
-Requer `grpcio-tools` instalado em `linx_core/shared` (dev dependency). O CI
-regenera os stubs e falha se divergirem do versionado (drift gate).
+O script usa `grpc_tools.protoc` para os dois contratos e corrige os imports
+absolutos gerados para relativos (`from . import <proto>_pb2`), necessário
+dentro do pacote. Requer `grpcio-tools` instalado em `linx_core/shared` (dev
+dependency). O CI regenera os stubs e falha se divergirem do versionado
+(drift gate).

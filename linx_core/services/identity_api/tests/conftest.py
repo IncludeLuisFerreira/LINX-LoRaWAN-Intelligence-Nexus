@@ -10,6 +10,10 @@ import pytest
 os.environ.setdefault(
     "DATABASE_URL", "postgresql+psycopg://linx:ci-db-pass@localhost:5432/linx"
 )
+os.environ.setdefault(
+    "RABBITMQ_AMQP_URL",
+    "amqp://linx:ci-rabbit-pass@localhost:5672/",
+)
 os.environ.setdefault("RABBITMQ_ADMIN_PASSWORD", "ci-rabbit-admin-pass")
 os.environ.setdefault("RABBITMQ_TENANT_SECRET", "ci-rabbit-tenant-secret")
 
@@ -22,6 +26,32 @@ def service_token(monkeypatch) -> None:
     from tests.auth import TOKEN
 
     monkeypatch.setattr(shared_settings, "service_token", TOKEN)
+
+
+@pytest.fixture
+def db_session() -> Generator[object, None, None]:
+    """Abre uma transação isolada e compartilha a Session com o teste."""
+    from linx_shared.db.base import engine, get_db
+    from sqlalchemy.orm import Session
+
+    from identity_api.main import app
+
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+    )
+
+    def override_get_db() -> Generator[Session, None, None]:
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield session
+    app.dependency_overrides.pop(get_db, None)
+    session.close()
+    transaction.rollback()
+    connection.close()
 
 
 @pytest.fixture(autouse=True)
