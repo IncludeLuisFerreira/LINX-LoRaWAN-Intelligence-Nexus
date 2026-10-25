@@ -4,8 +4,8 @@ Verifica que uma telemetria percorre o caminho real até o que o frontend
 consome:
 
 ```
-mosquitto (uplink MQTT) -> routing -> rabbitmq (exchange por tenant)
-  -> telemetry_consumer (persiste TimescaleDB + broadcast WebSocket)
+mosquitto do infra (uplink MQTT) -> routing (deploy) -> rabbitmq
+  (exchange por tenant) -> telemetry_consumer (TimescaleDB + WebSocket)
 ```
 
 Contratos do frontend cobertos: `GET /telemetry` (histórico REST) e
@@ -13,16 +13,17 @@ Contratos do frontend cobertos: `GET /telemetry` (histórico REST) e
 
 ## Reúso da stack real
 
-Esta suíte **não define serviços próprios**. Usa o compose real
-`deploy/docker-compose.yml` como base e aplica
-`docker-compose.override.yml` para:
+Esta suíte **não define serviços próprios**. Usa o Mosquitto real de
+`infra/docker-compose.yml` e o compose de `deploy/docker-compose.yml` como base,
+aplicando overrides para:
 
 - publicar portas em offsets de teste (loopback);
 - fixar `APP_ID=integration-app` e apontar o consumer para a credencial
   administrativa do broker (sem provisionamento por-tenant).
 
-Sobe apenas os serviços do caminho: `mosquitto`, `routing`, `rabbitmq`,
-`timescaledb`, `telemetry_consumer`.
+Sobe apenas os serviços do caminho: `mosquitto` (infra), `routing`, `rabbitmq`,
+`timescaledb`, `telemetry_consumer` (deploy), conectados pela rede
+`linx-network`.
 
 Variáveis exigidas pelo compose base ficam em `test.env` (valores de teste).
 
@@ -45,11 +46,16 @@ tests/integration/run.sh
 Inspecionar a stack manualmente:
 
 ```bash
+bash deploy/scripts/bootstrap-network.sh
 docker compose -p lynx-integration \
-  --env-file telemetry/test.env \
-  -f ../../deploy/docker-compose.yml \
-  -f telemetry/docker-compose.override.yml \
-  up -d --build --wait mosquitto routing rabbitmq timescaledb telemetry_consumer
+  --env-file tests/integration/telemetry/test.env \
+  -f deploy/docker-compose.yml \
+  -f tests/integration/telemetry/docker-compose.override.yml \
+  up -d --build --wait routing rabbitmq timescaledb telemetry_consumer
 docker compose -p lynx-integration ... ps
 docker compose -p lynx-integration ... down -v
 ```
+
+O Mosquitto é gerenciado separadamente pelo projeto `lynx-integration-infra`,
+usando `infra/docker-compose.yml` e
+`tests/integration/telemetry/docker-compose.infra-override.yml`.

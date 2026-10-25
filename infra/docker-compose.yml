@@ -83,7 +83,9 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      # Bind SOMENTE em loopback (#208): ChirpStack e routing alcançam o
+      # broker pela rede interna, não pela porta publicada no host.
+      - "127.0.0.1:1883:1883"
     volumes:
       # config/ traz mosquitto.conf + mosquitto.passwd + mosquitto.acl
       # (gerados por infra/scripts/gen-mosquitto-passwd.sh). Read-only.
@@ -91,6 +93,11 @@ services:
     depends_on:
       mosquitto-init:
         condition: service_completed_successfully
+    networks:
+      # O routing do stack deploy entra nesta rede externa para consumir os
+      # uplinks publicados pelo ChirpStack (#188).
+      - default
+      - linx-network
 
   # One-shot: garante que mosquitto.passwd exista antes de subir o broker
   # (allow_anonymous false exige password_file). Em dev, gera com as mesmas
@@ -123,6 +130,12 @@ services:
       - MQTT_HEALTHCHECK_PASSWORD=${MQTT_HEALTHCHECK_PASSWORD:?defina em infra/.env (veja .env.example)}
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+
+networks:
+  # Rede compartilhada com o stack deploy. Criada por
+  # deploy/scripts/bootstrap-network.sh antes de subir os stacks.
+  linx-network:
+    external: true
 
 volumes:
   postgresqldata:

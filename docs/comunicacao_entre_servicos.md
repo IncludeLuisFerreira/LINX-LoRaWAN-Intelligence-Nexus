@@ -344,13 +344,14 @@ retry (`CONSUMER_MAX_RETRIES` com backoff) e, esgotado ou payload inválido, a m
 vai para a DLQ `linx.telemetry.{app_id}.dlq` e recebe ack.
 
 > **Status de execução:** o pipeline está implementado em `middleware/services/routing`
-> e no `client/services/telemetry_consumer`. No `deploy/docker-compose.yml` o `routing`
-> sobe junto de `mosquitto` e `rabbitmq` e publica no exchange do tenant
-> (`linx.telemetry.{app_id}`); o `telemetry_consumer` sobe junto de `timescaledb` e
-> `rabbitmq` e consome a fila do tenant com credencial própria. O `identity_api`
-> provisiona essa credencial na criação da aplicação (management API do RabbitMQ).
-> A ingestão REST via `POST /ingest` foi **removida**: o RabbitMQ é o único
-> caminho de ingestão. Detalhes de isolamento: `docs/telemetry-consumer/rabbitmq-isolation.md`.
+> e no `client/services/telemetry_consumer`. O `routing` sobe no `deploy` com
+> `rabbitmq` e consome o broker Mosquitto do stack `infra` pela rede
+> `linx-network`; ele publica no exchange do tenant (`linx.telemetry.{app_id}`).
+> O `telemetry_consumer` sobe junto de `timescaledb` e `rabbitmq` e consome a fila
+> do tenant com credencial própria. O `identity_api` provisiona essa credencial na
+> criação da aplicação (management API do RabbitMQ). A ingestão REST via
+> `POST /ingest` foi **removida**: o RabbitMQ é o único caminho de ingestão.
+> Detalhes de isolamento: `docs/telemetry-consumer/rabbitmq-isolation.md`.
 
 ---
 
@@ -426,13 +427,14 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 ## 8. Como verificar
 
 ```bash
-# 1. Subir toda a stack
-cd deploy
-docker compose up -d --build
-docker compose ps                       # todos os serviços "Up"
+# 1. Subir a infra primeiro (ChirpStack + Mosquitto), depois o deploy
+make up-infra
+make up-deploy
+docker compose -f deploy/docker-compose.yml ps   # todos os serviços "Up"
 
 # 2. Prova do gRPC: conectividade do client_agent com o SaaS
-docker compose logs client_agent | grep "Linx Core acessível"
+docker compose -f deploy/docker-compose.yml logs client_agent \
+  | grep "Linx Core acessível"
 
 # 3. Prova do REST: criar um tenant no banco do plano de controle
 curl -i -X POST localhost:8000/api/v1/tenant/ \
@@ -444,8 +446,12 @@ Verificação do pipeline MQTT → RabbitMQ → TimescaleDB (serviços `routing`
 `telemetry_consumer`):
 
 ```bash
-# publica um uplink ChirpStack válido no broker MQTT
+# publica um uplink ChirpStack válido no broker MQTT do infra
+set -a
+source infra/.env
+set +a
 mosquitto_pub -h localhost -p 1883 \
+  -u "$MQTT_CHIRPSTACK_USER" -P "$MQTT_CHIRPSTACK_PASSWORD" \
   -t "application/1/device/dev1/event/up" \
   -m '{"object":{"temperature":25.5},"rxInfo":[{"rssi":-70,"snr":7.5}],"time":"2026-10-08T12:00:00Z"}'
 # esperado: o `routing` valida e publica o envelope no exchange `linx.telemetry`;
@@ -454,7 +460,8 @@ mosquitto_pub -h localhost -p 1883 \
 # 4. Prova da leitura: histórico persistido do tenant
 # O telemetry_consumer NÃO publica a porta 8000 no host (no stack unificado
 # localhost:8000 é o identity_api). Rode o curl DENTRO do container:
-docker compose exec telemetry_consumer python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/telemetry?limit=10').read().decode())"
+docker compose -f deploy/docker-compose.yml exec telemetry_consumer \
+  python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/telemetry?limit=10').read().decode())"
 # esperado: 200 {"items": [...], "next_cursor": ...}
 ```
 

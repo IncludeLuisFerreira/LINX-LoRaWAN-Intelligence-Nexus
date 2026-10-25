@@ -1,11 +1,13 @@
 """Fixtures dos testes de integração de telemetria ponta-a-ponta.
 
-NÃO define uma stack própria: sobe a stack real de `deploy/docker-compose.yml`
-em `tests/integration/telemetry/docker-compose.override.yml` (apenas portas de
+NÃO define uma stack própria: sobe o Mosquitto real de `infra/docker-compose.yml`
+e a stack de `deploy/docker-compose.yml` em
+`tests/integration/telemetry/docker-compose.override.yml` (apenas portas de
 teste, APP_ID e credencial administrativa do broker), com um `--env-file` de
 teste. Sobe só os serviços do caminho da telemetria:
 
-    mosquitto -> routing -> rabbitmq -> telemetry_consumer -> timescaledb
+    mosquitto (infra) -> routing (deploy) -> rabbitmq -> telemetry_consumer
+    -> timescaledb
 
 Valida que os containers estão no ar antes dos testes e derruba tudo no fim.
 Em falha de subida, imprime o estado de cada serviço e a dica de logs.
@@ -31,11 +33,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 BASE_COMPOSE = os.path.join(ROOT, "deploy", "docker-compose.yml")
 OVERRIDE_COMPOSE = os.path.join(HERE, "docker-compose.override.yml")
+INFRA_COMPOSE = os.path.join(ROOT, "infra", "docker-compose.yml")
+INFRA_OVERRIDE_COMPOSE = os.path.join(
+    HERE, "docker-compose.infra-override.yml"
+)
 TEST_ENV_FILE = os.path.join(HERE, "test.env")
+BOOTSTRAP_NETWORK = os.path.join(
+    ROOT, "deploy", "scripts", "bootstrap-network.sh"
+)
 
 PROJECT = "lynx-integration"
+INFRA_PROJECT = "lynx-integration-infra"
+NETWORK = "linx-network"
 SERVICES = (
-    "mosquitto",
     "rabbitmq",
     "timescaledb",
     "telemetry_consumer",
@@ -129,6 +139,41 @@ def compose(
     )
 
 
+def compose_infra(
+    *args: str, check: bool = True, input: str | None = None
+) -> subprocess.CompletedProcess:
+    """Executa `docker compose` sobre o Mosquitto real do stack infra."""
+    return subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-p",
+            INFRA_PROJECT,
+            "--env-file",
+            TEST_ENV_FILE,
+            "-f",
+            INFRA_COMPOSE,
+            "-f",
+            INFRA_OVERRIDE_COMPOSE,
+            *args,
+        ],
+        input=input,
+        capture_output=True,
+        text=True,
+        check=check,
+    )
+
+
+def _ensure_network() -> None:
+    """Garante a rede compartilhada usada por infra e deploy."""
+    subprocess.run(
+        ["bash", BOOTSTRAP_NETWORK, NETWORK],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 def _services_state() -> dict[str, dict[str, Any]]:
     """Retorna {serviço: {state, health, name}} a partir de `compose ps`."""
     result = compose("ps", "-a", "--format", "json", check=False)
@@ -196,10 +241,34 @@ def _dump_logs(focus: Iterator[str]) -> None:
         print(result.stdout or result.stderr)
 
 
+def _dump_infra_logs() -> None:
+    result = compose_infra("logs", "--tail", "40", "mosquitto", check=False)
+    print("\n----- logs: infra mosquitto -----")
+    print(result.stdout or result.stderr)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def stack() -> Iterator[None]:
-    """Sobe a stack real (via deploy compose), valida e derruba no fim."""
+    """Sobe Mosquitto do infra + stack de deploy, valida e derruba no fim."""
     _ensure_deploy_env()
+    _ensure_network()
+
+    infra_up = compose_infra(
+        "up",
+        "-d",
+        "--wait",
+        "--wait-timeout",
+        UP_TIMEOUT,
+        "mosquitto",
+    )
+    if infra_up.returncode != 0:
+        print(infra_up.stdout)
+        print(infra_up.stderr)
+        _dump_infra_logs()
+        pytest.exit(
+            "falha ao subir o mosquitto do stack infra", returncode=1
+        )
+
     up = compose(
         "up",
         "-d",
@@ -215,6 +284,8 @@ def stack() -> Iterator[None]:
         with contextlib.suppress(RuntimeError):
             _preflight()
         _dump_logs(iter(("telemetry_consumer", "routing", "rabbitmq")))
+        _dump_infra_logs()
+        compose_infra("down", "-v", "--remove-orphans", check=False)
         pytest.exit("falha ao subir a stack de integração", returncode=1)
 
     try:
@@ -224,6 +295,7 @@ def stack() -> Iterator[None]:
         yield
     finally:
         compose("down", "-v", "--remove-orphans", check=False)
+        compose_infra("down", "-v", "--remove-orphans", check=False)
 
 
 def _wait_consumer(timeout: float = 30.0) -> None:
@@ -250,7 +322,7 @@ def _publish_probe(dev: str) -> None:
             "rxInfo": [{"rssi": -1, "snr": 0.0}],
         }
     )
-    compose(
+    compose_infra(
         "exec",
         "-T",
         "mosquitto",
@@ -360,7 +432,7 @@ def publish_mqtt() -> Any:
     """Publica um uplink MQTT no mosquitto (mesmo caminho do gateway real)."""
 
     def _publish(topic: str, payload: dict[str, Any]) -> None:
-        result = compose(
+        result = compose_infra(
             "exec",
             "-T",
             "mosquitto",
@@ -415,7 +487,7 @@ def mqtt_publish_delivered() -> Any:
             "sleep 1.5; "
             f"grep -q '{marker}' /tmp/probe.out && echo GOT || echo MISS"
         )
-        result = compose(
+        result = compose_infra(
             "exec",
             "-T",
             "mosquitto",

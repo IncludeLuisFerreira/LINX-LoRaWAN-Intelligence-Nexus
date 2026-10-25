@@ -74,10 +74,15 @@ Cada compose do repositório tem um target `up-<stack>` (e `down-<stack>` /
 | `make up-base` | `infra/docker-compose.base.yml` | Base de dev (PostgreSQL + Redis + Mosquitto) |
 | `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + docker_provisioner + db) |
 | `make up-client` | `client/docker-compose.yml` | Ambiente isolado (frontend + telemetry_consumer + TimescaleDB) |
-| `make up-deploy` | `deploy/docker-compose.yml` | Stack full-stack (nginx + TLS + todos os serviços) |
+| `make up-deploy` | `deploy/docker-compose.yml` | Stack full-stack (nginx + TLS + todos os serviços); requer `infra` no ar |
 | `make up-client-agent` | `deploy/docker-compose.client-agent.yml` | Client Agent isolado (ver nota abaixo) |
 | `make build-tenant-image` | `client/tenant_app/` | Imagem mínima `linx-tenant-app:latest` usada no provisionamento |
 | `make test-integration` | `tests/integration/run.sh` | Testes de integração ponta-a-ponta |
+
+> O stack `deploy` não sobe Mosquitto próprio. O `routing` consome o broker do
+> stack `infra` pela rede `linx-network`; rode `make up-infra` antes de
+> `make up-deploy` (os targets garantem a rede). As credenciais do broker
+> pertencem a `infra/.env`.
 
 > `make up-client-agent` exige um `AGENT_SERVICE_TOKEN` real (não placeholder)
 > no `deploy/.env` e um `agent_bridge` alcançável. O default
