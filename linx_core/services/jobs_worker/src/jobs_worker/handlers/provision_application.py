@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -11,6 +12,8 @@ from linx_shared.jobs.handlers import PermanentJobError, TransientJobError
 from linx_shared.models.job import Job
 
 from jobs_worker.config import settings
+
+logger = logging.getLogger(__name__)
 
 _TRANSIENT_GRPC_CODES = frozenset(
     {
@@ -53,6 +56,16 @@ class ProvisionApplicationHandler:
             result = client.provision(str(job.subject_id))
         except ProvisionerClientError as exc:
             grpc_code = _grpc_code_name(exc.grpc_code)
+            if exc.grpc_code is None:
+                logger.warning(
+                    "provisioner client is misconfigured: %s",
+                    exc.message,
+                )
+                raise TransientJobError(
+                    exc.message,
+                    code="provisioner_configuration_error",
+                    grpc_code=grpc_code,
+                ) from exc
             if exc.grpc_code in _TRANSIENT_GRPC_CODES:
                 raise TransientJobError(
                     exc.message,
@@ -63,7 +76,13 @@ class ProvisionApplicationHandler:
                 grpc_code=grpc_code,
             ) from exc
         finally:
-            client.close()
+            try:
+                client.close()
+            except Exception:
+                logger.warning(
+                    "failed to close provisioner client",
+                    exc_info=True,
+                )
 
         return {
             "container_id": result.container_id,

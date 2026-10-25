@@ -64,6 +64,20 @@ class JobProcessor:
                 return
 
             attempt = job.attempts
+            if job.attempts > job.max_attempts:
+                self._add_failed(
+                    session,
+                    job,
+                    envelope,
+                    PermanentJobError(
+                        "job exceeded max attempts after lease recovery",
+                        code="attempts_exhausted",
+                    ),
+                )
+                session.commit()
+                outcome = JobStatus.FAILED.value
+                return
+
             self._add_started(session, job, envelope)
             session.commit()
 

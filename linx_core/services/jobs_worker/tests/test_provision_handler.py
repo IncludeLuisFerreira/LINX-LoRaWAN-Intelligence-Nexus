@@ -16,9 +16,10 @@ from jobs_worker.handlers.provision_application import (
 
 
 class FakeClient:
-    def __init__(self, *, result=None, error=None) -> None:
+    def __init__(self, *, result=None, error=None, close_error=None) -> None:
         self.result = result
         self.error = error
+        self.close_error = close_error
         self.requests: list[str] = []
         self.closed = False
 
@@ -30,6 +31,8 @@ class FakeClient:
 
     def close(self) -> None:
         self.closed = True
+        if self.close_error is not None:
+            raise self.close_error
 
 
 def _job(subject_id=None) -> Job:
@@ -111,4 +114,47 @@ def test_handler_maps_failed_precondition_to_permanent():
         handler.handle(_job())
 
     assert exc_info.value.grpc_code == "FAILED_PRECONDITION"
+    assert client.closed is True
+
+
+def test_handler_classifies_missing_grpc_code_as_transient():
+    error = ProvisionerClientError("Service token is not configured")
+    client = FakeClient(error=error)
+    handler = ProvisionApplicationHandler(client_factory=lambda: client)
+
+    with pytest.raises(TransientJobError) as exc_info:
+        handler.handle(_job())
+
+    assert exc_info.value.code == "provisioner_configuration_error"
+    assert exc_info.value.grpc_code is None
+
+
+def test_handler_close_error_does_not_mask_mapped_error():
+    provision_error = ProvisionerClientError(
+        "unavailable",
+        grpc_code=grpc.StatusCode.UNAVAILABLE,
+    )
+    client = FakeClient(
+        error=provision_error,
+        close_error=RuntimeError("close failed"),
+    )
+    handler = ProvisionApplicationHandler(client_factory=lambda: client)
+
+    with pytest.raises(TransientJobError) as exc_info:
+        handler.handle(_job())
+
+    assert exc_info.value.grpc_code == "UNAVAILABLE"
+    assert client.closed is True
+
+
+def test_handler_close_error_does_not_mask_success():
+    client = FakeClient(
+        result=_result(),
+        close_error=RuntimeError("close failed"),
+    )
+    handler = ProvisionApplicationHandler(client_factory=lambda: client)
+
+    result = handler.handle(_job())
+
+    assert result["container_id"] == "container-1"
     assert client.closed is True

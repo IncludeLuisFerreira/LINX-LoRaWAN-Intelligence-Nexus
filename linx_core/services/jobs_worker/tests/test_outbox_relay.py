@@ -1,12 +1,21 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+from linx_shared.db.base import engine
+from linx_shared.jobs.constants import (
+    JOB_EXCHANGE,
+    JOB_TYPE_PROVISION_APPLICATION,
+    PROVISIONING_REQUESTED,
+)
 from linx_shared.jobs.outbox import (
     OUTBOX_RETRY_DELAY_SECONDS,
     relay_pending_outbox,
 )
+from linx_shared.models.job import Job
 from linx_shared.models.job_outbox import JobOutbox
-from sqlalchemy import select
+from linx_shared.models.tenant import Tenant
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 
 class FakePublisher:
@@ -105,26 +114,46 @@ def test_publisher_failure_increments_attempts_and_schedules_retry(
     )
 
 
-def test_two_relays_do_not_publish_same_row_twice(
-    session_factory,
-    db_session,
-    job_factory,
-):
-    job = job_factory()
-    outbox = JobOutbox(
-        job_id=job.id,
-        exchange="linx.jobs",
-        routing_key="provisioning.application.requested",
-        payload={"job_id": str(job.id)},
-    )
-    db_session.add(outbox)
-    db_session.flush()
+def _seed_committed_outbox():
+    with Session(engine) as session:
+        tenant = Tenant(name=f"tenant-{uuid4()}")
+        session.add(tenant)
+        session.flush()
+        job = Job(
+            type=JOB_TYPE_PROVISION_APPLICATION,
+            tenant_id=tenant.id,
+            subject_id=uuid4(),
+            payload={},
+            command_exchange=JOB_EXCHANGE,
+            command_routing_key=PROVISIONING_REQUESTED,
+            deduplication_key=f"test:{uuid4()}",
+        )
+        session.add(job)
+        session.flush()
+        session.add(
+            JobOutbox(
+                job_id=job.id,
+                exchange=JOB_EXCHANGE,
+                routing_key=PROVISIONING_REQUESTED,
+                payload={"job_id": str(job.id)},
+            )
+        )
+        session.commit()
+        return tenant.id
+
+
+def test_two_relays_do_not_publish_same_row_twice():
+    tenant_id = None
+    first_connection = engine.connect()
+    second_connection = engine.connect()
+    first_session = Session(bind=first_connection)
+    second_session = Session(bind=second_connection)
     first_publisher = FakePublisher()
     second_publisher = FakePublisher()
-    first_session = session_factory()
-    second_session = session_factory()
 
     try:
+        tenant_id = _seed_committed_outbox()
+
         first_published = relay_pending_outbox(
             first_session,
             first_publisher,
@@ -134,16 +163,22 @@ def test_two_relays_do_not_publish_same_row_twice(
             second_session,
             second_publisher,
         )
-        second_session.rollback()
+
+        assert first_published == 1
+        assert second_published == 0
+        assert len(first_publisher.calls) == 1
+        assert second_publisher.calls == []
+
         first_session.commit()
     finally:
-        first_session.close()
         second_session.close()
-
-    assert first_published == 1
-    assert second_published == 0
-    assert len(first_publisher.calls) == 1
-    assert second_publisher.calls == []
+        first_session.close()
+        second_connection.close()
+        first_connection.close()
+        if tenant_id is not None:
+            with Session(engine) as cleanup:
+                cleanup.execute(delete(Tenant).where(Tenant.id == tenant_id))
+                cleanup.commit()
 
 
 def test_unrelated_pending_row_is_not_touched(

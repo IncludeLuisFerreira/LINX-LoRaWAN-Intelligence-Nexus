@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from jobs_worker.processor import JobProcessor
+from jobs_worker.reaper import JobReaper
 
 RETRY_DELAYS = (5, 30, 120)
 
@@ -270,6 +271,40 @@ def test_unknown_type_becomes_permanent_failure(
     assert by_key[failed_key].payload["status"] == JobStatus.FAILED.value
     assert by_key[failed_key].payload["error"]["retryable"] is False
     assert by_key[PROVISIONING_DEAD].exchange == JOB_DLX
+
+
+def test_exhausted_lease_fails_without_invoking_handler(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    job = job_factory(
+        status=JobStatus.RUNNING.value,
+        attempts=3,
+        max_attempts=3,
+        locked_until=datetime.now(timezone.utc) - timedelta(seconds=5),
+    )
+    reaper = JobReaper(session_factory, interval_seconds=60)
+    reaper.run_once()
+    handler = StubHandler(result={"container_id": "container-1"})
+    processor = _processor(session_factory, _registry(handler))
+
+    processor.process(_envelope(job))
+
+    rows = _outbox(db_session, job.id)
+    by_key = _by_routing_key(rows)
+    failed_key = f"{JOB_TYPE_PROVISION_APPLICATION}.failed"
+    started_key = f"{JOB_TYPE_PROVISION_APPLICATION}.started"
+    assert handler.calls == 0
+    assert failed_key in by_key
+    assert started_key not in by_key
+    assert by_key[failed_key].payload["error"]["code"] == "attempts_exhausted"
+    assert by_key[PROVISIONING_DEAD].exchange == JOB_DLX
+
+    db_session.expire_all()
+    assert job.attempts == 4
+    assert job.locked_until is None
+    assert job.status == JobStatus.RUNNING.value
 
 
 def test_commit_failure_leaves_no_uncommitted_outbox_row(
