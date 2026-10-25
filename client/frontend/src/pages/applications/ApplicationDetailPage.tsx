@@ -5,13 +5,19 @@ import { applicationService, type ApplicationOutput } from '../../services/app';
 import { deviceService, type DeviceOutput } from '../../services/device';
 import type { TenantOutput } from '../../services/tenant';
 import { useAsyncData } from '../../hooks/useAsyncData';
+import { useLatestTelemetry } from '../../hooks/useLatestTelemetry';
 import { getErrorMessage } from '../../services/api';
 import { formatDate } from '../../utils/format';
+import {
+  formatTelemetryValue,
+  isDeviceOnline,
+} from '../../utils/deviceTelemetry';
 import { cleanOptionalDescription } from '../../utils/form';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
 import { Tabs } from '../../components/ui/Tabs';
 import { Card } from '../../components/ui/Card';
+import { Badge } from '../../components/ui/Badge';
 import { Table, type Column } from '../../components/ui/Table';
 import { Button } from '../../components/ui/Button';
 import { Alert } from '../../components/ui/Alert';
@@ -65,6 +71,7 @@ export default function ApplicationDetailPage() {
   const tenant = data?.tenant;
   const app = data?.app;
   const devices = data?.devices ?? [];
+  const latestTelemetryByDevEui = useLatestTelemetry(devices);
 
   async function updateApp(values: ApplicationFormData) {
     setFormError('');
@@ -152,6 +159,55 @@ export default function ApplicationDetailPage() {
       key: 'created_at',
       header: 'Criado em',
       render: (device) => formatDate(device.created_at),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (device) => {
+        const last = latestTelemetryByDevEui[device.dev_eui];
+        if (last === undefined) {
+          return (
+            <span
+              aria-label="Carregando status do device"
+              className="text-muted"
+            >
+              …
+            </span>
+          );
+        }
+        const online = isDeviceOnline(last);
+        return (
+          <Badge color={online ? 'green' : 'red'}>
+            {online ? 'Online' : 'Offline'}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'last_telemetry',
+      header: 'Última telemetria',
+      render: (device) => {
+        const last = latestTelemetryByDevEui[device.dev_eui];
+        if (last === undefined) {
+          return (
+            <span
+              aria-label="Carregando última telemetria"
+              className="text-muted"
+            >
+              …
+            </span>
+          );
+        }
+        if (!last) return '—';
+        return (
+          <div className="space-y-1">
+            <div className="text-xs">{formatDate(last.time)}</div>
+            <div className="text-xs text-muted">
+              {formatTelemetryValue(last.payload)}
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: 'actions',
