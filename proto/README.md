@@ -91,10 +91,11 @@ A geração dos stubs Python é feita na issue #20.
 
 ## `proto/linx_docker_provisioner.proto`
 
-Contrato interno entre o `identity_api` (cliente) e o
-`docker_provisioner` (servidor). O `identity_api` valida tenant/application
-no Postgres e envia apenas o `app_id`; o provisioner concentra a política de
-imagem, porta, rede e variáveis de ambiente.
+Contrato interno entre o `jobs_worker` (cliente gRPC) e o
+`docker_provisioner` (servidor). No fluxo assíncrono, o `identity_api`
+valida tenant/application no Postgres e enfileira um job; quem chama este RPC
+enviando apenas o `app_id` é o `jobs_worker`. O provisioner concentra a
+política de imagem, porta, rede e variáveis de ambiente.
 
 | Item | Valor |
 | ---- | ----- |
