@@ -4,6 +4,7 @@ import { tenantService } from '../services/tenant';
 import { loadApplicationsByTenant } from '../services/app';
 import type { TenantOutput } from '../services/tenant';
 import type { ApplicationOutput } from '../services/app';
+import { UuidDisplay } from '../components/UuidDisplay';
 
 const TenantsPage: React.FC = () => {
   const [tenants, setTenants] = useState<TenantOutput[]>([]);
@@ -63,8 +64,8 @@ const TenantsPage: React.FC = () => {
                   <h2 className="text-xl font-semibold text-blue-400">
                     {tenant.name}
                   </h2>
-                  <span className="text-xs text-gray-400 font-mono">
-                    ID: {tenant.id}
+                  <span className="text-xs text-gray-400">
+                    ID: <UuidDisplay value={tenant.id} />
                   </span>
                 </div>
 
@@ -84,8 +85,8 @@ const TenantsPage: React.FC = () => {
                         className="text-sm bg-gray-900 p-2 rounded flex justify-between"
                       >
                         <span>{app.name}</span>
-                        <span className="text-xs text-gray-500 font-mono">
-                          App ID: {app.id}
+                        <span className="text-xs text-gray-500">
+                          App ID: <UuidDisplay value={app.id} />
                         </span>
                       </li>
                     ))}
