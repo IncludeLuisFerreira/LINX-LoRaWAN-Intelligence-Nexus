@@ -1,8 +1,9 @@
+import { useParams } from 'react-router-dom';
 import { UuidDisplay } from '../components/UuidDisplay';
 
 export default function Devices() {
-  // Em produção viria dos dados da API
-  const deviceId = '11111111-1111-1111-1111-111111111111';
+  const { id } = useParams();
+  const deviceId = id || '11111111-1111-1111-1111-111111111111';
 
   return (
     <div className="p-8 text-white">

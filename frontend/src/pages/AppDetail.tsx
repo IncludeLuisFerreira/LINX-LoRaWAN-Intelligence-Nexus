@@ -1,8 +1,9 @@
+import { useParams } from 'react-router-dom';
 import { UuidDisplay } from '../components/UuidDisplay';
 
 export default function AppDetail() {
-  // Em produção viria dos params/props
-  const appId = '00000000-0000-0000-0000-000000000000';
+  const { app_id, id } = useParams();
+  const appId = app_id || id || '00000000-0000-0000-0000-000000000000';
 
   return (
     <div className="p-8 text-white">

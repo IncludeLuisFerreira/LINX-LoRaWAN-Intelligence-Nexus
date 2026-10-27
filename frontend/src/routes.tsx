@@ -27,6 +27,7 @@ export function AppRoutes() {
             path="/tenants/:tenant_id/apps/:app_id"
             element={<AppDetail />}
           />
+          <Route path="/devices" element={<Devices />} />
           <Route path="/tenants/apps/:id/devices" element={<Devices />} />
           <Route path="/tenants/apps/:id/dashboard" element={<Dashboard />} />
           <Route path="*" element={<NotFound />} />
