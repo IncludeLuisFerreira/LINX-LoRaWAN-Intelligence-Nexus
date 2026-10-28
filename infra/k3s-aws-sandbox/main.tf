@@ -11,6 +11,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
   # Backend local por padrão — nada de S3 remoto.
 }
@@ -30,16 +34,19 @@ variable "key_name" {
   type        = string
 }
 
-variable "k3s_token" {
-  description = "Token fixo do cluster K3s (server e agents)."
-  type        = string
-  default     = "lynx-k3s-sandbox-token"
-}
-
 variable "node_count" {
   description = "Número de workers."
   type        = number
   default     = 2
+}
+
+###############################################################################
+# Token do cluster — gerado automaticamente
+###############################################################################
+
+resource "random_password" "k3s_token" {
+  length  = 64
+  special = false
 }
 
 ###############################################################################
@@ -83,6 +90,7 @@ resource "aws_vpc" "k3s" {
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.k3s.id
   cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -188,20 +196,31 @@ resource "aws_instance" "master" {
   associate_public_ip_address = true
 
   user_data = <<-EOT
-    #!/bin/bash
-    set -eux
+#!/bin/bash
+set -eux
 
-    export K3S_TOKEN="${var.k3s_token}"
+export K3S_TOKEN="${random_password.k3s_token.result}"
 
-    # Instala o K3s server.
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s -
+# Instala o K3s server.
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s -
 
-    # Expõe o kubeconfig para uso local.
-    mkdir -p /home/ubuntu/.kube
-    sleep 5
-    cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
-    chown ubuntu:ubuntu /home/ubuntu/.kube/config
-  EOT
+# Expõe o kubeconfig para uso local.
+mkdir -p /home/ubuntu/.kube
+for i in $(seq 1 60); do
+  if [ -f /etc/rancher/k3s/k3s.yaml ] && systemctl is-active --quiet k3s; then
+    break
+  fi
+  sleep 2
+done
+
+if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
+  echo "K3s kubeconfig não encontrado após 120s" >&2
+  exit 1
+fi
+
+cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+chown ubuntu:ubuntu /home/ubuntu/.kube/config
+EOT
 
   tags = {
     Name = "k3s-master"
@@ -223,15 +242,29 @@ resource "aws_instance" "worker" {
   associate_public_ip_address = true
 
   user_data = <<-EOT
-    #!/bin/bash
-    set -eux
+#!/bin/bash
+set -eux
 
-    export K3S_URL="https://${aws_instance.master.private_ip}:6443"
-    export K3S_TOKEN="${var.k3s_token}"
+MASTER_URL="https://${aws_instance.master.private_ip}:6443"
+export K3S_URL="$MASTER_URL"
+export K3S_TOKEN="${random_password.k3s_token.result}"
 
-    # Instala o K3s agent apontando para o master.
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent" sh -s -
-  EOT
+# Espera a API do K3s server ficar saudável antes de registrar o agent.
+for i in $(seq 1 90); do
+  if curl -ksf "$MASTER_URL/healthz" >/dev/null; then
+    break
+  fi
+  sleep 2
+done
+
+if ! curl -ksf "$MASTER_URL/healthz" >/dev/null; then
+  echo "K3s master não respondeu em $MASTER_URL após 180s" >&2
+  exit 1
+fi
+
+# Instala o K3s agent apontando para o master.
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent" sh -s -
+EOT
 
   depends_on = [aws_instance.master]
 
@@ -258,4 +291,10 @@ output "ssh_command" {
 output "worker_private_ips" {
   description = "IPs privados dos Workers."
   value       = aws_instance.worker[*].private_ip
+}
+
+output "k3s_token" {
+  description = "Token do cluster K3s gerado automaticamente (sensível)."
+  value       = random_password.k3s_token.result
+  sensitive   = true
 }
