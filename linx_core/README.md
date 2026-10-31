@@ -38,7 +38,7 @@ linx_core/
 │   └── src/linx_shared/
 │       ├── core/config.py     # Settings (DATABASE_URL, DB_CONNECT_TIMEOUT)
 │       ├── db/                # engine, SessionLocal, get_db, Base
-│       ├── models/            # tenant, application, user, tenant_user, devices, jobs
+│       ├── models/            # tenant, application, application_instances, user, devices, jobs
 │       ├── schemas/           # schemas Pydantic da API
 │       └── grpc/              # stubs dos contratos AgentBridge/DockerProvisioner
 │
@@ -300,6 +300,27 @@ startup.
 > (os atalhos `task migrate`/`task migration` já fazem isso).
 
 > Os models ficam em `linx_shared.models`; o `migrations/env.py` importa de lá.
+
+### Tabela `application_instances`
+
+Registra o container Docker provisionado para cada aplicação e é a fonte da
+verdade do estado de provisionamento. O model fica em
+`shared/src/linx_shared/models/application_instance.py` e a migration em
+`services/identity_api/migrations/versions/f6a7b8c9d0e1_add_application_instances_table.py`.
+
+| Coluna           | Tipo                     | Regras                                              |
+| ---------------- | ------------------------ | --------------------------------------------------- |
+| `id`             | `uuid`                   | PK, gerado por `uuid.uuid4`                         |
+| `app_id`         | `uuid`                   | FK `application.id`, `ON DELETE CASCADE`, `UNIQUE`  |
+| `container_id`   | `varchar(64)`            | Nulo até o container ser criado                     |
+| `host`           | `varchar(255)`           | Nulo até o container ser criado                     |
+| `port`           | `integer`                | Nulo até o container ser criado                     |
+| `status`         | `varchar(20)`            | `NOT NULL`, default `PENDING`                       |
+| `provisioned_at` | `timestamptz`            | Nulo até o provisionamento concluir                 |
+
+O `UNIQUE (app_id)` garante no máximo uma instância por aplicação. O
+`CHECK` aceita apenas os estados `PENDING`, `PROVISIONING`, `RUNNING` e
+`ERROR`. O default `PENDING` é aplicado pelo banco e também pelo ORM.
 
 ## Contratos gRPC
 
