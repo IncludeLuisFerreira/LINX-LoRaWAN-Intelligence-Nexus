@@ -56,6 +56,15 @@ def create_provisioning_job(
     return job
 
 
+def get_active_provisioning_job(
+    db: Session,
+    application_id: UUID,
+) -> Job | None:
+    """Retorna o job de provisionamento ativo da aplicação, se existir."""
+    deduplication_key = f"provisioning.application:{application_id}"
+    return get_active_job(db, deduplication_key)
+
+
 def get_tenant_job(
     db: Session,
     tenant_id: UUID,

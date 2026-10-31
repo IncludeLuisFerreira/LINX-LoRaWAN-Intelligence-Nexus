@@ -1,4 +1,7 @@
+from collections.abc import Iterator
 from functools import lru_cache
+
+from linx_shared.clients.docker_provisioner import DockerProvisionerClient
 
 from identity_api.chirpstack_client import ChirpStackClient
 from identity_api.config import settings
@@ -37,3 +40,21 @@ def _build_rabbitmq_client() -> RabbitMQClient:
 
 def get_rabbitmq_client() -> RabbitMQClient:
     return _build_rabbitmq_client()
+
+
+def get_docker_provisioner_client() -> (
+    Iterator[DockerProvisionerClient | None]
+):
+    if not settings.provisioner_grpc_host:
+        yield None
+        return
+
+    client = DockerProvisionerClient(
+        target=settings.provisioner_grpc_host,
+        service_token=settings.service_token,
+        timeout=settings.provisioner_grpc_timeout_seconds,
+    )
+    try:
+        yield client
+    finally:
+        client.close()

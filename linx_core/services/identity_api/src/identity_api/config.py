@@ -23,6 +23,26 @@ class IdentitySettings(Settings):
 
     job_max_attempts: int = 3
 
+    # Vazio desabilita o deprovisionamento no delete. O stack que provisiona
+    # containers define `docker_provisioner:50052`; stacks sem o serviço
+    # continuam podendo excluir aplicações sem depender do Docker.
+    provisioner_grpc_host: str = ""
+    provisioner_grpc_timeout_seconds: float = 10.0
+
+    @field_validator("provisioner_grpc_host")
+    @classmethod
+    def _validate_provisioner_grpc_host(cls, value: str) -> str:
+        return (value or "").strip()
+
+    @field_validator("provisioner_grpc_timeout_seconds")
+    @classmethod
+    def _validate_provisioner_grpc_timeout(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError(
+                "PROVISIONER_GRPC_TIMEOUT_SECONDS deve ser maior que zero"
+            )
+        return value
+
     @field_validator("database_url")
     @classmethod
     def _validate_database_url(cls, value: str) -> str:
