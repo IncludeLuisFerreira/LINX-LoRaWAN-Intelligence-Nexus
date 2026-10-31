@@ -1,7 +1,27 @@
 from uuid import uuid4
 
 from chirpstack_api import api
+from linx_shared.clients.docker_provisioner import (
+    DeprovisionedApplication,
+    ProvisionerClientError,
+)
 from linx_shared.core.exceptions import ExternalServiceError
+
+
+class FakeProvisionerClient:
+    def __init__(self) -> None:
+        self.deprovisioned: list[str] = []
+        self.error: ProvisionerClientError | None = None
+
+    def deprovision(self, app_id: str) -> DeprovisionedApplication:
+        if self.error is not None:
+            raise self.error
+        self.deprovisioned.append(app_id)
+        return DeprovisionedApplication(
+            network=f"linx-app-{app_id}",
+            removed=True,
+            containers_removed=1,
+        )
 
 
 class FakeRabbitMQClient:

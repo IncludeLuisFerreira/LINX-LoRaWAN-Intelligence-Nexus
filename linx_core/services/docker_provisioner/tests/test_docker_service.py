@@ -11,11 +11,13 @@ import pytest
 from docker_provisioner.docker_service import (
     ProvisioningError,
     allocate_port,
+    deprovision_application,
     provision_application,
 )
-from tests.fakes import FakeContainer, FakeDockerClient
+from tests.fakes import FakeContainer, FakeDockerClient, FakeNetwork
 
 APP_ID = "3d7f1a8e-3f4b-4f0a-9b7c-2e1d9a8b7c6d"
+OTHER_APP_ID = "8a2b4c6d-1e3f-4a5b-8c7d-9e0f1a2b3c4d"
 
 
 class FakeSocket:
@@ -310,3 +312,108 @@ def test_provision_serializes_concurrent_calls_for_same_app():
     assert len(client.containers.items) == 1
     assert sorted(result.created for result in results) == [False, True]
     assert len({result.container_id for result in results}) == 1
+
+
+def _deprovision(client: FakeDockerClient, *, app_id: str = APP_ID):
+    return deprovision_application(
+        client,
+        app_id,
+        network_prefix="linx-app",
+    )
+
+
+def test_provision_creates_distinct_bridge_networks_per_app():
+    client = FakeDockerClient()
+
+    with _patch_socket():
+        first = _provision(client, app_id=APP_ID)
+        second = _provision(client, app_id=OTHER_APP_ID)
+
+    assert first.network == f"linx-app-{APP_ID}"
+    assert second.network == f"linx-app-{OTHER_APP_ID}"
+    assert first.network != second.network
+    assert [call["driver"] for call in client.networks.create_calls] == [
+        "bridge",
+        "bridge",
+    ]
+    assert [call["name"] for call in client.networks.create_calls] == [
+        first.network,
+        second.network,
+    ]
+    assert client.containers.run_calls[0]["network"] == first.network
+    assert client.containers.run_calls[1]["network"] == second.network
+
+
+def test_deprovision_removes_application_container_and_network():
+    client = FakeDockerClient()
+    with _patch_socket():
+        _provision(client)
+    network = client.networks.items[f"linx-app-{APP_ID}"]
+
+    result = _deprovision(client)
+
+    assert result.removed is True
+    assert result.network == f"linx-app-{APP_ID}"
+    assert result.containers_removed == 1
+    assert client.containers.items[0].removed is True
+    assert network.removed is True
+
+
+def test_deprovision_is_idempotent_when_resources_are_missing():
+    client = FakeDockerClient()
+
+    result = _deprovision(client)
+
+    assert result.removed is False
+    assert result.network == f"linx-app-{APP_ID}"
+    assert result.containers_removed == 0
+
+
+def test_deprovision_does_not_touch_another_application_network():
+    client = FakeDockerClient()
+    with _patch_socket():
+        _provision(client, app_id=APP_ID)
+        _provision(client, app_id=OTHER_APP_ID)
+
+    _deprovision(client, app_id=APP_ID)
+
+    assert client.networks.items[f"linx-app-{APP_ID}"].removed is True
+    assert client.networks.items[f"linx-app-{OTHER_APP_ID}"].removed is False
+    assert client.containers.items[1].removed is False
+
+
+def test_deprovision_refuses_network_labeled_for_another_application():
+    client = FakeDockerClient()
+    network = FakeNetwork(
+        f"linx-app-{APP_ID}",
+        labels={
+            "linx.managed-by": "linx-core",
+            "linx.application.id": OTHER_APP_ID,
+        },
+    )
+    client.networks.items[network.name] = network
+
+    with pytest.raises(ProvisioningError) as exc_info:
+        _deprovision(client)
+
+    assert exc_info.value.status == grpc.StatusCode.FAILED_PRECONDITION
+    assert network.removed is False
+
+
+def test_deprovision_refuses_network_with_attached_containers():
+    client = FakeDockerClient()
+    network = FakeNetwork(
+        f"linx-app-{APP_ID}",
+        labels={
+            "linx.managed-by": "linx-core",
+            "linx.application.id": APP_ID,
+        },
+    )
+    network.attrs["Containers"] = {"foreign-container": {}}
+    client.networks.items[network.name] = network
+
+    with pytest.raises(ProvisioningError) as exc_info:
+        _deprovision(client)
+
+    assert exc_info.value.status == grpc.StatusCode.FAILED_PRECONDITION
+    assert network.removed is False

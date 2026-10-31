@@ -44,6 +44,11 @@ class DockerProvisionerStub:
                 request_serializer=linx__docker__provisioner__pb2.ProvisionApplicationRequest.SerializeToString,
                 response_deserializer=linx__docker__provisioner__pb2.ProvisionApplicationResponse.FromString,
                 _registered_method=True)
+        self.DeprovisionApplication = channel.unary_unary(
+                '/linx.DockerProvisioner/DeprovisionApplication',
+                request_serializer=linx__docker__provisioner__pb2.DeprovisionApplicationRequest.SerializeToString,
+                response_deserializer=linx__docker__provisioner__pb2.DeprovisionApplicationResponse.FromString,
+                _registered_method=True)
 
 
 class DockerProvisionerServicer:
@@ -60,6 +65,14 @@ class DockerProvisionerServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def DeprovisionApplication(self, request, context):
+        """Remove o container e a rede bridge dedicada da aplicação. Idempotente:
+        recursos ausentes não são erro.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DockerProvisionerServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -67,6 +80,11 @@ def add_DockerProvisionerServicer_to_server(servicer, server):
                     servicer.ProvisionApplication,
                     request_deserializer=linx__docker__provisioner__pb2.ProvisionApplicationRequest.FromString,
                     response_serializer=linx__docker__provisioner__pb2.ProvisionApplicationResponse.SerializeToString,
+            ),
+            'DeprovisionApplication': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeprovisionApplication,
+                    request_deserializer=linx__docker__provisioner__pb2.DeprovisionApplicationRequest.FromString,
+                    response_serializer=linx__docker__provisioner__pb2.DeprovisionApplicationResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -101,6 +119,33 @@ class DockerProvisioner:
             '/linx.DockerProvisioner/ProvisionApplication',
             linx__docker__provisioner__pb2.ProvisionApplicationRequest.SerializeToString,
             linx__docker__provisioner__pb2.ProvisionApplicationResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeprovisionApplication(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/linx.DockerProvisioner/DeprovisionApplication',
+            linx__docker__provisioner__pb2.DeprovisionApplicationRequest.SerializeToString,
+            linx__docker__provisioner__pb2.DeprovisionApplicationResponse.FromString,
             options,
             channel_credentials,
             insecure,

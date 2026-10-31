@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dlinx_docker_provisioner.proto\x12\x04linx\"-\n\x1bProvisionApplicationRequest\x12\x0e\n\x06\x61pp_id\x18\x01 \x01(\t\"\x97\x01\n\x1cProvisionApplicationResponse\x12\x14\n\x0c\x63ontainer_id\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\r\x12\x0f\n\x07network\x18\x03 \x01(\t\x12\r\n\x05image\x18\x04 \x01(\t\x12\x0e\n\x06status\x18\x05 \x01(\t\x12\x0f\n\x07\x63reated\x18\x06 \x01(\x08\x12\x12\n\nmqtt_topic\x18\x07 \x01(\t2r\n\x11\x44ockerProvisioner\x12]\n\x14ProvisionApplication\x12!.linx.ProvisionApplicationRequest\x1a\".linx.ProvisionApplicationResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dlinx_docker_provisioner.proto\x12\x04linx\"-\n\x1bProvisionApplicationRequest\x12\x0e\n\x06\x61pp_id\x18\x01 \x01(\t\"\x97\x01\n\x1cProvisionApplicationResponse\x12\x14\n\x0c\x63ontainer_id\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\r\x12\x0f\n\x07network\x18\x03 \x01(\t\x12\r\n\x05image\x18\x04 \x01(\t\x12\x0e\n\x06status\x18\x05 \x01(\t\x12\x0f\n\x07\x63reated\x18\x06 \x01(\x08\x12\x12\n\nmqtt_topic\x18\x07 \x01(\t\"/\n\x1d\x44\x65provisionApplicationRequest\x12\x0e\n\x06\x61pp_id\x18\x01 \x01(\t\"^\n\x1e\x44\x65provisionApplicationResponse\x12\x0f\n\x07network\x18\x01 \x01(\t\x12\x0f\n\x07removed\x18\x02 \x01(\x08\x12\x1a\n\x12\x63ontainers_removed\x18\x03 \x01(\r2\xd7\x01\n\x11\x44ockerProvisioner\x12]\n\x14ProvisionApplication\x12!.linx.ProvisionApplicationRequest\x1a\".linx.ProvisionApplicationResponse\x12\x63\n\x16\x44\x65provisionApplication\x12#.linx.DeprovisionApplicationRequest\x1a$.linx.DeprovisionApplicationResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,6 +35,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PROVISIONAPPLICATIONREQUEST']._serialized_end=84
   _globals['_PROVISIONAPPLICATIONRESPONSE']._serialized_start=87
   _globals['_PROVISIONAPPLICATIONRESPONSE']._serialized_end=238
-  _globals['_DOCKERPROVISIONER']._serialized_start=240
-  _globals['_DOCKERPROVISIONER']._serialized_end=354
+  _globals['_DEPROVISIONAPPLICATIONREQUEST']._serialized_start=240
+  _globals['_DEPROVISIONAPPLICATIONREQUEST']._serialized_end=287
+  _globals['_DEPROVISIONAPPLICATIONRESPONSE']._serialized_start=289
+  _globals['_DEPROVISIONAPPLICATIONRESPONSE']._serialized_end=383
+  _globals['_DOCKERPROVISIONER']._serialized_start=386
+  _globals['_DOCKERPROVISIONER']._serialized_end=601
 # @@protoc_insertion_point(module_scope)

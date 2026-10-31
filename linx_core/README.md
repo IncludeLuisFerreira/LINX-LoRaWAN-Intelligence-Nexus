@@ -90,7 +90,7 @@ Serviço FastAPI com os recursos de identidade/catálogo:
 |  `GET`  | `/api/v1/tenant/{id}/applications`          | Lista as applications do tenant.      |
 |  `GET`  | `/api/v1/tenant/{id}/applications/{app_id}` | Busca uma application.                |
 | `PATCH` | `/api/v1/tenant/{id}/applications/{app_id}` | Atualiza parcialmente uma application.|
-| `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}` | Remove uma application (`204`).       |
+| `DELETE`| `/api/v1/tenant/{id}/applications/{app_id}` | Remove a application, o container e a rede dedicada (`204`). |
 | `POST`  | `/api/v1/tenant/{id}/applications/{app_id}/provision` | Enfileira o provisionamento assíncrono do container (`202 Accepted`). |
 |  `GET`  | `/api/v1/tenant/{id}/jobs/{job_id}`        | Consulta o status do job de provisionamento.      |
 | `POST`  | `/api/v1/devices`                          | Cria um device (`201`) e provisiona no ChirpStack. |
@@ -117,6 +117,7 @@ Serviço interno que cria e reaproveita containers Docker por aplicação. É o
 | RPC | Direção | Uso |
 | --- | ------- | --- |
 | `ProvisionApplication` | jobs_worker → docker_provisioner | Cria/reaproveita o container da aplicação e devolve porta/rede. |
+| `DeprovisionApplication` | identity_api → docker_provisioner | Remove o container e a rede dedicada no delete da aplicação. |
 
 Contrato em `proto/linx_docker_provisioner.proto`. A chamada exige o metadado
 `authorization: Bearer <SERVICE_TOKEN>` e a porta não é publicada no host.
@@ -159,12 +160,40 @@ pending ──claim──> running ──sucesso──> succeeded
 O provisioner:
 
 - reutiliza o container se já existir label `linx.application.id`;
-- cria/reutiliza a rede `linx-app-<app_id>`;
+- cria/reutiliza a rede bridge `linx-app-<app_id>`;
 - sorteia uma porta no range `8100–9100` (`secrets.SystemRandom`), consulta
   portas publicadas no Docker e re-tenta se o daemon rejeitar uma porta já
   alocada;
 - sobe a imagem `PROVISION_IMAGE` em `0.0.0.0:<porta>`;
 - injeta `APP_ID`, `DB_PASSWORD`, `MQTT_TOPIC` e `SERVICE_TOKEN`.
+
+### Deprovisionamento e isolamento de rede
+
+Cada aplicação tem uma rede bridge exclusiva (`linx-app-<app_id>`) com labels
+`linx.managed-by=linx-core` e `linx.application.id=<app_id>`. O
+`DELETE /api/v1/tenant/{tenant_id}/applications/{application_id}` chama
+`DeprovisionApplication` antes de remover a aplicação do Postgres:
+
+1. remove os containers com label `linx.application.id=<app_id>`;
+2. remove a rede dedicada somente se ela pertence à mesma aplicação e não tem
+   outros endpoints conectados;
+3. responde `409` se houver job de provisionamento ativo;
+4. responde `502` se o provisioner estiver configurado e a limpeza falhar.
+
+O deprovisionamento é habilitado quando `PROVISIONER_GRPC_HOST` aponta para o
+provisioner (o Compose do `linx_core` usa `docker_provisioner:50052`). Em stacks
+sem esse serviço, deixe a variável vazia para preservar o delete sem Docker.
+
+Verificação manual:
+
+```bash
+docker network ls | grep 'linx-app-'
+docker exec <container-app-a> python -c \
+  "import socket; socket.create_connection(('<host-db-b>', 5432), 2)"
+```
+
+O segundo comando deve falhar quando o destino pertence à rede de outra
+aplicação, comprovando que não há rota direta entre as bridges.
 
 Request de exemplo:
 
@@ -367,8 +396,8 @@ Resposta esperada (`200`):
 | `OUTBOX_MAX_ATTEMPTS` | Tentativas de publicação antes da quarentena da outbox.         | `10`                            |
 | `JOB_LOCK_SECONDS`   | Duração do lease de um job em execução.                          | `60`                            |
 | `JOB_REAPER_INTERVAL_SECONDS` | Intervalo de varredura de leases expirados.             | `60`                            |
-| `PROVISIONER_GRPC_HOST` | Endereço gRPC do provisioner visto pelo `jobs_worker`.        | `localhost:50052` (Compose: `docker_provisioner:50052`) |
-| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | Timeout da chamada gRPC do worker.                   | `10`                            |
+| `PROVISIONER_GRPC_HOST` | Endereço gRPC usado pelo worker e pelo delete da aplicação. Vazio desabilita o deprovisionamento. | `docker_provisioner:50052` |
+| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | Timeout das chamadas gRPC ao provisioner.            | `10`                            |
 | `PROVISION_IMAGE`    | Imagem Docker provisionada por aplicação.                        | `linx-tenant-app:latest`        |
 | `PROVISION_PORT_MIN` | Início do range de portas publicado no host.                     | `8100`                          |
 | `PROVISION_PORT_MAX` | Fim do range de portas publicado no host.                        | `9100`                          |

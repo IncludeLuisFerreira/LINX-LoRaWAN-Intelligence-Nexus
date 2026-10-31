@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
+from linx_shared.clients.docker_provisioner import ProvisionerClientError
 from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.core.rabbitmq import (
     derive_tenant_password,
@@ -19,11 +20,14 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from identity_api.config import settings
-from identity_api.dependencies import get_chirpstack_client
+from identity_api.dependencies import (
+    get_chirpstack_client,
+    get_docker_provisioner_client,
+)
 from identity_api.main import app
 from identity_api.routes.application import create_application
 from tests.auth import AUTH
-from tests.fakes import FakeChirpStackClient
+from tests.fakes import FakeChirpStackClient, FakeProvisionerClient
 
 client = TestClient(app, headers=AUTH)
 
@@ -56,6 +60,18 @@ def chirpstack() -> Generator[FakeChirpStackClient, None, None]:
     app.dependency_overrides.pop(get_chirpstack_client, None)
     transaction.rollback()
     connection.close()
+
+
+@pytest.fixture(autouse=True)
+def provisioner() -> Generator[FakeProvisionerClient, None, None]:
+    fake = FakeProvisionerClient()
+
+    def override() -> FakeProvisionerClient:
+        return fake
+
+    app.dependency_overrides[get_docker_provisioner_client] = override
+    yield fake
+    app.dependency_overrides.pop(get_docker_provisioner_client, None)
 
 
 def _create_tenant(name: str = "Tenant Teste") -> str:
@@ -474,3 +490,73 @@ def test_delete_application_removes_rabbitmq_user(rabbitmq):
 
     assert response.status_code == 204
     assert rabbitmq.deleted_users == [tenant_user(created["id"])]
+
+
+def test_delete_application_deprovisions_container_and_network(provisioner):
+    tenant_id = _create_tenant()
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+
+    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+
+    assert response.status_code == 204
+    assert provisioner.deprovisioned == [created["id"]]
+
+
+def test_delete_application_deprovision_failure_returns_502(
+    chirpstack, provisioner
+):
+    tenant_id = _create_tenant()
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+    provisioner.error = ProvisionerClientError(
+        "Provisioner error: docker unavailable",
+        grpc_code=None,
+    )
+
+    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Failed to deprovision application: "
+        "Provisioner error: docker unavailable"
+    }
+    assert chirpstack.deleted_applications == []
+    assert (
+        client.get(
+            f"{_applications_url(tenant_id)}/{created['id']}"
+        ).status_code
+        == 200
+    )
+
+
+def test_delete_application_with_active_provisioning_job_returns_409(
+    provisioner,
+):
+    tenant_id = _create_tenant()
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+    client.post(f"{_applications_url(tenant_id)}/{created['id']}/provision")
+
+    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Application provisioning is in progress; retry later."
+    }
+    assert provisioner.deprovisioned == []
+
+
+def test_delete_application_without_provisioner_skips_docker_cleanup():
+    app.dependency_overrides[get_docker_provisioner_client] = lambda: None
+    tenant_id = _create_tenant()
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+
+    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+
+    assert response.status_code == 204

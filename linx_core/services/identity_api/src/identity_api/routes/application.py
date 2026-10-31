@@ -2,6 +2,10 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from linx_shared.clients.docker_provisioner import (
+    DockerProvisionerClient,
+    ProvisionerClientError,
+)
 from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.core.rabbitmq import (
     derive_tenant_password,
@@ -24,9 +28,13 @@ from identity_api.chirpstack_client import ChirpStackClient
 from identity_api.config import settings
 from identity_api.dependencies import (
     get_chirpstack_client,
+    get_docker_provisioner_client,
     get_rabbitmq_client,
 )
-from identity_api.jobs import create_provisioning_job
+from identity_api.jobs import (
+    create_provisioning_job,
+    get_active_provisioning_job,
+)
 from identity_api.rabbitmq_client import RabbitMQClient
 from identity_api.schemas import JobAcceptedResponse
 
@@ -293,6 +301,9 @@ def delete_application(
     db: Session = Depends(get_db),
     chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
     rabbitmq: RabbitMQClient = Depends(get_rabbitmq_client),
+    provisioner: DockerProvisionerClient | None = Depends(
+        get_docker_provisioner_client
+    ),
 ):
     tenant = db.get(Tenant, tenant_id)
     if not tenant:
@@ -307,6 +318,21 @@ def delete_application(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found!",
         )
+
+    if get_active_provisioning_job(db, application_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=("Application provisioning is in progress; retry later."),
+        )
+
+    if provisioner is not None:
+        try:
+            provisioner.deprovision(str(application_id))
+        except ProvisionerClientError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to deprovision application: {exc.message}",
+            ) from exc
 
     try:
         chirpstack.delete_application(str(application_id))
