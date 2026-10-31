@@ -36,14 +36,29 @@ describe('TenantDetailPage', () => {
 
     renderDetail(tenant.id);
 
-    expect(await screen.findByRole("heading", { name: tenant.name })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: tenant.name }),
+    ).toBeInTheDocument();
     expect(screen.getByText('App Sensores')).toBeInTheDocument();
+  });
+
+  it('shows tenant and application UUIDs with copy actions', async () => {
+    const tenant = await firstTenant();
+    const apps = (await (
+      await fetch(`${base}/tenant/${tenant.id}/applications`)
+    ).json()) as { id: string }[];
+
+    renderDetail(tenant.id);
+
+    await screen.findByRole('heading', { name: tenant.name });
+    expect(screen.getByText(tenant.id)).toBeInTheDocument();
+    expect(screen.getByText(apps[0].id)).toBeInTheDocument();
   });
 
   it('creates an application under the tenant', async () => {
     const tenant = await firstTenant();
     renderDetail(tenant.id);
-    await screen.findByRole("heading", { name: tenant.name });
+    await screen.findByRole('heading', { name: tenant.name });
 
     await userEvent.click(
       screen.getByRole('button', { name: /nova application/i }),
@@ -57,7 +72,7 @@ describe('TenantDetailPage', () => {
   it('deletes the tenant and navigates back to the list', async () => {
     const tenant = await firstTenant();
     renderDetail(tenant.id);
-    await screen.findByRole("heading", { name: tenant.name });
+    await screen.findByRole('heading', { name: tenant.name });
 
     await userEvent.click(screen.getByRole('tab', { name: 'Configurações' }));
     await userEvent.click(

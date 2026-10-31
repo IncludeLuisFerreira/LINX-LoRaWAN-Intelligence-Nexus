@@ -13,11 +13,9 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { UuidDisplay } from '../../components/ui/UuidDisplay';
 import { Edit, Plus, Trash } from '../../components/ui/icons';
-import {
-  TenantFormModal,
-  type TenantFormData,
-} from './TenantFormModal';
+import { TenantFormModal, type TenantFormData } from './TenantFormModal';
 
 type LoadResult = {
   tenants: TenantOutput[];
@@ -138,6 +136,12 @@ export default function TenantListPage() {
               <p className="mt-1 min-h-[1.25rem] text-sm text-muted">
                 {tenant.description || 'Sem descrição'}
               </p>
+              <div className="mt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Tenant ID
+                </p>
+                <UuidDisplay value={tenant.id} className="mt-1" />
+              </div>
               <div className="mt-4 flex justify-end gap-1">
                 <Button
                   variant="ghost"

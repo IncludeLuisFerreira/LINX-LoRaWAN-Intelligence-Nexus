@@ -15,6 +15,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { UuidDisplay } from '../../components/ui/UuidDisplay';
 import { Edit, Plus, Trash } from '../../components/ui/icons';
 import { DeviceNicknameModal } from './DeviceNicknameModal';
 
@@ -93,6 +94,11 @@ export default function DeviceListPage() {
       render: (row) => (
         <span className="font-mono text-xs">{row.device.dev_eui}</span>
       ),
+    },
+    {
+      key: 'id',
+      header: 'Device ID',
+      render: (row) => <UuidDisplay value={row.device.id} />,
     },
     {
       key: 'join_eui',

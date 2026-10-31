@@ -30,8 +30,12 @@ async function firstTenantAndApp(): Promise<{
   return { tenantId, appId: apps[0].id, appName: apps[0].name };
 }
 
-async function createDevice(appId: string, devEui: string, nickname?: string) {
-  await fetch(`${base}/devices`, {
+async function createDevice(
+  appId: string,
+  devEui: string,
+  nickname?: string,
+): Promise<{ id: string }> {
+  const response = await fetch(`${base}/devices`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -43,6 +47,7 @@ async function createDevice(appId: string, devEui: string, nickname?: string) {
       nickname,
     }),
   });
+  return (await response.json()) as { id: string };
 }
 
 function renderDetail(tenantId: string, appId: string) {
@@ -287,6 +292,19 @@ describe('ApplicationDetailPage', () => {
     releaseTelemetry?.();
     expect(
       await within(row as HTMLElement).findByText('Online'),
+    ).toBeInTheDocument();
+  });
+  it('shows application and device UUIDs with copy actions', async () => {
+    const { tenantId, appId } = await firstTenantAndApp();
+    const device = await createDevice(appId, 'aabbccddeeff0808');
+
+    renderDetail(tenantId, appId);
+
+    await screen.findByText('aabbccddeeff0808');
+    expect(screen.getByText(appId)).toBeInTheDocument();
+    expect(screen.getByText(device.id)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Copiar UUID ${device.id}` }),
     ).toBeInTheDocument();
   });
 });

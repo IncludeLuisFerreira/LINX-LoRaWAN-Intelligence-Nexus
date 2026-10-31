@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { tenantService } from '../../services/tenant';
-import {
-  applicationService,
-  type ApplicationOutput,
-} from '../../services/app';
+import { applicationService, type ApplicationOutput } from '../../services/app';
 import type { TenantOutput } from '../../services/tenant';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { getErrorMessage } from '../../services/api';
@@ -20,11 +17,9 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { UuidDisplay } from '../../components/ui/UuidDisplay';
 import { Plus, Trash, Edit } from '../../components/ui/icons';
-import {
-  TenantFormModal,
-  type TenantFormData,
-} from './TenantFormModal';
+import { TenantFormModal, type TenantFormData } from './TenantFormModal';
 import {
   ApplicationFormModal,
   type ApplicationFormData,
@@ -112,7 +107,11 @@ export default function TenantDetailPage() {
   }
 
   if (error || !tenant) {
-    return <Alert variant="error" onRetry={reload}>{error || 'Tenant não encontrado'}</Alert>;
+    return (
+      <Alert variant="error" onRetry={reload}>
+        {error || 'Tenant não encontrado'}
+      </Alert>
+    );
   }
 
   const columns: Column<ApplicationOutput>[] = [
@@ -127,6 +126,11 @@ export default function TenantDetailPage() {
           {app.name}
         </Link>
       ),
+    },
+    {
+      key: 'id',
+      header: 'App ID',
+      render: (app) => <UuidDisplay value={app.id} />,
     },
     {
       key: 'description',
@@ -160,6 +164,13 @@ export default function TenantDetailPage() {
           </Button>
         }
       />
+
+      <div className="mt-4 rounded-lg border border-border bg-surface px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Tenant ID
+        </p>
+        <UuidDisplay value={tenant.id} className="mt-1" />
+      </div>
 
       {actionError && (
         <Alert variant="error" className="mb-4">

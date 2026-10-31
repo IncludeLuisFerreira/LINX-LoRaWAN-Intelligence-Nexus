@@ -8,6 +8,7 @@ import { handlers } from '../../mocks/handlers';
 import TenantListPage from './TenantListPage';
 
 const server = setupServer(...handlers);
+const base = 'http://localhost:8000/api/v1';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => server.resetHandlers());
@@ -29,6 +30,20 @@ describe('TenantListPage', () => {
     expect(screen.getByText('Organização Beta')).toBeInTheDocument();
   });
 
+  it('shows tenant UUIDs with copy actions', async () => {
+    const tenants = (await (await fetch(`${base}/tenant`)).json()) as {
+      id: string;
+    }[];
+
+    renderPage();
+
+    await screen.findByText('Organização Alfa');
+    expect(screen.getByText(tenants[0].id)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Copiar UUID ${tenants[0].id}` }),
+    ).toBeInTheDocument();
+  });
+
   it('creates a tenant through the modal', async () => {
     renderPage();
     await screen.findByText('Organização Alfa');
@@ -42,9 +57,7 @@ describe('TenantListPage', () => {
   });
 
   it('shows an empty state when there are no tenants', async () => {
-    server.use(
-      http.get('*/api/v1/tenant', () => HttpResponse.json([])),
-    );
+    server.use(http.get('*/api/v1/tenant', () => HttpResponse.json([])));
 
     renderPage();
 
@@ -62,9 +75,7 @@ describe('TenantListPage', () => {
 
     renderPage();
 
-    await waitFor(() =>
-      expect(screen.getByText('boom')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('boom')).toBeInTheDocument());
     expect(
       screen.getByRole('button', { name: 'Tentar novamente' }),
     ).toBeInTheDocument();

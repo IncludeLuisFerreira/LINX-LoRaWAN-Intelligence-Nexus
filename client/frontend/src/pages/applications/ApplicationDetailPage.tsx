@@ -24,6 +24,7 @@ import { Alert } from '../../components/ui/Alert';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { UuidDisplay } from '../../components/ui/UuidDisplay';
 import { Edit, Layers, Plus, Trash } from '../../components/ui/icons';
 import { DeviceNicknameModal } from '../devices/DeviceNicknameModal';
 import {
@@ -142,6 +143,11 @@ export default function ApplicationDetailPage() {
       render: (device) => (
         <span className="font-mono text-xs">{device.dev_eui}</span>
       ),
+    },
+    {
+      key: 'id',
+      header: 'Device ID',
+      render: (device) => <UuidDisplay value={device.id} />,
     },
     {
       key: 'join_eui',
@@ -268,6 +274,13 @@ export default function ApplicationDetailPage() {
           </>
         }
       />
+
+      <div className="mt-4 rounded-lg border border-border bg-surface px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+          App ID
+        </p>
+        <UuidDisplay value={app.id} className="mt-1" />
+      </div>
 
       {actionError && (
         <Alert variant="error" className="mb-4">

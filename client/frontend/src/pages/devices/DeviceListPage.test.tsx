@@ -30,8 +30,11 @@ async function firstTenantAndApp(): Promise<{
   return { tenantId, appId: apps[0].id, appName: apps[0].name };
 }
 
-async function createDevice(appId: string, devEui: string) {
-  await fetch(`${base}/devices`, {
+async function createDevice(
+  appId: string,
+  devEui: string,
+): Promise<{ id: string }> {
+  const response = await fetch(`${base}/devices`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -42,6 +45,7 @@ async function createDevice(appId: string, devEui: string) {
       device_profile_id: 'profile-test',
     }),
   });
+  return (await response.json()) as { id: string };
 }
 
 function renderPage() {
@@ -64,6 +68,19 @@ describe('DeviceListPage', () => {
 
     expect(await screen.findByText('aabbccddeeff0101')).toBeInTheDocument();
     expect(screen.getByText(appName)).toBeInTheDocument();
+  });
+
+  it('shows device UUIDs with copy actions', async () => {
+    const { appId } = await firstTenantAndApp();
+    const device = await createDevice(appId, 'aabbccddeeff0909');
+
+    renderPage();
+
+    await screen.findByText('aabbccddeeff0909');
+    expect(screen.getByText(device.id)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Copiar UUID ${device.id}` }),
+    ).toBeInTheDocument();
   });
 
   it('keeps other devices when one application fetch fails', async () => {
