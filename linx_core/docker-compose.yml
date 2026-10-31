@@ -1,0 +1,154 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-linx}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      - POSTGRES_DB=${POSTGRES_DB:-linx}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${POSTGRES_USER:-linx} -d ${POSTGRES_DB:-linx}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_ADMIN_USER:-linx}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  identity_api:
+    build:
+      context: .
+      dockerfile: services/identity_api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - CHIRPSTACK_HOST=${CHIRPSTACK_HOST:-localhost:8080}
+      - CHIRPSTACK_API_TOKEN=${CHIRPSTACK_API_TOKEN:?CHIRPSTACK_API_TOKEN must be set}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+      - JOB_MAX_ATTEMPTS=${JOB_MAX_ATTEMPTS:-3}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  agent_bridge:
+    build:
+      context: .
+      dockerfile: services/agent_bridge/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - GRPC_HOST=0.0.0.0
+      - GRPC_PORT=50051
+    ports:
+      # 50051 expõe GetAppConfig (sem auth). Restrinja no Security Group ao IP
+      # do Client Agent; nunca a 0.0.0.0/0. Ver README (Runbook — Security Group).
+      - "50051:50051"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  docker_provisioner:
+    build:
+      context: .
+      dockerfile: services/docker_provisioner/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - GRPC_HOST=0.0.0.0
+      - GRPC_PORT=50052
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+      - PROVISION_IMAGE=${PROVISION_IMAGE:-linx-tenant-app:latest}
+      - PROVISION_PORT_MIN=${PROVISION_PORT_MIN:-8100}
+      - PROVISION_PORT_MAX=${PROVISION_PORT_MAX:-9100}
+      - PROVISION_BIND_HOST=${PROVISION_BIND_HOST:-0.0.0.0}
+      - PROVISION_NETWORK_PREFIX=${PROVISION_NETWORK_PREFIX:-linx-app}
+      - PROVISION_CONTAINER_PORT=${PROVISION_CONTAINER_PORT:-8000}
+    volumes:
+      # O socket dá poder equivalente a root no host. Use somente em ambiente
+      # controlado; a porta gRPC não é publicada no host.
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:?DOCKER_GID must be set}"
+    expose:
+      - "50052"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from docker_provisioner.server import ensure_service_token; ensure_service_token(); import docker; docker.from_env().ping()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  jobs_worker:
+    build:
+      context: .
+      dockerfile: services/jobs_worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - RABBITMQ_AMQP_URL=amqp://${RABBITMQ_ADMIN_USER:-linx}:${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}@rabbitmq:5672/
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+      - PROVISIONER_GRPC_HOST=docker_provisioner:50052
+      - PROVISIONER_GRPC_TIMEOUT_SECONDS=${PROVISIONER_GRPC_TIMEOUT_SECONDS:-10}
+      - WORKER_QUEUE=${WORKER_QUEUE:-linx.jobs.provisioning}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-4}
+      - WORKER_PREFETCH=${WORKER_PREFETCH:-4}
+      - OUTBOX_MAX_ATTEMPTS=${OUTBOX_MAX_ATTEMPTS:-10}
+      - JOB_LOCK_SECONDS=${JOB_LOCK_SECONDS:-60}
+      - JOB_REAPER_INTERVAL_SECONDS=${JOB_REAPER_INTERVAL_SECONDS:-60}
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      docker_provisioner:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "from jobs_worker.health import check; check()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:
+  rabbitmqdata:

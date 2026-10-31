@@ -3,14 +3,20 @@ name: backend-ci
 on:
   pull_request:
     paths:
-      - "saas_backend/**"
+      - "linx_core/**"
+      - "client/tenant_app/**"
+      - "proto/**"
+      - "scripts/gen_proto.sh"
       - ".github/workflows/backend-ci.yml"
   push:
     branches:
       - main
       - develop
     paths:
-      - "saas_backend/**"
+      - "linx_core/**"
+      - "client/tenant_app/**"
+      - "proto/**"
+      - "scripts/gen_proto.sh"
       - ".github/workflows/backend-ci.yml"
 
 env:
@@ -24,10 +30,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, identity_api, agent_bridge]
+        package: [shared, services/identity_api, services/agent_bridge, services/docker_provisioner, services/jobs_worker]
     defaults:
       run:
-        working-directory: saas_backend
+        working-directory: linx_core
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,13 +67,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, identity_api, agent_bridge]
+        package: [shared, services/identity_api, services/agent_bridge, services/docker_provisioner, services/jobs_worker]
     services:
       postgres:
         image: postgres:15-alpine
         env:
           POSTGRES_USER: linx
-          POSTGRES_PASSWORD: linx
+          POSTGRES_PASSWORD: ci-db-pass
           POSTGRES_DB: linx
         ports:
           - 5432:5432
@@ -76,9 +82,11 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://linx:ci-db-pass@localhost:5432/linx
     defaults:
       run:
-        working-directory: saas_backend
+        working-directory: linx_core
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,11 +102,75 @@ jobs:
       - name: Install dependencies
         run: |
           poetry -C shared install
-          poetry -C identity_api install
-          poetry -C agent_bridge install
+          poetry -C services/identity_api install
+          poetry -C services/agent_bridge install
+          poetry -C services/docker_provisioner install
+          poetry -C services/jobs_worker install
 
       - name: Apply migrations
-        run: poetry -C identity_api run alembic -c ../alembic.ini upgrade head
+        run: poetry -C services/identity_api run alembic -c ../../alembic.ini upgrade head
 
       - name: Pytest (cobertura >= 70%)
         run: poetry -C ${{ matrix.package }} run pytest --cov=src --cov-report=term-missing --cov-fail-under=70
+
+  tenant-app:
+    name: Tenant App (lint, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/tenant_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Black (format check)
+        run: poetry run black --check src tests
+
+      - name: isort (import order check)
+        run: poetry run isort --check-only src tests
+
+      - name: Flake8 (lint)
+        run: poetry run flake8 src tests
+
+      - name: Mypy (type check)
+        run: poetry run mypy src tests
+
+      - name: Pytest
+        run: poetry run pytest
+
+      - name: Docker build
+        run: docker build -t linx-tenant-app:ci .
+
+  proto-drift:
+    name: gRPC stubs drift check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install linx-shared deps (grpcio-tools)
+        run: poetry -C linx_core/shared install
+
+      - name: Regenerate stubs and fail on drift
+        run: |
+          bash scripts/gen_proto.sh
+          git diff --exit-code -- linx_core/shared/src/linx_shared/grpc

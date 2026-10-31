@@ -13,12 +13,11 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 
 **Subsistemas:**
 
-- `saas_backend/` — Microserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`), `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
-- `client_agent_api/` — Middleware de segurança e roteamento: valida JWT e direciona requisições ao contêiner isolado correto.
-- `tenant_app_template/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
-- `frontend/` — Dashboard React consumindo dados via `client_agent_api` e WebSocket.
+- `linx_core/` — Microsserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`) e `services/` com `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
+- `middleware/` — Camada de middleware: `services/routing/` roteia uplinks MQTT do ChirpStack para a exchange RabbitMQ do tenant; `services/client_agent/` é o agente por tenant (health + cliente gRPC ao Linx Core). A validação de credenciais do plano de controle fica no `identity_api` (`linx_core/`).
+- `client/` — Ambiente isolado do cliente: dashboard (`frontend/`), consumidor de telemetria (`services/telemetry_consumer/`) e TimescaleDB (`db/`).
 - `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
-- `proto/` — Contrato gRPC compartilhado (`saas_agent.proto`) entre SaaS Backend e Client Agent.
+- `proto/` — Contrato gRPC compartilhado (`linx_agent.proto`) entre Linx Core e Client Agent.
 
 > Documentação completa do produto: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md)
 
@@ -28,19 +27,29 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 
 ```
 LINX/
-├── saas_backend/           # Microserviços do SaaS (plano de controle)
-│   ├── shared/             #   biblioteca comum (linx_shared)
-│   ├── identity_api/       #   REST (FastAPI)      :8000
-│   └── agent_bridge/       #   gRPC (AgentBridge)  :50051
-├── client_agent_api/       # Middleware: autenticação JWT + roteamento multi-tenant
-├── tenant_app_template/    # Template do Docker Cliente (motor de regras + TimescaleDB)
-├── frontend/               # Dashboard web (React + Vite + TailwindCSS)
+├── linx_core/              # Microsserviços do plano de controle
+│   ├── services/
+│   │   ├── identity_api/   #   REST (FastAPI)      :8000
+│   │   └── agent_bridge/   #   gRPC (AgentBridge)  :50051
+│   └── shared/             #   biblioteca comum (linx_shared)
+├── middleware/             # Middleware: agente por tenant + roteamento de uplinks
+│   └── services/
+│       ├── client_agent/   #   Agente do tenant (health + gRPC client)
+│       └── routing/        #   Roteamento de uplinks MQTT -> RabbitMQ
+├── client/                 # Ambiente isolado do cliente (Docker)
+│   ├── frontend/           #   Dashboard web (React + Vite + TailwindCSS)
+│   ├── services/           #   telemetry_consumer (ingestão AMQP + REST/WS)
+│   └── db/                 #   Schema TimescaleDB
 ├── infra/                  # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
 │   ├── docker-compose.yml         # Stack completa ChirpStack v4
 │   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
 │   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
 ├── proto/                  # Contrato gRPC compartilhado (AgentBridge)
-│   └── saas_agent.proto    # service AgentBridge (proto3)
+│   └── linx_agent.proto    # service AgentBridge (proto3)
+├── deploy/                 # Stack full-stack (nginx + TLS + todos os serviços) + schema
+├── scripts/                # gen_proto.sh, update_progress.py, docker_install.sh
+├── tests/                  # Testes de integração ponta-a-ponta
+├── website/                # Site institucional (Astro)
 ├── docs/
 │   ├── estrutura_de_pastas/
 │   ├── analise_seguranca_chirpstack/
@@ -68,14 +77,14 @@ make up
 ou
 
 ```bash
-cd infra
-docker compose up -d
+bash deploy/scripts/bootstrap-network.sh   # cria a rede compartilhada
+docker compose -f infra/docker-compose.yml up -d
 ```
 
 Verifique se todos os contêineres estão saudáveis:
 
 ```bash
-docker compose ps
+docker compose -f infra/docker-compose.yml ps
 ```
 
 Acesse a UI em `http://localhost:8080` — login: `admin` / senha: `admin`.
@@ -159,6 +168,11 @@ volumes:
 
 > Os topic templates do gateway bridge usam o prefixo `au915_0` (região AU915).
 
+> O `mosquitto` do `infra` também entra na rede nomeada `linx-network`. O stack
+> `deploy` não sobe broker próprio: o `routing` consome esse Mosquitto pela rede
+> compartilhada (#188). Suba `infra` antes de `deploy`; `make up-infra` e
+> `make up-deploy` garantem a rede com `deploy/scripts/bootstrap-network.sh`.
+
 #### Referência: `configuration/chirpstack/chirpstack.toml`
 
 ```toml
@@ -190,6 +204,7 @@ volumes:
   [integration.mqtt]
     server="tcp://$MQTT_BROKER_HOST:1883/"
     json=true
+    event_topic="application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
 
 [gateway.backend]
   type="mqtt"

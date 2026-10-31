@@ -1,0 +1,22 @@
+<svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Símbolo LINX</title>
+  <desc id="desc">Símbolo abstrato que combina uma rede de nós com ondas de rádio LoRaWAN.</desc>
+  <defs>
+    <linearGradient id="linx-gradient" x1="10" y1="10" x2="62" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00D4AA"/>
+      <stop offset="1" stop-color="#00B4D8"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#linx-gradient)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 48 36 57 51 48V30L36 21 21 30Z" stroke-width="4"/>
+    <path d="M36 21v36M21 30l30 18M51 30 21 48" stroke-width="2.5" opacity=".78"/>
+    <path d="M13 23c-7 8-7 18 0 26M59 23c7 8 7 18 0 26" stroke-width="3" opacity=".72"/>
+    <path d="M8 17C-2 28-2 44 8 55M64 17c10 11 10 27 0 38" stroke-width="2" opacity=".34"/>
+  </g>
+  <g fill="url(#linx-gradient)">
+    <circle cx="36" cy="21" r="4.5"/>
+    <circle cx="21" cy="48" r="4.5"/>
+    <circle cx="51" cy="48" r="4.5"/>
+    <circle cx="36" cy="57" r="3.25"/>
+  </g>
+</svg>

@@ -9,6 +9,9 @@ configNode.h
 .env.*.local
 # Chaves OTAA do End Device (NAO versionar)
 nvs_secrets.h
+# Hash de senha do Mosquitto (issue #208) — gerar via gen-mosquitto-passwd.sh
+# ou pelo serviço mosquitto-init. Nunca versionar; só o .example e o .acl.
+infra/configuration/mosquitto/config/mosquitto.passwd
 
 # === Build / Compilação ===
 # Byte-compiled / optimized / DLL files
@@ -255,6 +258,9 @@ postgresqldata/
 redisdata/
 data/
 lorawan-devices/
+
+# Clone local do repositório de device profiles (usado por infra/Makefile)
+infra/chirpstack-device-profiles/
 
 # Certificados TLS gerados localmente (self-signed)
 deploy/certs/

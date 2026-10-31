@@ -1,0 +1,42 @@
+# ACL do Mosquitto — issue #208.
+#
+# Formato: cada bloco começa com `user <nome>` (as identidades devem existir
+# no mosquitto.passwd). Dentro do bloco, `topic` define o acesso:
+#   topic read <filtro>       -> apenas assinar
+#   topic readwrite <filtro>  -> assinar e publicar
+# Em mosquitto 2.x o ACL built-in NEGA por padrão qualquer tópico sem regra
+# correspondente, então o que não estiver listado abaixo fica inacessível.
+
+# ---------------------------------------------------------------
+# Identidade da integração MQTT do ChirpStack (app server + gateway
+# backend + gateway bridge usam esta credencial no stack de infra).
+# Publica eventos (application/<app>/device/<dev>/event/up) e assina
+# comandos (application/<app>/device/<dev>/command/#); o gateway backend
+# trafega nos tópicos regionais do bridge (prefixo au915_0 no infra
+# compose — acrescente o prefixo de qualquer outra região habilitada).
+# ---------------------------------------------------------------
+user chirpstack
+topic readwrite application/#
+topic readwrite au915_0/#
+
+# ---------------------------------------------------------------
+# Identidade do serviço de roteamento (middleware/services/routing):
+# SOMENTE assinatura da árvore de eventos. Não pode publicar nada —
+# forjar telemetria via credencial do routing fica bloqueado pela ACL.
+# ---------------------------------------------------------------
+user routing
+topic read application/#
+
+# ---------------------------------------------------------------
+# Identidade apenas para healthcheck dos composes (leitura de $SYS).
+# ---------------------------------------------------------------
+user healthcheck
+topic read $SYS/broker/uptime
+
+# ---------------------------------------------------------------
+# Isolamento por tenant (próximo passo quando houver usuários de
+# aplicação próprios): use `pattern`, que aceita %u (usuário) e %c
+# (client-id), ex.:
+#   user tenant-a
+#   pattern readwrite application/%u/#
+# ---------------------------------------------------------------

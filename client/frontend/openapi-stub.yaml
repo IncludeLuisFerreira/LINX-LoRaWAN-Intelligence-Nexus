@@ -1,0 +1,487 @@
+openapi: 3.0.0
+info:
+  title: LINX SaaS API
+  version: 0.1.0
+  description: Contrato de API para gerenciamento de Tenants e Aplicações.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: /api/v1
+    description: Servidor de Desenvolvimento Local
+
+security:
+  - BearerAuth: []
+
+paths:
+  /tenant:
+    get:
+      summary: Listar tenants
+      operationId: listTenants
+      responses:
+        '200':
+          description: Lista de tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TenantOut'
+        '401':
+          description: Não autorizado
+    post:
+      summary: Criar tenant
+      operationId: createTenant
+      description: >
+        O backend expõe este recurso em `/api/v1/tenant/`; o FastAPI redireciona
+        chamadas sem a barra final, então este contrato documenta o caminho canônico
+        sem a barra por convenção OpenAPI.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreate'
+      responses:
+        '201':
+          description: Tenant criado
+          headers:
+            Location:
+              description: URL do tenant criado
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOut'
+        '422':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+
+  /tenant/{tenant_id}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      summary: Buscar tenant
+      operationId: getTenant
+      responses:
+        '200':
+          description: Tenant encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOut'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
+    patch:
+      summary: Atualizar tenant
+      operationId: updateTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantUpdate'
+      responses:
+        '200':
+          description: Tenant atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOut'
+        '422':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
+    delete:
+      summary: Deletar tenant
+      operationId: deleteTenant
+      responses:
+        '204':
+          description: Tenant removido com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
+
+  /tenant/{tenant_id}/applications:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      summary: Listar aplicações do tenant
+      operationId: listApplications
+      responses:
+        '200':
+          description: Lista de aplicações
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationOut'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
+    post:
+      summary: Criar aplicação
+      operationId: createApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreate'
+      responses:
+        '201':
+          description: Aplicação criada
+          headers:
+            Location:
+              description: URL da aplicação criada
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '422':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Tenant não encontrado
+
+  /tenant/{tenant_id}/applications/{application_id}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/ApplicationId'
+    get:
+      summary: Buscar aplicação
+      operationId: getApplication
+      responses:
+        '200':
+          description: Aplicação encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação ou tenant não encontrado
+    patch:
+      summary: Atualizar aplicação
+      operationId: updateApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationUpdate'
+      responses:
+        '200':
+          description: Aplicação atualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationOut'
+        '422':
+          description: Dados inválidos
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação ou tenant não encontrado
+    delete:
+      summary: Deletar aplicação
+      operationId: deleteApplication
+      responses:
+        '204':
+          description: Aplicação removida com sucesso
+        '401':
+          description: Não autorizado
+        '404':
+          description: Aplicação ou tenant não encontrado
+
+  /telemetry:
+    get:
+      summary: Histórico de telemetria
+      operationId: getTelemetry
+      description: >
+        Retorna o histórico de telemetria da aplicação, filtrado opcionalmente
+        por `dev_eui`, com paginação cursor-based via `before`.
+      parameters:
+        - name: dev_eui
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: before
+          in: query
+          required: false
+          description: Cursor opaco (`{time}|{dev_eui}|{event_type}`) para paginação.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Página de telemetria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelemetryHistory'
+        '422':
+          description: Parâmetros inválidos
+        '503':
+          description: Banco de dados indisponível
+
+  /devices/{device_id}:
+    parameters:
+      - name: device_id
+        in: path
+        required: true
+        description: Identificador do device
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Atualizar nickname do device
+      operationId: updateDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: Device atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '404':
+          description: Device não encontrado
+        '422':
+          description: Dados inválidos
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    TenantId:
+      name: tenant_id
+      in: path
+      required: true
+      description: Identificador do tenant
+      schema:
+        type: string
+        format: uuid
+
+    ApplicationId:
+      name: application_id
+      in: path
+      required: true
+      description: Identificador da aplicação
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    TenantCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 100
+          default: ''
+
+    TenantUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    TenantOut:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ApplicationCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 100
+          default: ''
+
+    ApplicationUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    ApplicationOut:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TelemetryItem:
+      type: object
+      required:
+        - time
+        - dev_eui
+        - payload
+        - event_type
+      properties:
+        time:
+          type: string
+          format: date-time
+        dev_eui:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        rssi:
+          type: integer
+          nullable: true
+        snr:
+          type: number
+          format: float
+          nullable: true
+        app_id:
+          type: string
+          nullable: true
+        event_type:
+          type: string
+
+    TelemetryHistory:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TelemetryItem'
+        next_cursor:
+          type: string
+          nullable: true
+
+    DeviceResponse:
+      type: object
+      required:
+        - id
+        - dev_eui
+        - app_id
+        - join_eui
+        - device_profile_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        dev_eui:
+          type: string
+        app_id:
+          type: string
+          format: uuid
+        join_eui:
+          type: string
+        device_profile_id:
+          type: string
+          format: uuid
+        nickname:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    DeviceUpdate:
+      type: object
+      properties:
+        nickname:
+          type: string
+          maxLength: 50
+          nullable: true

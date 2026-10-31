@@ -1,252 +1,124 @@
+<div align="center">
+
+<img src="docs/logo.svg" alt="LINX" width="150">
+
 # LINX — LoRaWAN Intelligence Nexus
 
-![Platform](https://img.shields.io/badge/platform-AWS%20Cloud-orange)
+Plataforma SaaS IoT distribuída para dados LoRaWAN, com isolamento por aplicação.
+
+![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
+
+[![Backend CI](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/actions/workflows/frontend-ci.yml)
+![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-REST-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
 ![LoRaWAN](https://img.shields.io/badge/radio-LoRaWAN%20AU915-blue)
-![ChirpStack](https://img.shields.io/badge/network-ChirpStack%20v4-purple)
-![Docker](https://img.shields.io/badge/infra-Docker%20Compose-2496ED)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-## Visão Geral
+</div>
 
-LINX é uma plataforma SaaS IoT distribuída para aquisição, processamento e visualização de dados de dispositivos LoRaWAN. A arquitetura é 100% cloud-native (AWS), com isolamento por aplicação: cada cliente recebe um ambiente Docker dedicado na nuvem com banco de dados e motor de regras próprios.
+## Sobre o Projeto
 
-A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria startup — o cliente instala apenas os sensores.
+O **LINX** é uma plataforma SaaS IoT para aquisição, processamento e visualização de dados de dispositivos LoRaWAN, hospedada 100% em nuvem (AWS). Ele resolve o problema das soluções IoT B2B que exigem infraestrutura local complexa, centralizando processamento e telemetria na nuvem e entregando um ambiente Docker isolado por aplicação. O público-alvo são organizações B2B — agricultura de precisão, indústria, logística e integradores de IoT — que precisam monitorar dispositivos sem manter servidores no local.
 
-**Subsistemas:**
+## Tech Stack
 
-- `saas_backend/` — Microserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`), `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
-- `client_agent_api/` — Middleware de segurança e roteamento: valida JWT e direciona requisições ao contêiner isolado correto.
-- `tenant_app_template/` — Template do ambiente isolado de cada aplicação (motor de regras + TimescaleDB).
-- `frontend/` — Dashboard React consumindo dados via `client_agent_api` e WebSocket.
-- `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
-- `proto/` — Contrato gRPC compartilhado (`saas_agent.proto`) entre SaaS Backend e Client Agent.
+| Camada | Tecnologia |
+| --- | --- |
+| Backend | Python 3.12 · FastAPI · gRPC · SQLAlchemy · Alembic |
+| Frontend | React 19 · Vite · TypeScript · Tailwind CSS |
+| Dados | PostgreSQL 15 · TimescaleDB |
+| Conectividade IoT | ChirpStack v4 · LoRaWAN (AU915) · MQTT |
+| Infraestrutura | Docker Compose · AWS · Nginx |
+| Documentação | MkDocs Material · Astro |
 
-> Documentação completa do produto: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md)
+## Quick Start
 
----
+```bash
+# 1. Clonar
+git clone https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus.git
+cd LINX-LoRaWAN-Intelligence-Nexus
 
-## Estrutura do Repositório
+# 2. Subir a stack LoRaWAN (ChirpStack + MQTT + PostgreSQL)
+make up
+
+# 3. Backend do plano de controle (REST :8000 + gRPC :50051)
+cd linx_core
+poetry install
+poetry -C shared install
+poetry -C services/identity_api install
+poetry -C services/agent_bridge install
+poetry -C services/docker_provisioner install
+make -C .. build-tenant-image  # imagem mínima provisionada por aplicação
+cp .env.example .env        # ajuste POSTGRES_PASSWORD, SERVICE_TOKEN, DOCKER_GID e CHIRPSTACK_API_TOKEN
+poetry run task run
+
+# 4. Dashboard web (opcional, em outro terminal)
+cd ../client/frontend
+npm install
+npm run dev
+```
+
+> ChirpStack UI em `http://localhost:8080` (`admin`/`admin`). REST do core em `http://localhost:8000` (`/docs`). Dashboard em `http://localhost:5173`.
+
+## Stacks (Makefile)
+
+Cada compose do repositório tem um target `up-<stack>` (e `down-<stack>` /
+`logs-<stack>`). `make up` continua subindo só a infraestrutura base.
+
+| Target | Compose | Conteúdo |
+| --- | --- | --- |
+| `make up` / `up-infra` | `infra/docker-compose.yml` | ChirpStack v4 + MQTT + PostgreSQL |
+| `make up-base` | `infra/docker-compose.base.yml` | Base de dev (PostgreSQL + Redis + Mosquitto) |
+| `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + docker_provisioner + db) |
+| `make up-client` | `client/docker-compose.yml` | Ambiente isolado (frontend + telemetry_consumer + TimescaleDB) |
+| `make up-deploy` | `deploy/docker-compose.yml` | Stack full-stack (nginx + TLS + todos os serviços); requer `infra` no ar |
+| `make up-client-agent` | `deploy/docker-compose.client-agent.yml` | Client Agent isolado (ver nota abaixo) |
+| `make build-tenant-image` | `client/tenant_app/` | Imagem mínima `linx-tenant-app:latest` usada no provisionamento |
+| `make test-integration` | `tests/integration/run.sh` | Testes de integração ponta-a-ponta |
+
+> O stack `deploy` não sobe Mosquitto próprio. O `routing` consome o broker do
+> stack `infra` pela rede `linx-network`; rode `make up-infra` antes de
+> `make up-deploy` (os targets garantem a rede). As credenciais do broker
+> pertencem a `infra/.env`.
+
+> `make up-client-agent` exige um `AGENT_SERVICE_TOKEN` real (não placeholder)
+> no `deploy/.env` e um `agent_bridge` alcançável. O default
+> `SAAS_GRPC_HOST=agent_bridge:50051` só resolve com a stack de
+> `deploy/docker-compose.yml` em execução; para outro host, defina
+> `SAAS_GRPC_HOST` no ambiente antes de subir o target.
+
+> `make help` lista a matriz completa. Rode `make down-<stack>` para derrubar
+> uma stack específica.
+
+## Estrutura
 
 ```
 LINX/
-├── saas_backend/           # Microserviços do SaaS (plano de controle)
-│   ├── shared/             #   biblioteca comum (linx_shared)
-│   ├── identity_api/       #   REST (FastAPI)      :8000
-│   └── agent_bridge/       #   gRPC (AgentBridge)  :50051
-├── client_agent_api/       # Middleware: autenticação JWT + roteamento multi-tenant
-├── tenant_app_template/    # Template do Docker Cliente (motor de regras + TimescaleDB)
-├── frontend/               # Dashboard web (React + Vite + TailwindCSS)
-├── infra/                  # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
-│   ├── docker-compose.yml         # Stack completa ChirpStack v4
-│   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
-│   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
-├── proto/                  # Contrato gRPC compartilhado (AgentBridge)
-│   └── saas_agent.proto    # service AgentBridge (proto3)
-├── docs/
-│   ├── estrutura_de_pastas/
-│   ├── analise_seguranca_chirpstack/
-│   └── manuais_de_config_e_impl/
-├── PRD_PLATAFORMA_IOT.md
-└── README.md
+├── linx_core/     # Plano de controle (REST FastAPI + gRPC AgentBridge/DockerProvisioner)
+├── middleware/    # Middleware: roteamento de uplinks (routing) + agente por tenant (client_agent)
+├── client/        # Ambiente isolado do cliente (frontend + telemetry_consumer + tenant_app + TimescaleDB)
+├── infra/         # Stack ChirpStack v4 (gateway bridge, MQTT, PostgreSQL)
+├── deploy/        # Compose full-stack (nginx, TLS, todos os serviços)
+├── proto/         # Contratos gRPC compartilhados (AgentBridge + DockerProvisioner)
+├── docs/          # Documentação (MkDocs)
+└── website/       # Site institucional (Astro)
 ```
 
----
+> Documentação completa: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md) · [`docs/`](docs/)
 
-## Quickstart — Subindo o Network Server (ChirpStack)
+## Contribuição
 
-O ChirpStack é a base de toda a infraestrutura LoRaWAN. Siga estes passos para colocá-lo no ar localmente.
-
-### Pré-requisitos
-
-- Docker e Docker Compose instalados
-- Portas `8080` (ChirpStack UI), `1700/udp` (Gateway Bridge) e `1883` (MQTT) livres
-
-### 1. Subir os serviços
+Instale as dependências da raiz (uma vez) para habilitar o hook de pre-commit:
 
 ```bash
-make up
-```
-ou
-
-```bash
-cd infra
-docker compose up -d
+npm install          # husky + lint-staged na raiz
+pipx install ruff    # ou deixe `ruff` no PATH
 ```
 
-Verifique se todos os contêineres estão saudáveis:
-
-```bash
-docker compose ps
-```
-
-Acesse a UI em `http://localhost:8080` — login: `admin` / senha: `admin`.
-
-#### Referência: `docker-compose.yml`
-
-O compose sobe os seguintes serviços:
-
-```yaml
-services:
-  chirpstack:
-    image: chirpstack/chirpstack:4
-    command: -c /etc/chirpstack
-    restart: unless-stopped
-    volumes:
-      - ./configuration/chirpstack:/etc/chirpstack
-    depends_on:
-      - postgres
-      - mosquitto
-      - redis
-    environment:
-      - MQTT_BROKER_HOST=mosquitto
-      - REDIS_HOST=redis
-      - POSTGRESQL_HOST=postgres
-    ports:
-      - "8080:8080"
-
-  chirpstack-gateway-bridge:
-    image: chirpstack/chirpstack-gateway-bridge:4
-    restart: unless-stopped
-    ports:
-      - "1700:1700/udp"
-    volumes:
-      - ./configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
-    environment:
-      - INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/event/{{ .EventType }}
-      - INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/state/{{ .StateType }}
-      - INTEGRATION__MQTT__COMMAND_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/command/#
-    depends_on:
-      - mosquitto
-
-  chirpstack-rest-api:
-    image: chirpstack/chirpstack-rest-api:4
-    restart: unless-stopped
-    command: --server chirpstack:8080 --bind 0.0.0.0:8090 --insecure
-    ports:
-      - "8090:8090"
-    depends_on:
-      - chirpstack
-
-  postgres:
-    image: postgres:14-alpine
-    restart: unless-stopped
-    volumes:
-      - ./configuration/postgresql/initdb:/docker-entrypoint-initdb.d
-      - postgresqldata:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=chirpstack
-      - POSTGRES_PASSWORD=chirpstack
-      - POSTGRES_DB=chirpstack
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --save 300 1 --save 60 100 --appendonly no
-    volumes:
-      - redisdata:/data
-
-  mosquitto:
-    image: eclipse-mosquitto:2
-    restart: unless-stopped
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./configuration/mosquitto/config/:/mosquitto/config/
-
-volumes:
-  postgresqldata:
-  redisdata:
-```
-
-> Os topic templates do gateway bridge usam o prefixo `au915_0` (região AU915).
-
-#### Referência: `configuration/chirpstack/chirpstack.toml`
-
-```toml
-[logging]
-  level="info"
-
-[postgresql]
-  dsn="postgres://chirpstack:chirpstack@$POSTGRESQL_HOST/chirpstack?sslmode=disable"
-
-[redis]
-  servers=["redis://$REDIS_HOST/"]
-
-[network]
-  net_id="000000"
-  enabled_regions=[
-    "as923", "as923_2", "as923_3", "as923_4",
-    "au915_0",
-    "cn470_10", "cn779", "eu433", "eu868",
-    "in865", "ism2400", "kr920", "ru864",
-    "us915_0", "us915_1",
-  ]
-
-[api]
-  bind="0.0.0.0:8080"
-  secret="you-must-replace-this"
-
-[integration]
-  enabled=["mqtt"]
-  [integration.mqtt]
-    server="tcp://$MQTT_BROKER_HOST:1883/"
-    json=true
-
-[gateway.backend]
-  type="mqtt"
-  [gateway.backend.mqtt]
-    server="tcp://$MQTT_BROKER_HOST:1883/"
-    event_topic_prefix="au915_1"
-    command_topic_prefix="au915_1"
-```
-
-#### Referência: `configuration/chirpstack/region_au915_0.toml`
-
-Copiado de `region_au915_0.toml.example` (parte do repositório oficial ChirpStack Docker). Contém as configurações de canal, potência, SF e duty cycle para a banda AU915.
-
-> **Ajuste para gateway monocanal (OTAA):** em `[regions.network]` force o servidor a responder somente na RX1 em 916,8 MHz/SF7 — combinação que o gateway monocanal consegue transmitir:
-> `rx_window=1`, `enabled_uplink_channels=[8]`, `rx2_dr=5`, `rx2_frequency=916800000`, `adr_disabled=true`, `min_dr=5`, `max_dr=5`.
-
-### 2. Criar o Gateway Profile
-
-1. Navegue até **Gateways → Gateway Profiles → Add**
-2. Nome: `Meu-Gateway`
-3. Region: `au915_0`
-4. Salve.
-
-### 3. Criar o Device Profile
-
-1. **Device Profiles → Add**
-2. Nome: `Meu-EndDevice`
-3. Region: `au915_0`
-4. MAC version: `LoRaWAN 1.0.3` / Revision: `B`
-5. Supports OTA: **marcado**
-6. ADR: **desabilitado**
-7. Salve.
-
-### 4. Registrar um dispositivo (OTAA)
-
-1. **Devices → Add**
-2. Selecione o Device Profile criado acima.
-3. Preencha DevEUI, AppEUI e AppKey com os mesmos valores do firmware do sensor.
-4. Salve — o ChirpStack aguardará o Join Request do dispositivo.
-
-> Em OTAA **não** há DevAddr/NwkSKey/AppSKey fixos no ChirpStack — eles são derivados pelo servidor no momento do join. Deixe **Disable frame-counter validation** desmarcado.
-
-### 5. Verificar uplinks
-
-| Onde | O que deve aparecer |
-|------|---------------------|
-| ChirpStack → Gateways | Gateway listado como "online" |
-| ChirpStack → Devices → Events | Payload dos uplinks recebidos |
-| MQTT (`localhost:1883`) | Tópico `application/+/device/+/event/up` com telemetria |
-
----
-
-### Problemas comuns
-
-| Problema | Causa | Solução |
-|----------|-------|---------|
-| Gateway não conecta ao ChirpStack | IP do servidor errado na configuração do gateway | Verifique o IP da máquina com `ip a` e atualize a configuração do gateway |
-| ChirpStack não recebe uplinks | Região do Gateway Profile ≠ região do `chirpstack.toml` | Use `au915_0` (ou sua região) em ambos |
-| Frame counter mismatch | FCnt dessincronizado com o servidor | OTAA reinicia FCnt a cada join; se persistir, delete a sessão do device e reinicie o nó |
-| Join nunca completa (OTAA) | Downlink do Join Accept fora de 916,8 MHz/SF7 | Em `region_au915_0.toml`: `rx_window=1`, `enabled_uplink_channels=[8]`, `min_dr=max_dr=5`, `adr_disabled=true` |
+O `.husky/pre-commit` roda `lint-staged` com a config do `package.json` da
+raiz: arquivos do frontend passam por `prettier` + `oxlint`, e arquivos
+Python por `ruff check --fix`. O hook cobre todo o monorepo (não só
+`client/frontend`).

@@ -1,0 +1,20 @@
+# Template do arquivo de senhas do Mosquitto (issue #208).
+#
+# Este arquivo NAO contem hashes reais e nao deve ser copiado direto para
+# `mosquitto.passwd` — gere o arquivo real com:
+#
+#   infra/scripts/gen-mosquitto-passwd.sh
+#
+# (que roda `mosquitto_passwd -c -b <arquivo> <usuario> <senha>` dentro da
+# imagem eclipse-mosquitto, entao nenhuma ferramenta precisa estar instalada
+# no host). As identidades abaixo devem bater com o `mosquitto.acl`:
+#
+#   chirpstack   -> integracao MQTT do ChirpStack (pub/sub application/#)
+#   routing      -> servico de roteamento (somente sub em application/#)
+#   healthcheck  -> healthcheck do compose (le $SYS/broker/uptime)
+#
+# Formato de cada linha: <usuario>:<hash>
+# Exemplo (hash gerado por mosquitto_passwd, nao commitar):
+#   chirpstack:$7$01$...
+#   routing:$7$01$...
+#   healthcheck:$7$01$...

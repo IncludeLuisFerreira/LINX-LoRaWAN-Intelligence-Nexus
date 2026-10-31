@@ -1,40 +1,39 @@
 #!/usr/bin/env bash
-# Gera os stubs Python gRPC (saas_agent_pb2.py / saas_agent_pb2_grpc.py) a
-# partir de proto/saas_agent.proto, para a biblioteca compartilhada do SaaS
-# (package linx_shared), o Client Agent (package agent) e o tenant app
-# template (package tenant).
+# Gera os stubs Python gRPC dos contratos em proto/ para o pacote
+# compartilhado `linx_shared`, dono único dos contratos gRPC da plataforma.
+#
+# Contratos:
+#   - linx_agent.proto              -> AgentBridge
+#   - linx_docker_provisioner.proto -> DockerProvisioner
 #
 # Uso:
 #     bash scripts/gen_proto.sh
 #
-# Requer grpcio-tools instalado em cada módulo (poetry install).
+# Requer grpcio-tools instalado em linx_core/shared (poetry install).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-gen() {
-  local module="$1"
-  local out="$2"
-  poetry -C "$module" run python -m grpc_tools.protoc \
+OUT="linx_core/shared/src/linx_shared/grpc"
+
+generate_stub() {
+  local proto_name="$1"
+
+  poetry -C linx_core/shared run python -m grpc_tools.protoc \
     -I "$ROOT/proto" \
-    --python_out="$ROOT/$out" \
-    --grpc_python_out="$ROOT/$out" \
-    "$ROOT/proto/saas_agent.proto"
+    --python_out="$ROOT/$OUT" \
+    --grpc_python_out="$ROOT/$OUT" \
+    "$ROOT/proto/${proto_name}.proto"
+
+  # grpc_tools.protoc gera imports absolutos (`import <proto>_pb2`), o que
+  # quebra quando o arquivo vive dentro do pacote linx_shared.grpc. Corrige
+  # para import relativo.
+  sed -i "s/^import ${proto_name}_pb2 as /from . import ${proto_name}_pb2 as /" \
+    "$OUT/${proto_name}_pb2_grpc.py"
 }
 
-gen saas_backend/shared saas_backend/shared/src/linx_shared/grpc
-gen client_agent_api client_agent_api/src/agent/grpc
-gen tenant_app_template tenant_app_template/src/tenant/grpc
+generate_stub "linx_agent"
+generate_stub "linx_docker_provisioner"
 
-# grpc_tools.protoc gera `import saas_agent_pb2` (absoluto), o que quebra
-# quando o arquivo vive dentro de um pacote (linx_shared.grpc / agent.grpc /
-# tenant.grpc). Corrige para import relativo.
-for grpc_file in \
-  saas_backend/shared/src/linx_shared/grpc/saas_agent_pb2_grpc.py \
-  client_agent_api/src/agent/grpc/saas_agent_pb2_grpc.py \
-  tenant_app_template/src/tenant/grpc/saas_agent_pb2_grpc.py; do
-  sed -i 's/^import saas_agent_pb2 as saas__agent__pb2$/from . import saas_agent_pb2 as saas__agent__pb2/' "$grpc_file"
-done
-
-echo "Stubs gRPC gerados em saas_backend/shared/src/linx_shared/grpc, client_agent_api/src/agent/grpc e tenant_app_template/src/tenant/grpc"
+echo "Stubs gRPC gerados em $OUT"

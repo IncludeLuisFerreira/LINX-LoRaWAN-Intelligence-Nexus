@@ -1,6 +1,11 @@
-# Contrato gRPC — `proto/saas_agent.proto`
+# Contratos gRPC
 
-Contrato compartilhado entre o **SaaS Backend** (servidor) e o **Client Agent
+Os contratos gRPC da plataforma ficam em `proto/` e os stubs Python são
+versionados no pacote compartilhado `linx_shared.grpc`.
+
+## `proto/linx_agent.proto`
+
+Contrato compartilhado entre o **Linx Core** (servidor) e o **Client Agent
 API** (middleware compartilhado). Define o serviço `AgentBridge`, que sustenta
 toda a comunicação gRPC entre os serviços da plataforma.
 
@@ -17,11 +22,11 @@ A geração dos stubs Python é feita na issue #20.
 | `ReportViolation`| `Violation`    | `Ack`        | Client Agent → SaaS             | Notificar violação de regra (S6) |
 
 > **Nota sobre direção (bidirecional):** o contrato é único, mas cada lado
-> expõe um servidor gRPC conforme o RPC. O **SaaS Backend** hospeda
+> expõe um servidor gRPC conforme o RPC. O **Linx Core** hospeda
 > `GetAppConfig` e `ReportViolation`; o **Client Agent API** (middleware
 > compartilhado) hospeda `SyncRule` e `IngestTelemetry`. A persistência de
-> telemetria é exposta pelo middleware no `POST /ingest` (issue
-> [#35](https://github.com/IncludeLuisFerreira/LINX-LoRaWAN-Intelligence-Nexus/issues/35)).
+> telemetria é feita pelo serviço `telemetry_consumer`, que consome o
+> exchange RabbitMQ `linx.telemetry` e grava no TimescaleDB do tenant.
 > O RPC `IngestTelemetry` cobre o caminho de roteamento do SaaS (Sprint 3), a
 > confirmar na implementação.
 
@@ -84,21 +89,48 @@ A geração dos stubs Python é feita na issue #20.
 | `ok`    | bool   | 1 | `true` se a operação foi aceita               |
 | `error` | string | 2 | Mensagem de erro (vazia em caso de sucesso)   |
 
+## `proto/linx_docker_provisioner.proto`
+
+Contrato interno entre o `jobs_worker` (cliente gRPC) e o
+`docker_provisioner` (servidor). No fluxo assíncrono, o `identity_api`
+valida tenant/application no Postgres e enfileira um job; quem chama este RPC
+enviando apenas o `app_id` é o `jobs_worker`. O provisioner concentra a
+política de imagem, porta, rede e variáveis de ambiente.
+
+| Item | Valor |
+| ---- | ----- |
+| Serviço | `DockerProvisioner` |
+| RPC | `ProvisionApplication` |
+| Porta | `50052` (rede interna do Compose) |
+| Autenticação | metadado `authorization: Bearer <SERVICE_TOKEN>` |
+| Request | `ProvisionApplicationRequest { string app_id = 1; }` |
+| Response | `container_id`, `port`, `network`, `image`, `status`, `created`, `mqtt_topic` |
+
+> `DB_PASSWORD` é gerado pelo provisioner e injetado apenas no container do
+> tenant; ele não trafega no gRPC nem é retornado ao `identity_api`.
+
 ## Como compilar / verificar
 
 ```bash
-protoc --descriptor_set_out=/dev/null --proto_path=proto proto/saas_agent.proto
+protoc --descriptor_set_out=/dev/null --proto_path=proto proto/linx_agent.proto
+protoc --descriptor_set_out=/dev/null --proto_path=proto \
+  proto/linx_docker_provisioner.proto
 ```
 
-## Gerar stubs Python (issue #20)
+## Gerar stubs Python
 
-Os stubs são versionados em `saas_backend/src/linx/grpc/` (pacote `linx`) e em
-`client_agent_api/src/agent/grpc/` (pacote `agent`). Para regenerar:
+Os stubs são versionados em um único lugar:
+`linx_core/shared/src/linx_shared/grpc/` (pacote `linx_shared`). O
+`client_agent` resolve `linx_agent_pb2` por esse pacote (path dependency),
+como o serviço `routing`; não há mais cópia sob `middleware/` (#215). Para
+regenerar:
 
 ```bash
 bash scripts/gen_proto.sh
 ```
 
-O script usa `grpc_tools.protoc` e corrige o import absoluto gerado para
-import relativo (`from . import saas_agent_pb2`), necessário dentro de pacote.
-Requer `grpcio-tools` instalado em cada módulo (dev dependency).
+O script usa `grpc_tools.protoc` para os dois contratos e corrige os imports
+absolutos gerados para relativos (`from . import <proto>_pb2`), necessário
+dentro do pacote. Requer `grpcio-tools` instalado em `linx_core/shared` (dev
+dependency). O CI regenera os stubs e falha se divergirem do versionado
+(drift gate).

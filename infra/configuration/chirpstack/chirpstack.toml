@@ -102,7 +102,10 @@
 
   [integration.mqtt]
     server="tcp://$MQTT_BROKER_HOST:1883/"
+    username="$MQTT_CHIRPSTACK_USER"
+    password="$MQTT_CHIRPSTACK_PASSWORD"
     json=true
+    event_topic="application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
 
 # Gateway backend configuration.
 [gateway.backend]
@@ -110,6 +113,8 @@
 
   [gateway.backend.mqtt]
     server="tcp://$MQTT_BROKER_HOST:1883/"
+    username="$MQTT_CHIRPSTACK_USER"
+    password="$MQTT_CHIRPSTACK_PASSWORD"
     event_topic_prefix="au915_0"
     command_topic_prefix="au915_0"
     clean_session=false

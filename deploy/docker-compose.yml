@@ -19,16 +19,26 @@ services:
 
   identity_api:
     build:
-      context: ../saas_backend/.
-      dockerfile: identity_api/Dockerfile
+      context: ../linx_core/.
+      dockerfile: services/identity_api/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
       - CHIRPSTACK_HOST=${CHIRPSTACK_HOST:-localhost:8080}
       - CHIRPSTACK_API_TOKEN=${CHIRPSTACK_API_TOKEN:?CHIRPSTACK_API_TOKEN must be set}
-    ports:
-      - "8000:8000"
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+      - RABBITMQ_MANAGEMENT_URL=${RABBITMQ_MANAGEMENT_URL:-http://rabbitmq:15672}
+      - RABBITMQ_ADMIN_USER=${RABBITMQ_ADMIN_USER:-linx}
+      - RABBITMQ_ADMIN_PASSWORD=${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}
+      - RABBITMQ_VHOST=${RABBITMQ_VHOST:-/}
+      - RABBITMQ_TENANT_SECRET=${RABBITMQ_TENANT_SECRET:?RABBITMQ_TENANT_SECRET must be set}
+      - RABBITMQ_AMQP_HOST=${RABBITMQ_AMQP_HOST:-rabbitmq:5672}
+    # Sem publicação de porta no host: a API só é acessível pela rede interna
+    # (via nginx). O acesso direto à 8000 contornava o proxy e a autenticação.
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
@@ -66,38 +76,36 @@ services:
 
   agent_bridge:
     build:
-      context: ../saas_backend/.
-      dockerfile: agent_bridge/Dockerfile
+      context: ../linx_core/.
+      dockerfile: services/agent_bridge/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
       - GRPC_HOST=0.0.0.0
       - GRPC_PORT=50051
-    ports:
-      # 50051 expõe GetAppConfig (sem auth). Restrinja no Security Group ao IP
-      # do Client Agent; nunca a 0.0.0.0/0. Ver README (Runbook — Security Group).
-      - "50051:50051"
+      - AGENT_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN must be set}
+    # A porta 50051 não é publicada no host: GetAppConfig entrega db_password.
+    # O Client Agent alcança o agent_bridge pela rede interna do Compose
+    # (service name), sem exposição ao host. Ver issue #207.
     depends_on:
       db:
         condition: service_healthy
 
   client_agent:
     build:
-      context: ../client_agent_api/.
-      dockerfile: Dockerfile
+      context: ../
+      dockerfile: middleware/services/client_agent/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
       # Hosts são nomes de serviço do Compose, não "localhost".
       - SAAS_GRPC_HOST=${SAAS_GRPC_HOST:-agent_bridge:50051}
-      - TENANT_APP_URL=${TENANT_APP_URL:-http://tenant_app:8002}
       - GRPC_TIMEOUT_SECONDS=${GRPC_TIMEOUT_SECONDS:-5}
       - CONFIG_CACHE_TTL_SECONDS=${CONFIG_CACHE_TTL_SECONDS:-60}
+      - GRPC_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:?AGENT_SERVICE_TOKEN must be set}
     depends_on:
       agent_bridge:
-        condition: service_started
-      tenant_app:
         condition: service_started
     ports:
       - "8001:8001"
@@ -110,37 +118,87 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
       - POSTGRES_DB=${DB_NAME:?DB_NAME must be set}
     volumes:
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/0_schema.sql
+      - ../client/db/schema.sql:/docker-entrypoint-initdb.d/0_schema.sql
       - timescaledb_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
-  tenant_app:
-    build: ../tenant_app_template/.
+  telemetry_consumer:
+    build:
+      context: ../client/services/telemetry_consumer
+      dockerfile: Dockerfile
     restart: unless-stopped
-    # SAAS_GRPC_HOST deve apontar para o endereço alcançável do SaaS Backend
-    # a partir do container (não use "localhost" aqui).
+    env_file: .env
     environment:
-      - CLIENT_AGENT_URL=${CLIENT_AGENT_URL:-http://client_agent:8001}
       - APP_ID=${APP_ID}
-      - MQTT_TOPIC=${MQTT_TOPIC}
-      - SAAS_GRPC_HOST=${SAAS_GRPC_HOST:-agent_bridge:50051}
+      - RABBIT_URL=amqp://tenant.${APP_ID}:${RABBITMQ_TENANT_PASS}@rabbitmq:5672/%2f
       - DB_HOST=timescaledb
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
     depends_on:
       timescaledb:
         condition: service_healthy
-      agent_bridge:
-        condition: service_started
-      identity_api:
-        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-linx}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS must be set}
     ports:
-      - "${TENANT_PORT:-8002}:8002"
+      # Publicados apenas no loopback do host. O management UI (15672) e o
+      # AMQP (5672) nunca devem ir para 0.0.0.0/0.
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  routing:
+    build:
+      context: ../
+      dockerfile: middleware/services/routing/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Broker Mosquitto do stack infra, alcançado pela rede linx-network.
+      # Não existe broker local no deploy (#188).
+      - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mosquitto}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
+      - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
+      # Auth no broker (#208, allow_anonymous false): identidade de leitura
+      # `routing` (ACL read-only em application/#).
+      - MQTT_USERNAME=${MQTT_ROUTING_USER:-routing}
+      - MQTT_PASSWORD=${MQTT_ROUTING_PASSWORD:?MQTT_ROUTING_PASSWORD must be set}
+      - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f}
+      - RABBIT_EXCHANGE_PREFIX=${RABBIT_EXCHANGE_PREFIX:-linx.telemetry}
+      - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      # default: RabbitMQ local do deploy.
+      # linx-network: broker Mosquitto do stack infra.
+      - default
+      - linx-network
+
+networks:
+  # Criada pelo stack infra; ver deploy/scripts/bootstrap-network.sh.
+  linx-network:
+    external: true
 
 volumes:
   pgdata:
   timescaledb_data:
+  rabbitmq_data:

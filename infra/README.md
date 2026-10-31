@@ -73,8 +73,10 @@ repository (optional step), run the following command:
 make import-device-profiles
 ```
 
-This will clone the `chirpstack-device-profiles` repository and execute the import command of ChirpStack.
-Please note that for this step you need to have the `make` command installed.
+This imports the device-profiles repository located in the local
+`chirpstack-device-profiles` directory (override with `DEVICE_PROFILES_DIR=<path>`)
+by executing the ChirpStack import command. Please note that for this step you
+need to have the `make` command installed.
 
 ## Usage
 
@@ -83,6 +85,24 @@ To start the ChirpStack simply run:
 ```bash
 $ docker compose up
 ```
+
+### Required environment
+
+`docker-compose.yml` no longer hardcodes the PostgreSQL password. The `postgres`
+service requires `POSTGRES_PASSWORD` to be provided, otherwise `docker compose`
+aborts with an explicit error (fail closed — the stack must not boot with a
+placeholder credential).
+
+Create an `infra/.env` file (or export the variable) with a real value:
+
+```bash
+$ echo 'POSTGRES_PASSWORD=troque-por-uma-senha-forte' > .env
+$ docker compose up
+```
+
+There is no `infra/.env.example` in this directory; if you add one, keep
+`POSTGRES_PASSWORD` as an obviously-invalid placeholder so a copy still fails
+startup until the operator sets a real value.
 
 After all the components have been initialized and started, you should be able
 to open http://localhost:8080/ in your browser.

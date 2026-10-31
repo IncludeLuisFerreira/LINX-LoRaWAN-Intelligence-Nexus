@@ -1,0 +1,54 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.13-pg14
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/0_schema.sql
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  telemetry_consumer:
+    build:
+      context: ./services/telemetry_consumer
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - APP_ID=${APP_ID}
+      - RABBIT_URL=${RABBIT_URL}
+      - DB_HOST=timescaledb
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      # Token exigido no REST/WS de telemetria (#211); o nginx do frontend
+      # injeta o mesmo valor no header X-Service-Token dos proxies /api e /ws.
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+        VITE_ENABLE_MOCKS: ${VITE_ENABLE_MOCKS:-false}
+    restart: unless-stopped
+    environment:
+      # Destino do proxy /api do nginx do dashboard (backend do plano de controle).
+      - BACKEND_URL=${BACKEND_URL:?BACKEND_URL must be set}
+      # Token de serviço injetado pelo nginx no proxy /api (nunca chega ao browser).
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+      # Destino do proxy /ws/ do nginx (WebSocket de telemetria).
+      - WS_BACKEND_URL=${WS_BACKEND_URL:-http://telemetry_consumer:8000}
+    ports:
+      - "8080:80"
+volumes:
+  timescaledb_data:

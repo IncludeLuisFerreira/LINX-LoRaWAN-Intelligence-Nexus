@@ -1,0 +1,28 @@
+# Override da stack de integração sobre deploy/docker-compose.yml.
+#
+# NÃO redefine serviços: apenas ajusta a stack real para o teste.
+# - publica as portas em offsets de teste (loopback);
+# - fixa o APP_ID de teste e aponta o consumer para as credenciais
+#   administrativas do broker (sem provisionamento por-tenant);
+# - o Mosquitto vem do stack infra (ver conftest.py), compartilhado via
+#   `linx-network`;
+# - a stack é subida com:
+#     docker compose -p lynx-integration \
+#       --env-file telemetry/test.env \
+#       -f ../../deploy/docker-compose.yml \
+#       -f telemetry/docker-compose.override.yml \
+#       up -d --build --wait rabbitmq timescaledb telemetry_consumer routing
+
+services:
+  rabbitmq:
+    # !override substitui as portas do compose base (5672/15672).
+    ports: !override
+      - "127.0.0.1:5673:5672"
+      - "127.0.0.1:15673:15672"
+
+  telemetry_consumer:
+    environment:
+      - APP_ID=${APP_ID:-integration-app}
+      - RABBIT_URL=amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS:-changeme}@rabbitmq:5672/%2f
+    ports:
+      - "127.0.0.1:8011:8000"
