@@ -27,6 +27,8 @@ class FakeContainer:
         self.status = status
         self.environment = environment or {}
         self.started = False
+        self.removed = False
+        self.remove_error: Exception | None = None
         self.attrs: dict[str, Any] = {
             "Id": container_id,
             "Config": {"Labels": labels or {}},
@@ -42,11 +44,34 @@ class FakeContainer:
         self.status = "running"
         self.reload()
 
+    def remove(self, *, force: bool = False) -> None:
+        if self.remove_error is not None:
+            raise self.remove_error
+        self.removed = force
+        self.status = "removed"
+
 
 class FakeNetwork:
-    def __init__(self, name: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        *,
+        labels: dict[str, str] | None = None,
+    ) -> None:
         self.name = name
         self.id = f"network-{name}"
+        self.removed = False
+        self.remove_error: Exception | None = None
+        self.attrs: dict[str, Any] = {
+            "Name": name,
+            "Labels": labels or {},
+            "Containers": {},
+        }
+
+    def remove(self) -> None:
+        if self.remove_error is not None:
+            raise self.remove_error
+        self.removed = True
 
 
 class FakeContainers:
@@ -125,7 +150,7 @@ class FakeNetworks:
         self.create_calls.append({"name": name, **kwargs})
         if self.create_error is not None:
             raise self.create_error
-        network = FakeNetwork(name)
+        network = FakeNetwork(name, labels=kwargs.get("labels"))
         self.items[name] = network
         return network
 

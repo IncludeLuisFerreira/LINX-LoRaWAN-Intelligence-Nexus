@@ -15,6 +15,7 @@ from linx_shared.grpc import (
 from docker_provisioner.config import settings
 from docker_provisioner.docker_service import (
     ProvisioningError,
+    deprovision_application,
     provision_application,
 )
 
@@ -145,6 +146,45 @@ class DockerProvisionerServicer(
             status=result.status,
             created=result.created,
             mqtt_topic=result.mqtt_topic,
+        )
+
+    def DeprovisionApplication(self, request, context):
+        authorize(context)
+
+        try:
+            app_id = str(UUID(request.app_id))
+        except ValueError:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"app_id inválido: {request.app_id}",
+            )
+
+        try:
+            client = self._client_factory()
+            try:
+                result = deprovision_application(
+                    client,
+                    app_id,
+                    network_prefix=settings.provision_network_prefix,
+                )
+            finally:
+                client.close()
+        except ProvisioningError as exc:
+            context.abort(exc.status, exc.message)
+        except (
+            docker.errors.DockerException,
+            requests.exceptions.RequestException,
+        ):
+            logger.exception("Falha ao obter client Docker")
+            context.abort(
+                grpc.StatusCode.UNAVAILABLE,
+                "Docker daemon is unavailable",
+            )
+
+        return linx_docker_provisioner_pb2.DeprovisionApplicationResponse(
+            network=result.network,
+            removed=result.removed,
+            containers_removed=result.containers_removed,
         )
 
 
