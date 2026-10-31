@@ -9,6 +9,7 @@ from sqlalchemy.schema import CreateIndex
 
 from linx_shared.models import (
     Application,
+    ApplicationInstance,
     Base,
     Device,
     Job,
@@ -22,6 +23,7 @@ from linx_shared.models import (
 def test_all_tables_registered():
     assert set(Base.metadata.tables) == {
         "application",
+        "application_instances",
         "devices",
         "job_outbox",
         "jobs",
@@ -36,7 +38,7 @@ def test_device_routes_table_is_not_registered():
 
 
 def test_models_have_uuid_pk():
-    for model in (Tenant, Application, User, Device, Job):
+    for model in (Tenant, Application, ApplicationInstance, User, Device, Job):
         pk = list(model.__table__.primary_key.columns)[0]
         assert pk.name == "id"
         assert isinstance(pk.type, PGUUID)
@@ -120,8 +122,8 @@ def test_db_base_import_registers_models():
         check=True,
     )
     expected = (
-        "['application', 'devices', 'job_outbox', 'jobs', 'tenant', "
-        "'tenant_user', 'user']"
+        "['application', 'application_instances', 'devices', 'job_outbox', "
+        "'jobs', 'tenant', 'tenant_user', 'user']"
     )
     assert result.stdout.strip() == expected
 
