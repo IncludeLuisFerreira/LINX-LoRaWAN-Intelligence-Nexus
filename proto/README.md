@@ -91,23 +91,31 @@ A geração dos stubs Python é feita na issue #20.
 
 ## `proto/linx_docker_provisioner.proto`
 
-Contrato interno entre o `jobs_worker` (cliente gRPC) e o
-`docker_provisioner` (servidor). No fluxo assíncrono, o `identity_api`
-valida tenant/application no Postgres e enfileira um job; quem chama este RPC
-enviando apenas o `app_id` é o `jobs_worker`. O provisioner concentra a
-política de imagem, porta, rede e variáveis de ambiente.
+Contrato interno entre o plano de controle e o `docker_provisioner`
+(servidor). No provisionamento assíncrono, o `identity_api` valida
+tenant/application no Postgres e enfileira um job; o `jobs_worker` chama
+`ProvisionApplication` enviando apenas o `app_id`. No delete da aplicação, o
+`identity_api` chama `DeprovisionApplication` antes de remover o registro. O
+provisioner concentra a política de imagem, porta, rede e variáveis de
+ambiente.
 
 | Item | Valor |
 | ---- | ----- |
 | Serviço | `DockerProvisioner` |
-| RPC | `ProvisionApplication` |
+| RPCs | `ProvisionApplication`, `DeprovisionApplication` |
 | Porta | `50052` (rede interna do Compose) |
 | Autenticação | metadado `authorization: Bearer <SERVICE_TOKEN>` |
-| Request | `ProvisionApplicationRequest { string app_id = 1; }` |
-| Response | `container_id`, `port`, `network`, `image`, `status`, `created`, `mqtt_topic` |
+| Request (provision) | `ProvisionApplicationRequest { string app_id = 1; }` |
+| Response (provision) | `container_id`, `port`, `network`, `image`, `status`, `created`, `mqtt_topic` |
+| Request (deprovision) | `DeprovisionApplicationRequest { string app_id = 1; }` |
+| Response (deprovision) | `network`, `removed`, `containers_removed` |
 
 > `DB_PASSWORD` é gerado pelo provisioner e injetado apenas no container do
 > tenant; ele não trafega no gRPC nem é retornado ao `identity_api`.
+
+O `DeprovisionApplication` é idempotente e remove primeiro os containers da
+aplicação; a rede `linx-app-<app_id>` só é removida se pertencer à mesma
+aplicação e não tiver outros endpoints conectados.
 
 ## Como compilar / verificar
 
