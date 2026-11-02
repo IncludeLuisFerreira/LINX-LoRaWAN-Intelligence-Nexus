@@ -286,3 +286,92 @@ def test_second_provision_over_grpc_is_idempotent(grpc_channel):
     assert second.container_id == first.container_id
     assert second.port == first.port
     assert second.created is False
+
+
+def _deprovision_request(app_id: str = APP_ID):
+    request_cls = getattr(
+        linx_docker_provisioner_pb2, "DeprovisionApplicationRequest"
+    )
+    return request_cls(app_id=app_id)
+
+
+def _add_managed_application_resources(client: FakeDockerClient) -> None:
+    from tests.fakes import FakeContainer, FakeNetwork
+
+    client.containers.items.append(
+        FakeContainer(
+            "container-1",
+            labels={"linx.application.id": APP_ID},
+        )
+    )
+    network = FakeNetwork(
+        f"linx-app-{APP_ID}",
+        labels={
+            "linx.managed-by": "linx-core",
+            "linx.application.id": APP_ID,
+        },
+    )
+    client.networks.items[network.name] = network
+
+
+def test_deprovision_application_returns_removed_resources():
+    client = FakeDockerClient()
+    _add_managed_application_resources(client)
+    servicer, _ = _servicer(client)
+
+    response = servicer.DeprovisionApplication(
+        _deprovision_request(),
+        FakeContext(),
+    )
+
+    assert response.network == f"linx-app-{APP_ID}"
+    assert response.removed is True
+    assert response.containers_removed == 1
+    assert client.closed is True
+
+
+def test_deprovision_application_is_idempotent():
+    servicer, _ = _servicer()
+
+    response = servicer.DeprovisionApplication(
+        _deprovision_request(),
+        FakeContext(),
+    )
+
+    assert response.network == f"linx-app-{APP_ID}"
+    assert response.removed is False
+    assert response.containers_removed == 0
+
+
+def test_deprovision_application_rejects_invalid_uuid():
+    servicer, _ = _servicer()
+    context = FakeContext()
+
+    with pytest.raises(AbortError):
+        servicer.DeprovisionApplication(
+            _deprovision_request("not-a-uuid"),
+            context,
+        )
+
+    assert context.aborted[0] == grpc.StatusCode.INVALID_ARGUMENT
+
+
+def test_deprovision_application_over_grpc(grpc_channel):
+    stub = linx_docker_provisioner_pb2_grpc.DockerProvisionerStub(grpc_channel)
+
+    response = stub.DeprovisionApplication(
+        _deprovision_request(),
+        metadata=AUTH_METADATA,
+    )
+
+    assert response.network == f"linx-app-{APP_ID}"
+    assert response.removed is False
+
+
+def test_deprovision_application_over_grpc_requires_auth(grpc_channel):
+    stub = linx_docker_provisioner_pb2_grpc.DockerProvisionerStub(grpc_channel)
+
+    with pytest.raises(grpc.RpcError) as exc_info:
+        stub.DeprovisionApplication(_deprovision_request())
+
+    assert exc_info.value.code() == grpc.StatusCode.UNAUTHENTICATED

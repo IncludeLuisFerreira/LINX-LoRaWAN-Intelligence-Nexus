@@ -10,6 +10,11 @@ package linx;
 service DockerProvisioner {
   rpc ProvisionApplication(ProvisionApplicationRequest)
       returns (ProvisionApplicationResponse);
+
+  // Remove o container e a rede bridge dedicada da aplicação. Idempotente:
+  // recursos ausentes não são erro.
+  rpc DeprovisionApplication(DeprovisionApplicationRequest)
+      returns (DeprovisionApplicationResponse);
 }
 
 message ProvisionApplicationRequest {
@@ -25,4 +30,15 @@ message ProvisionApplicationResponse {
   string status = 5;
   bool created = 6;
   string mqtt_topic = 7;
+}
+
+message DeprovisionApplicationRequest {
+  // UUID da application já validada pelo identity_api.
+  string app_id = 1;
+}
+
+message DeprovisionApplicationResponse {
+  string network = 1;
+  bool removed = 2;
+  uint32 containers_removed = 3;
 }

@@ -55,6 +55,19 @@ class ProvisionResult:
     mqtt_topic: str
 
 
+@dataclass(frozen=True)
+class DeprovisionResult:
+    """Resultado da remoção dos recursos Docker de uma aplicação."""
+
+    network: str
+    removed: bool
+    containers_removed: int
+
+
+def _network_name(prefix: str, app_id: str) -> str:
+    return f"{prefix}-{app_id}"
+
+
 def mqtt_topic_for(app_id: str) -> str:
     """Tópico MQTT de uplink consumido pelo tenant."""
     return f"application/{app_id}/device/+/event/up"
@@ -144,7 +157,7 @@ def ensure_network(
     prefix: str,
 ) -> Any:
     """Cria ou reutiliza a rede bridge dedicada da aplicação."""
-    name = f"{prefix}-{app_id}"
+    name = _network_name(prefix, app_id)
     labels = {
         MANAGED_LABEL: MANAGED_BY,
         APP_LABEL: app_id,
@@ -171,6 +184,107 @@ def ensure_network(
             f"Falha ao criar rede {name}: {exc}",
             status=grpc.StatusCode.INTERNAL,
         ) from exc
+
+
+def _remove_application_containers(
+    client: docker.DockerClient,
+    app_id: str,
+) -> int:
+    """Remove os containers gerenciados da aplicação e devolve a contagem."""
+    removed = 0
+    for container in _find_containers(client, app_id):
+        try:
+            container.remove(force=True)
+        except docker.errors.NotFound:
+            continue
+        except docker.errors.DockerException as exc:
+            raise ProvisioningError(
+                f"Falha ao remover container da aplicação {app_id}: {exc}",
+                status=grpc.StatusCode.INTERNAL,
+            ) from exc
+        removed += 1
+    return removed
+
+
+def _remove_application_network(
+    client: docker.DockerClient,
+    app_id: str,
+    network_prefix: str,
+) -> bool:
+    """Remove a rede dedicada, recusando redes de outra aplicação.
+
+    A checagem de labels evita apagar uma rede compartilhada por engano. Redes
+    legadas sem labels só são removidas quando não têm nenhum endpoint ativo.
+    """
+    name = _network_name(network_prefix, app_id)
+
+    try:
+        network = client.networks.get(name)
+    except docker.errors.NotFound:
+        return False
+    except docker.errors.DockerException as exc:
+        raise ProvisioningError(
+            f"Falha ao consultar rede {name}: {exc}",
+            status=grpc.StatusCode.UNAVAILABLE,
+        ) from exc
+
+    attrs = getattr(network, "attrs", {}) or {}
+    labels = attrs.get("Labels") or {}
+    managed_by = labels.get(MANAGED_LABEL)
+    labeled_app = labels.get(APP_LABEL)
+    if managed_by not in (None, MANAGED_BY) or labeled_app not in (
+        None,
+        app_id,
+    ):
+        raise ProvisioningError(
+            f"Rede {name} não pertence à aplicação {app_id}",
+            status=grpc.StatusCode.FAILED_PRECONDITION,
+        )
+
+    if attrs.get("Containers"):
+        raise ProvisioningError(
+            f"Rede {name} ainda possui containers conectados",
+            status=grpc.StatusCode.FAILED_PRECONDITION,
+        )
+
+    try:
+        network.remove()
+    except docker.errors.NotFound:
+        return False
+    except docker.errors.DockerException as exc:
+        raise ProvisioningError(
+            f"Falha ao remover rede {name}: {exc}",
+            status=grpc.StatusCode.INTERNAL,
+        ) from exc
+    return True
+
+
+def deprovision_application(
+    client: docker.DockerClient,
+    app_id: str,
+    *,
+    network_prefix: str,
+) -> DeprovisionResult:
+    """Remove container e rede dedicada da aplicação de forma idempotente.
+
+    O container é removido antes da rede porque o Docker não permite apagar uma
+    rede com endpoints ativos. Se restar qualquer container conectado à rede
+    (por exemplo, de outra aplicação), a rede é preservada e o erro é exposto.
+    """
+    with _app_lock(app_id):
+        network = _network_name(network_prefix, app_id)
+        containers_removed = _remove_application_containers(client, app_id)
+        network_removed = _remove_application_network(
+            client,
+            app_id,
+            network_prefix,
+        )
+
+    return DeprovisionResult(
+        network=network,
+        removed=containers_removed > 0 or network_removed,
+        containers_removed=containers_removed,
+    )
 
 
 def _find_containers(client: docker.DockerClient, app_id: str) -> list[Any]:

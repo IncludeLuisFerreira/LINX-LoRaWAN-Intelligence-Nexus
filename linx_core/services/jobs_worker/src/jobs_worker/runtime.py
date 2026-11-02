@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pika
+from linx_shared.db.base import SessionLocal
 from linx_shared.jobs.broker import JobPublisher
 from linx_shared.jobs.handlers import HandlerRegistry
 from linx_shared.jobs.outbox import (
@@ -124,5 +125,7 @@ def run_consumer(
 
 def build_registry() -> HandlerRegistry:
     registry = HandlerRegistry()
-    registry.register(ProvisionApplicationHandler())
+    registry.register(
+        ProvisionApplicationHandler(session_factory=SessionLocal)
+    )
     return registry

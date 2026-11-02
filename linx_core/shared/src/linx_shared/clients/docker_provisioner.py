@@ -56,6 +56,15 @@ class ProvisionedApplication:
     mqtt_topic: str
 
 
+@dataclass(frozen=True)
+class DeprovisionedApplication:
+    """Dados públicos devolvidos pela remoção de uma aplicação."""
+
+    network: str
+    removed: bool
+    containers_removed: int
+
+
 class DockerProvisionerClient:
     """Cliente gRPC compartilhado para provisionar containers."""
 
@@ -114,6 +123,44 @@ class DockerProvisionerClient:
             status=response.status,
             created=response.created,
             mqtt_topic=response.mqtt_topic,
+        )
+
+    def deprovision(self, app_id: str) -> DeprovisionedApplication:
+        """Remove container e rede dedicada da aplicação."""
+        if not self._service_token:
+            raise ProvisionerClientError(
+                "Service token is not configured",
+                status_code=503,
+            )
+
+        request_cls = getattr(
+            linx_docker_provisioner_pb2,
+            "DeprovisionApplicationRequest",
+        )
+        request = request_cls(app_id=app_id)
+        metadata = (("authorization", f"Bearer {self._service_token}"),)
+
+        try:
+            response = self._stub.DeprovisionApplication(
+                request,
+                metadata=metadata,
+                timeout=self._timeout,
+            )
+        except grpc.RpcError as exc:
+            status_code = _GRPC_TO_HTTP_STATUS.get(
+                exc.code(), _DEFAULT_HTTP_STATUS
+            )
+            details = exc.details() or str(exc)
+            raise ProvisionerClientError(
+                f"Provisioner error: {details}",
+                status_code=status_code,
+                grpc_code=exc.code(),
+            ) from exc
+
+        return DeprovisionedApplication(
+            network=response.network,
+            removed=response.removed,
+            containers_removed=response.containers_removed,
         )
 
     def close(self) -> None:

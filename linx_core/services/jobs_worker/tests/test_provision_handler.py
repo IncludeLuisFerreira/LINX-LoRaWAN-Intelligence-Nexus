@@ -158,3 +158,48 @@ def test_handler_close_error_does_not_mask_success():
 
     assert result["container_id"] == "container-1"
     assert client.closed is True
+
+
+def test_handler_fails_permanent_when_application_gone(session_factory):
+    client = FakeClient(result=_result())
+    handler = ProvisionApplicationHandler(
+        client_factory=lambda: client,
+        session_factory=session_factory,
+    )
+
+    with pytest.raises(PermanentJobError) as exc_info:
+        handler.handle(_job())
+
+    assert exc_info.value.code == "application_not_found"
+    assert client.requests == []
+    assert client.closed is False
+
+
+def test_handler_provisions_when_application_exists(
+    session_factory, db_session
+):
+    from linx_shared.models.application import Application
+    from linx_shared.models.tenant import Tenant
+
+    tenant = Tenant(name=f"tenant-{uuid4()}")
+    db_session.add(tenant)
+    db_session.flush()
+    application = Application(
+        id=uuid4(),
+        tenant_id=tenant.id,
+        name="Fazenda",
+        description="",
+    )
+    db_session.add(application)
+    db_session.flush()
+
+    client = FakeClient(result=_result())
+    handler = ProvisionApplicationHandler(
+        client_factory=lambda: client,
+        session_factory=session_factory,
+    )
+
+    result = handler.handle(_job(application.id))
+
+    assert client.requests == [str(application.id)]
+    assert result["container_id"] == "container-1"

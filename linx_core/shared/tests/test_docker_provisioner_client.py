@@ -18,6 +18,9 @@ APP_ID = "3d7f1a8e-3f4b-4f0a-9b7c-2e1d9a8b7c6d"
 RESPONSE_CLS = getattr(
     linx_docker_provisioner_pb2, "ProvisionApplicationResponse"
 )
+DEPROVISION_RESPONSE_CLS = getattr(
+    linx_docker_provisioner_pb2, "DeprovisionApplicationResponse"
+)
 
 
 class FakeProvisionerServicer(
@@ -26,6 +29,7 @@ class FakeProvisionerServicer(
     def __init__(self, *, error_code=None) -> None:
         self.error_code = error_code
         self.requests: list[str] = []
+        self.deprovision_requests: list[str] = []
         self.metadata: list[tuple[str, str]] = []
 
     def ProvisionApplication(self, request, context):
@@ -42,6 +46,18 @@ class FakeProvisionerServicer(
             status="running",
             created=True,
             mqtt_topic=f"application/{request.app_id}/device/+/event/up",
+        )
+
+    def DeprovisionApplication(self, request, context):
+        self.deprovision_requests.append(request.app_id)
+        self.metadata = list(context.invocation_metadata())
+        if self.error_code is not None:
+            context.abort(self.error_code, "boom")
+
+        return DEPROVISION_RESPONSE_CLS(
+            network=f"linx-app-{request.app_id}",
+            removed=True,
+            containers_removed=1,
         )
 
 
@@ -127,6 +143,39 @@ def test_provision_fails_closed_without_service_token():
     try:
         with pytest.raises(ProvisionerClientError) as exc_info:
             client.provision(APP_ID)
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.grpc_code is None
+
+
+def test_deprovision_sends_app_id_and_bearer_token():
+    servicer = FakeProvisionerServicer()
+
+    with _serve(servicer) as target:
+        client = _client(target)
+        try:
+            result = client.deprovision(APP_ID)
+        finally:
+            client.close()
+
+    assert servicer.deprovision_requests == [APP_ID]
+    assert ("authorization", f"Bearer {TOKEN}") in servicer.metadata
+    assert result.network == f"linx-app-{APP_ID}"
+    assert result.removed is True
+    assert result.containers_removed == 1
+
+
+def test_deprovision_fails_closed_without_service_token():
+    client = DockerProvisionerClient(
+        target="127.0.0.1:1",
+        service_token="",
+        timeout=0.1,
+    )
+    try:
+        with pytest.raises(ProvisionerClientError) as exc_info:
+            client.deprovision(APP_ID)
     finally:
         client.close()
 

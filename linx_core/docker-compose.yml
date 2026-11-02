@@ -48,6 +48,9 @@ services:
       - CHIRPSTACK_API_TOKEN=${CHIRPSTACK_API_TOKEN:?CHIRPSTACK_API_TOKEN must be set}
       - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
       - JOB_MAX_ATTEMPTS=${JOB_MAX_ATTEMPTS:-3}
+      # Deprovisionamento dos containers/redes no DELETE de aplicação.
+      - PROVISIONER_GRPC_HOST=${PROVISIONER_GRPC_HOST:-docker_provisioner:50052}
+      - PROVISIONER_GRPC_TIMEOUT_SECONDS=${PROVISIONER_GRPC_TIMEOUT_SECONDS:-10}
     ports:
       - "8000:8000"
     depends_on:

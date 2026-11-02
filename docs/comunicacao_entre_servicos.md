@@ -83,8 +83,9 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 | Origem                          | Destino                          | Protocolo             | Porta   | Propósito                                              | Momento       |
 | :------------------------------ | :------------------------------- | :-------------------- | :------ | :----------------------------------------------------- | :------------ |
 | `client_agent`                  | `agent_bridge`                   | gRPC                  | `50051` | `GetAppConfig` sob demanda (com cache) e health check  | startup / on-demand |
-| `identity_api`                  | `docker_provisioner`             | gRPC                  | `50052` | `ProvisionApplication` (cria/reaproveita container)    | criação/requisição de provisionamento |
-| `docker_provisioner`            | Docker daemon                    | Docker API            | socket  | Criar rede, publicar porta e subir container           | sob demanda   |
+| `jobs_worker`                   | `docker_provisioner`             | gRPC                  | `50052` | `ProvisionApplication` (cria/reaproveita container)    | job de provisionamento |
+| `identity_api`                  | `docker_provisioner`             | gRPC                  | `50052` | `DeprovisionApplication` (remove container e rede)     | delete da aplicação |
+| `docker_provisioner`            | Docker daemon                    | Docker API            | socket  | Criar/remover rede e container; publicar porta         | sob demanda   |
 | Broker MQTT                     | `routing`                        | MQTT                  | `1883`  | Receber uplinks LoRaWAN do ChirpStack                  | contínuo      |
 | `routing`                       | `rabbitmq` (exchange `linx.telemetry.{app_id}`) | AMQP            | `5672`  | Publicar envelope normalizado (routing key por tópico) | por uplink    |
 | `rabbitmq` (fila do tenant)     | `telemetry_consumer`             | AMQP                  | `5672`  | Entregar envelope na fila `linx.telemetry.{app_id}` (credencial do tenant) | por evento    |
@@ -96,6 +97,12 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 > **Direção do gRPC:** o contrato é único (`AgentBridge`), mas cada lado hospeda o RPC
 > que lhe cabe. O **SaaS** hospeda `GetAppConfig` (em `agent_bridge`) e o `client_agent`
 > é o cliente que o consome. Os demais RPCs do contrato ainda não estão implementados.
+
+> **Isolamento de rede:** cada aplicação provisionada recebe uma rede bridge
+> exclusiva `linx-app-<app_id>`, com labels de gerenciamento. O
+> `DeprovisionApplication` remove o container e depois a rede; a rede não é
+> apagada se ainda tiver endpoints ou pertencer a outra aplicação. Assim, um
+> container da aplicação A não tem rota direta para containers da aplicação B.
 
 ---
 
@@ -412,8 +419,8 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 | `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `telemetry_consumer`, `timescaledb` | `tenant` / `...` / `tenantdb` | Credenciais do banco do tenant.                        |
 | `HTTP_HOST` / `HTTP_PORT` | `telemetry_consumer`      | `0.0.0.0` / `8000`                         | Bind do FastAPI de leitura.                                      |
 | `DATABASE_URL`           | `agent_bridge`, `identity_api` | `postgresql+psycopg://...@db:5432/linx` | Banco do plano de controle.                                      |
-| `PROVISIONER_GRPC_HOST`  | `identity_api`             | `localhost:50052` (Compose: `docker_provisioner:50052`) | Endereço gRPC do provisioner.                        |
-| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | `identity_api`    | `10`                                       | Timeout da chamada `ProvisionApplication`.                       |
+| `PROVISIONER_GRPC_HOST`  | `identity_api`, `jobs_worker` | `docker_provisioner:50052` (vazio desabilita o deprovisionamento) | Endereço gRPC do provisioner.                |
+| `PROVISIONER_GRPC_TIMEOUT_SECONDS` | `identity_api`, `jobs_worker` | `10`                           | Timeout das chamadas `ProvisionApplication`/`DeprovisionApplication`. |
 | `SERVICE_TOKEN`          | `identity_api`, `docker_provisioner` | `openssl rand -hex 32`           | Token Bearer da chamada gRPC e do header `X-Service-Token`.      |
 | `DOCKER_GID`             | `docker_provisioner`       | `990`                                      | GID do grupo dono de `/var/run/docker.sock`.                     |
 | `PROVISION_IMAGE`        | `docker_provisioner`       | `linx-tenant-app:latest`                   | Imagem provisionada por aplicação.                               |
