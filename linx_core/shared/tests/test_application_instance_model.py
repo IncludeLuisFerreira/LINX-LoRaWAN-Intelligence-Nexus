@@ -164,3 +164,35 @@ def test_application_instances_rejects_invalid_status(db_session):
                 ApplicationInstance(app_id=application.id, status="UNKNOWN")
             )
             db_session.flush()
+
+
+def test_application_instances_cascade_delete_on_application_removal(
+    db_session,
+):
+    from sqlalchemy import select
+
+    application = _application(db_session)
+    instance = ApplicationInstance(app_id=application.id)
+    db_session.add(instance)
+    db_session.flush()
+    instance_id = instance.id
+
+    db_session.delete(application)
+    db_session.flush()
+
+    db_session.expunge_all()
+    remaining = db_session.execute(
+        select(ApplicationInstance).where(
+            ApplicationInstance.id == instance_id
+        )
+    ).scalar_one_or_none()
+    assert remaining is None
+
+
+def test_application_instances_rejects_nonexistent_app_id(db_session):
+    random_app_id = uuid.uuid4()
+
+    with pytest.raises(IntegrityError):
+        with db_session.begin_nested():
+            db_session.add(ApplicationInstance(app_id=random_app_id))
+            db_session.flush()
