@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from typing import Any
+from uuid import UUID
 
 import grpc
 from linx_shared.clients.docker_provisioner import (
@@ -9,7 +10,9 @@ from linx_shared.clients.docker_provisioner import (
 )
 from linx_shared.jobs.constants import JOB_TYPE_PROVISION_APPLICATION
 from linx_shared.jobs.handlers import PermanentJobError, TransientJobError
+from linx_shared.models.application import Application
 from linx_shared.models.job import Job
+from sqlalchemy.orm import Session
 
 from jobs_worker.config import settings
 
@@ -38,8 +41,10 @@ class ProvisionApplicationHandler:
     def __init__(
         self,
         client_factory: Callable[[], DockerProvisionerClient] | None = None,
+        session_factory: Callable[[], Session] | None = None,
     ) -> None:
         self._client_factory = client_factory
+        self._session_factory = session_factory
 
     def _create_client(self) -> DockerProvisionerClient:
         if self._client_factory is not None:
@@ -50,7 +55,29 @@ class ProvisionApplicationHandler:
             timeout=settings.provisioner_grpc_timeout_seconds,
         )
 
+    def _application_exists(self, app_id: UUID) -> bool:
+        """Confere se a aplicação ainda existe antes de provisionar.
+
+        Fecha a janela TOCTOU entre o delete (que remove a linha) e um job de
+        provisionamento enfileirado logo antes: sem a linha, provisionar
+        criaria um container órfão com credenciais de um tenant removido.
+        Sem ``session_factory`` (harness mínimo) o guard é ignorado.
+        """
+        if self._session_factory is None:
+            return True
+        session = self._session_factory()
+        try:
+            return session.get(Application, app_id) is not None
+        finally:
+            session.close()
+
     def handle(self, job: Job) -> dict[str, Any]:
+        if not self._application_exists(job.subject_id):
+            raise PermanentJobError(
+                f"Application {job.subject_id} no longer exists; "
+                "skipping provision",
+                code="application_not_found",
+            )
         client = self._create_client()
         try:
             result = client.provision(str(job.subject_id))
