@@ -1,6 +1,7 @@
 import logging
 from uuid import UUID
 
+import grpc
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from linx_shared.clients.docker_provisioner import (
     DockerProvisionerClient,
@@ -329,10 +330,17 @@ def delete_application(
         try:
             provisioner.deprovision(str(application_id))
         except ProvisionerClientError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to deprovision application: {exc.message}",
-            ) from exc
+            if exc.grpc_code == grpc.StatusCode.UNIMPLEMENTED:
+                logger.warning(
+                    "DeprovisionApplication unimplemented by provisioner for "
+                    "application %s; skipping Docker cleanup",
+                    application_id,
+                )
+            else:
+                raise HTTPException(
+                    status_code=exc.status_code,
+                    detail=f"Failed to deprovision application: {exc.message}",
+                ) from exc
 
     try:
         chirpstack.delete_application(str(application_id))

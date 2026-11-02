@@ -178,11 +178,21 @@ Cada aplicação tem uma rede bridge exclusiva (`linx-app-<app_id>`) com labels
 2. remove a rede dedicada somente se ela pertence à mesma aplicação e não tem
    outros endpoints conectados;
 3. responde `409` se houver job de provisionamento ativo;
-4. responde `502` se o provisioner estiver configurado e a limpeza falhar.
+4. se o provisioner estiver configurado e a limpeza falhar, responde com o
+   status já traduzido pelo cliente (`503` indisponível/esgotado, `504` timeout,
+   `409` conflito, `502` erro interno/contrato);
+5. se o provisioner for antigo e não implementar `DeprovisionApplication`
+   (`UNIMPLEMENTED`), a limpeza Docker é ignorada com aviso e o delete continua,
+   para não bloquear a remoção durante o skew de deploy.
 
 O deprovisionamento é habilitado quando `PROVISIONER_GRPC_HOST` aponta para o
 provisioner (o Compose do `linx_core` usa `docker_provisioner:50052`). Em stacks
 sem esse serviço, deixe a variável vazia para preservar o delete sem Docker.
+
+Ordem de upgrade obrigatória: **suba o `docker_provisioner` (com
+`DeprovisionApplication`) antes do `identity_api`**. Um `identity_api` novo
+chamando um provisioner antigo degrada para "limpeza ignorada" (item 5), mas o
+container/rede da aplicação ficam órfãos até o provisioner ser atualizado.
 
 Verificação manual:
 
@@ -417,3 +427,7 @@ Resposta esperada (`200`):
 3. `cd linx_core && cp .env.example .env` e defina uma senha forte.
 4. `./scripts/deploy.sh`.
 5. Verifique de fora: `curl -i http://<ec2-ip>:8000/health`.
+6. **Ordem de upgrade:** ao atualizar, suba o `docker_provisioner` (com
+   `DeprovisionApplication`) **antes** do `identity_api`. Um `identity_api` novo
+   contra um provisioner antigo apenas ignora a limpeza Docker no delete (ver
+   *Deprovisionamento e isolamento de rede*), deixando container/rede órfãos.

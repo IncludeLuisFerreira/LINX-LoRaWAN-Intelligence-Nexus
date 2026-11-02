@@ -4,6 +4,7 @@ from time import sleep
 from types import SimpleNamespace
 from uuid import uuid4
 
+import grpc
 import pytest
 from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
@@ -522,6 +523,59 @@ def test_delete_application_deprovision_failure_returns_502(
     assert response.json() == {
         "detail": "Failed to deprovision application: "
         "Provisioner error: docker unavailable"
+    }
+    assert chirpstack.deleted_applications == []
+    assert (
+        client.get(
+            f"{_applications_url(tenant_id)}/{created['id']}"
+        ).status_code
+        == 200
+    )
+
+
+def test_delete_application_deprovision_unimplemented_skips_cleanup(
+    provisioner,
+):
+    tenant_id = _create_tenant()
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+    provisioner.error = ProvisionerClientError(
+        "Provisioner error: Method not found",
+        status_code=502,
+        grpc_code=grpc.StatusCode.UNIMPLEMENTED,
+    )
+
+    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+
+    assert response.status_code == 204
+    assert (
+        client.get(
+            f"{_applications_url(tenant_id)}/{created['id']}"
+        ).status_code
+        == 404
+    )
+
+
+def test_delete_application_deprovision_unavailable_returns_503(
+    chirpstack, provisioner
+):
+    tenant_id = _create_tenant()
+    created = client.post(
+        _applications_url(tenant_id), json={"name": "Fazenda"}
+    ).json()
+    provisioner.error = ProvisionerClientError(
+        "Provisioner error: unavailable",
+        status_code=503,
+        grpc_code=grpc.StatusCode.UNAVAILABLE,
+    )
+
+    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Failed to deprovision application: "
+        "Provisioner error: unavailable"
     }
     assert chirpstack.deleted_applications == []
     assert (
