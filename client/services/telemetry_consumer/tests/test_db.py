@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 from datetime import datetime
 
@@ -190,3 +191,145 @@ async def test_create_db_pool_rejects_blank_password():
         await db.create_db_pool(
             host="h", port=1, user="u", database="d", password="   "
         )
+
+
+class PingPool:
+    def __init__(self, result=1, error=None):
+        self.result = result
+        self.error = error
+        self.queries = []
+
+    async def fetchval(self, query):
+        self.queries.append(query)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_true_when_select_succeeds():
+    pool = PingPool(result=1)
+
+    assert await db.ping_db(pool) is True
+    assert pool.queries == ["SELECT 1"]
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_false_when_select_fails():
+    pool = PingPool(error=RuntimeError("db down"))
+
+    assert await db.ping_db(pool) is False
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_false_without_pool():
+    assert await db.ping_db(None) is False
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_false_when_result_is_not_one():
+    pool = PingPool(result=0)
+
+    assert await db.ping_db(pool) is False
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_false_on_timeout():
+    class SlowPool:
+        async def fetchval(self, query):
+            await asyncio.sleep(1)
+            return 1
+
+    assert await db.ping_db(SlowPool(), timeout=0.01) is False
+
+
+class ProbeConnection:
+    def __init__(self, result=1, error=None):
+        self.result = result
+        self.error = error
+        self.queries = []
+        self.closed = False
+
+    async def fetchval(self, query):
+        self.queries.append(query)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+    async def close(self):
+        self.closed = True
+
+
+@pytest.mark.asyncio
+async def test_probe_db_uses_dedicated_connection(monkeypatch):
+    connection = ProbeConnection(result=1)
+    calls = []
+
+    async def fake_connect(**kwargs):
+        calls.append(kwargs)
+        return connection
+
+    monkeypatch.setattr(db.asyncpg, "connect", fake_connect)
+
+    assert (
+        await db.probe_db(
+            host="h", port=5432, user="u", password="p", database="d"
+        )
+        is True
+    )
+    assert connection.queries == ["SELECT 1"]
+    assert connection.closed is True
+    assert calls[0]["host"] == "h"
+
+
+@pytest.mark.asyncio
+async def test_probe_db_returns_false_when_connect_fails(monkeypatch):
+    async def fake_connect(**kwargs):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db.asyncpg, "connect", fake_connect)
+
+    assert (
+        await db.probe_db(
+            host="h", port=5432, user="u", password="p", database="d"
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_probe_db_closes_connection_when_select_fails(monkeypatch):
+    connection = ProbeConnection(error=RuntimeError("select failed"))
+
+    async def fake_connect(**kwargs):
+        return connection
+
+    monkeypatch.setattr(db.asyncpg, "connect", fake_connect)
+
+    assert (
+        await db.probe_db(
+            host="h", port=5432, user="u", password="p", database="d"
+        )
+        is False
+    )
+    assert connection.closed is True
+
+
+@pytest.mark.asyncio
+async def test_probe_db_returns_false_on_connect_timeout(monkeypatch):
+    async def slow_connect(**kwargs):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(db.asyncpg, "connect", slow_connect)
+
+    assert (
+        await db.probe_db(
+            host="h",
+            port=5432,
+            user="u",
+            password="p",
+            database="d",
+            timeout=0.01,
+        )
+        is False
+    )

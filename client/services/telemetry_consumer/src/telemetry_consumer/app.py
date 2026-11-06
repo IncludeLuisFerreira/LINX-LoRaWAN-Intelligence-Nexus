@@ -3,15 +3,22 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Awaitable, Callable
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, status
 
 from telemetry_consumer.broadcaster import Broadcaster
 from telemetry_consumer.config import ConsumerSettings
 from telemetry_consumer.consumer import RabbitConsumer
-from telemetry_consumer.db import create_db_pool, insert_event
+from telemetry_consumer.db import (
+    create_db_pool,
+    insert_event,
+    ping_db,
+    probe_db,
+)
 from telemetry_consumer.routers.telemetry import router as telemetry_router
 
 logger = logging.getLogger(__name__)
+
+_HEALTH_TIMEOUT_SECONDS = 2.0
 
 
 def create_app(
@@ -19,6 +26,7 @@ def create_app(
     *,
     pool_factory: Callable[..., Awaitable[Any]] = create_db_pool,
     consumer_factory: Callable[..., Any] = RabbitConsumer,
+    db_probe: Callable[..., Awaitable[bool]] = probe_db,
 ) -> FastAPI:
     app_settings = settings or ConsumerSettings()
 
@@ -65,6 +73,8 @@ def create_app(
                 app.state.db_pool = current
                 logger.info("Pool TimescaleDB recuperado.")
                 return current
+
+        app.state.ensure_pool = ensure_pool
 
         broadcaster = Broadcaster()
         app.state.broadcaster = broadcaster
@@ -116,13 +126,45 @@ def create_app(
     app.state.settings = app_settings
 
     @app.get("/health")
-    def health(request: Request) -> dict[str, Any]:
+    async def health(request: Request, response: Response) -> dict[str, Any]:
         state = request.app.state
         consumer_state = state.consumer.health()
+        pool = state.db_pool
+        if pool is None:
+            try:
+                pool = await asyncio.wait_for(
+                    state.ensure_pool(),
+                    timeout=_HEALTH_TIMEOUT_SECONDS,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "reconexao do pool no health falhou: %s",
+                    exc,
+                )
+                pool = None
+        db_ok = await ping_db(
+            pool,
+            timeout=_HEALTH_TIMEOUT_SECONDS,
+        )
+        if not db_ok:
+            db_ok = await db_probe(
+                host=app_settings.db_host,
+                port=app_settings.db_port,
+                user=app_settings.db_user,
+                password=app_settings.db_password,
+                database=app_settings.db_name,
+                timeout=_HEALTH_TIMEOUT_SECONDS,
+            )
+        mqtt_ok = bool(consumer_state["rabbitmq_connected"])
+        healthy = db_ok and mqtt_ok
+        if not healthy:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
-            "status": "ok",
-            "rabbitmq_connected": consumer_state["rabbitmq_connected"],
-            "db_ok": state.db_pool is not None,
+            "status": "ok" if healthy else "degraded",
+            "db": db_ok,
+            "db_ok": db_ok,
+            "mqtt": mqtt_ok,
+            "rabbitmq_connected": mqtt_ok,
             "processed": consumer_state["processed"],
             "failed": consumer_state["failed"],
             "last_processed_at": consumer_state["last_processed_at"],

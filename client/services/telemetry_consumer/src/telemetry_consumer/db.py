@@ -1,5 +1,6 @@
 """Camada de persistencia assincrona no TimescaleDB via asyncpg."""
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -97,6 +98,84 @@ async def create_db_pool(
         max_size=max_size,
         init=_init_connection,
     )
+
+
+async def ping_db(
+    pool: asyncpg.Pool | None,
+    *,
+    timeout: float = 2.0,
+) -> bool:
+    """Verifica se o TimescaleDB responde a um ``SELECT 1``.
+
+    Retorna ``False`` quando o pool não existe, quando a consulta falha ou
+    quando excede ``timeout``. Nunca propaga exceção: o health check precisa
+    ser seguro para responders automáticos.
+    """
+    if pool is None:
+        return False
+    try:
+        result = await asyncio.wait_for(
+            pool.fetchval("SELECT 1"),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("TimescaleDB ping excedeu %.1fs", timeout)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TimescaleDB ping falhou: %s", exc)
+        return False
+    return result == 1
+
+
+async def probe_db(
+    *,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    database: str,
+    timeout: float = 2.0,
+) -> bool:
+    """Verifica o TimescaleDB com uma conexão dedicada e ``SELECT 1``.
+
+    A conexão dedicada não depende do pool de ingestão, então saturação do
+    pool não gera falso negativo no health check. A conexão é sempre fechada.
+    """
+    try:
+        connection = await asyncio.wait_for(
+            asyncpg.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                database=database,
+            ),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("TimescaleDB probe excedeu %.1fs", timeout)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TimescaleDB probe falhou: %s", exc)
+        return False
+
+    try:
+        result = await asyncio.wait_for(
+            connection.fetchval("SELECT 1"),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("TimescaleDB probe SELECT 1 excedeu %.1fs", timeout)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TimescaleDB probe SELECT 1 falhou: %s", exc)
+        return False
+    finally:
+        try:
+            await connection.close()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("falha ao fechar conexão do probe: %s", exc)
+    return result == 1
 
 
 async def insert_event(

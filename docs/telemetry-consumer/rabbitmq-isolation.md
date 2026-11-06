@@ -91,9 +91,12 @@ DLQ = `linx.telemetry.{app_id}.dlq`; binding = `application.{app_id}.#`.
 ## Falha de credencial/permissão
 
 Falha de acesso (`ACCESS_REFUSED`, reply code 403) é logada em nível `error` com a
-causa e registrada em `last_error` (visível em `GET /health`). O serviço **não**
-encerra: reconecta com o backoff configurado. Como a falha é permanente até a
-credencial/permissão ser corrigida, o `/health` é o sinal operacional.
+causa e registrada em `last_error` apenas nos logs do serviço (o `/health`
+público não expõe a mensagem, que pode conter usuário/vhost AMQP). O serviço
+**não** encerra: reconecta com o backoff configurado. Como a falha é permanente
+até a credencial/permissão ser corrigida, o `/health` é o sinal operacional:
+enquanto o consumidor estiver desconectado, o endpoint retorna `503` com
+`{"status": "degraded", "mqtt": false}`.
 
 ## Verificação de isolamento
 
