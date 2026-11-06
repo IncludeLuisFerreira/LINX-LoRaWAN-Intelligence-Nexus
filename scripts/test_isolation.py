@@ -35,7 +35,7 @@ Exit code 0 = isolamento verificado; != 0 = vazamento ou falha.
 
 Pressupostos do modo real (auditar ao rodar contra stack viva):
   - A rota de status da issue #61 (Worker 1) existe em
-    GET /api/v1/applications/{app_id}/status e responde
+    GET /api/v1/tenant/{tenant_id}/applications/{app_id}/status e responde
     {"status": "RUNNING" | "PENDING" | "PROVISIONING" | "ERROR"}; o script
     faz polling com timeout. Este caminho AINDA NAO esta no develop: o e2e
     so roda apos a #61 ser mergeada. Ajuste o path se o contrato divergir.
@@ -307,7 +307,9 @@ class HttpControlPlane:
 
     def app_status(self, tenant_id: str, app_id: str) -> str:
         resp = self._raise(
-            self._client.get(f"/api/v1/applications/{app_id}/status"),
+            self._client.get(
+                f"/api/v1/tenant/{tenant_id}" f"/applications/{app_id}/status"
+            ),
             f"app_status({app_id})",
         )
         return str(resp.json().get("status", "UNKNOWN"))
