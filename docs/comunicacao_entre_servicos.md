@@ -370,11 +370,12 @@ executa `SELECT 1` no TimescaleDB e consulta o estado do consumidor:
 {
   "status": "ok",
   "db": true,
+  "db_ok": true,
   "mqtt": true,
+  "rabbitmq_connected": true,
   "processed": 0,
   "failed": 0,
   "last_processed_at": null,
-  "last_error": null,
   "ws_connections": 0
 }
 ```
@@ -382,8 +383,17 @@ executa `SELECT 1` no TimescaleDB e consulta o estado do consumidor:
 - Banco e consumidor ok → `200` + `status: "ok"`.
 - Banco indisponível ou consumidor desconectado → `503` + `status: "degraded"`.
 - `db` reflete o resultado real do `SELECT 1` (não apenas a existência do pool).
+  Se o pool estiver saturado ou o `SELECT 1` exceder o timeout, o endpoint faz
+  uma probe dedicada no banco antes de marcar `db: false`.
+- Quando o pool não existe (banco caiu no startup), o health tenta recriá-lo
+  antes da checagem, sem depender de tráfego de mensagens.
 - `mqtt` reflete a conexão do consumidor de entrada. Após a migração para
   RabbitMQ (#192), ele representa a conexão AMQP, não um cliente MQTT direto.
+- `db_ok` e `rabbitmq_connected` são aliases mantidos para compatibilidade.
+- `last_error` não é exposto no endpoint público; fica apenas nos logs.
+- `503/degraded` também torna o container `unhealthy` em healthchecks que usam
+  `/health`, portanto a indisponibilidade de um componente é uma mudança
+  operacional explícita.
 
 ```bash
 docker compose -f deploy/docker-compose.yml exec telemetry_consumer \

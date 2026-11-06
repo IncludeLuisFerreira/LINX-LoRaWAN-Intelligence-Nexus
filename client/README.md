@@ -55,17 +55,25 @@ limitado ao intervalo `1..1000` (default `100`).
 {
   "status": "ok",
   "db": true,
+  "db_ok": true,
   "mqtt": true,
+  "rabbitmq_connected": true,
   "processed": 0,
   "failed": 0,
   "last_processed_at": null,
-  "last_error": null,
   "ws_connections": 0
 }
 ```
 
 O campo `mqtt` representa o consumidor de entrada do tenant. Após a migração
 para RabbitMQ (#192), ele reflete a conexão AMQP, não um cliente MQTT direto.
+`db_ok` e `rabbitmq_connected` são aliases mantidos para compatibilidade com o
+contrato anterior.
+
+O `last_error` do consumidor não é exposto no `/health` público; ele fica nos
+logs do serviço. O status `degraded` faz o healthcheck do container falhar,
+então uma integração que use `/health` deve tratar `503` como indisponibilidade
+operacional do tenant.
 
 > **Credencial (#211):** o plano de dados por tenant exige o header
 > `X-Service-Token` (env `SERVICE_TOKEN`, o mesmo do plano de controle) em

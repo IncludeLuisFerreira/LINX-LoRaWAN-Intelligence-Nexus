@@ -118,9 +118,63 @@ async def ping_db(
             pool.fetchval("SELECT 1"),
             timeout=timeout,
         )
+    except asyncio.TimeoutError:
+        logger.warning("TimescaleDB ping excedeu %.1fs", timeout)
+        return False
     except Exception as exc:  # noqa: BLE001
         logger.warning("TimescaleDB ping falhou: %s", exc)
         return False
+    return result == 1
+
+
+async def probe_db(
+    *,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    database: str,
+    timeout: float = 2.0,
+) -> bool:
+    """Verifica o TimescaleDB com uma conexão dedicada e ``SELECT 1``.
+
+    A conexão dedicada não depende do pool de ingestão, então saturação do
+    pool não gera falso negativo no health check. A conexão é sempre fechada.
+    """
+    try:
+        connection = await asyncio.wait_for(
+            asyncpg.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                database=database,
+            ),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("TimescaleDB probe excedeu %.1fs", timeout)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TimescaleDB probe falhou: %s", exc)
+        return False
+
+    try:
+        result = await asyncio.wait_for(
+            connection.fetchval("SELECT 1"),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("TimescaleDB probe SELECT 1 excedeu %.1fs", timeout)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TimescaleDB probe SELECT 1 falhou: %s", exc)
+        return False
+    finally:
+        try:
+            await connection.close()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("falha ao fechar conexão do probe: %s", exc)
     return result == 1
 
 
