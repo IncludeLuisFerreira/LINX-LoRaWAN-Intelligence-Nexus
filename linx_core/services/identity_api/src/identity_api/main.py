@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session
 from identity_api.config import settings as identity_settings
 from identity_api.dependencies import close_chirpstack_client
 from identity_api.routes.application import router as application_router
+from identity_api.routes.application_status import (
+    router as application_status_router,
+)
 from identity_api.routes.device_profile import router as device_profile_router
 from identity_api.routes.devices import router as devices_router
 from identity_api.routes.jobs import router as jobs_router
@@ -65,6 +68,7 @@ def create_app() -> FastAPI:
 
     application.include_router(router, dependencies=auth)
     application.include_router(application_router, dependencies=auth)
+    application.include_router(application_status_router, dependencies=auth)
     application.include_router(jobs_router, dependencies=auth)
     application.include_router(devices_router, dependencies=auth)
     application.include_router(user_router, dependencies=auth)
