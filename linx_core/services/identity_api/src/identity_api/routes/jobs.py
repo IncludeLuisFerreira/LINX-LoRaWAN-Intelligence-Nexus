@@ -1,6 +1,5 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
+from linx_shared.core.uuid4 import UUID4
 from linx_shared.db.base import get_db
 from linx_shared.jobs.constants import JobStatus
 from sqlalchemy.orm import Session
@@ -18,8 +17,8 @@ router = APIRouter(prefix="/api/v1/tenant", tags=["Job"])
     responses={status.HTTP_404_NOT_FOUND: {"description": "Job not found."}},
 )
 def get_job_status(
-    tenant_id: UUID,
-    job_id: UUID,
+    tenant_id: UUID4,
+    job_id: UUID4,
     db: Session = Depends(get_db),
 ):
     """Retorna o estado atual de um job do tenant informado."""

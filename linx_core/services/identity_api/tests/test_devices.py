@@ -26,7 +26,7 @@ from tests.fakes import FakeChirpStackClient
 
 client = TestClient(app, headers=AUTH)
 
-PROFILE_ID = "11111111-1111-1111-1111-111111111111"
+PROFILE_ID = "11111111-1111-4111-8111-111111111111"
 
 
 @dataclass

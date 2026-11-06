@@ -1,6 +1,5 @@
 import logging
 from typing import NoReturn
-from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -11,6 +10,7 @@ from fastapi import (
     Response,
     status,
 )
+from linx_shared.core.uuid4 import UUID4
 from linx_shared.db.base import get_db
 from linx_shared.models.user import User
 from linx_shared.schemas.user import (
@@ -59,7 +59,7 @@ def _raise_email_conflict(db: Session, exc: IntegrityError) -> NoReturn:
     raise exc
 
 
-def get_user_or_404(user_id: UUID, db: Session = Depends(get_db)) -> User:
+def get_user_or_404(user_id: UUID4, db: Session = Depends(get_db)) -> User:
     """Busca um usuário pelo id ou retorna 404."""
     user = db.get(User, user_id)
     if not user:

@@ -1,5 +1,4 @@
 import logging
-from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -10,6 +9,7 @@ from fastapi import (
     status,
 )
 from linx_shared.core.exceptions import ExternalServiceError
+from linx_shared.core.uuid4 import UUID4, ensure_uuid_v4
 from linx_shared.db.base import get_db
 from linx_shared.models.tenant import Tenant
 from linx_shared.schemas.tenant import (
@@ -41,7 +41,7 @@ def _delete_tenant_best_effort(
 
 # --- Dependência Reutilizável ---
 def get_tenant_or_404(
-    tenant_id: UUID, db: Session = Depends(get_db)
+    tenant_id: UUID4, db: Session = Depends(get_db)
 ) -> Tenant:
     """Busca um tenant ou retorna 404. Usado por GET, PATCH e DELETE."""
     tenant = db.get(Tenant, tenant_id)
@@ -73,7 +73,7 @@ def create_tenant(
         ) from exc
 
     try:
-        tenant_uuid = UUID(chirpstack_tenant_id)
+        tenant_uuid = ensure_uuid_v4(chirpstack_tenant_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

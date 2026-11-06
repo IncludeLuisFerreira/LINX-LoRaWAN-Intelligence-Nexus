@@ -1,7 +1,6 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from linx_shared.core.exceptions import ExternalServiceError
+from linx_shared.core.uuid4 import UUID4
 from linx_shared.db.base import get_db
 from linx_shared.models.application import Application
 from linx_shared.schemas.device_profile import DeviceProfileResponse
@@ -19,7 +18,7 @@ router = APIRouter(prefix="/api/v1/device-profile", tags=["device profile"])
     response_model=list[DeviceProfileResponse],
 )
 def list_device_profiles(
-    app_id: UUID,
+    app_id: UUID4,
     db: Session = Depends(get_db),
     chirpstack_client: ChirpStackClient = Depends(get_chirpstack_client),
 ):

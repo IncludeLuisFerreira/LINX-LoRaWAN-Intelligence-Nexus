@@ -1,9 +1,9 @@
 import logging
-from uuid import UUID
 
 from chirpstack_api import api
 from fastapi import APIRouter, Depends, HTTPException, status
 from linx_shared.core.exceptions import ExternalServiceError
+from linx_shared.core.uuid4 import UUID4
 from linx_shared.db.base import get_db
 from linx_shared.models.application import Application
 from linx_shared.models.device import Device
@@ -39,7 +39,7 @@ def _delete_device_best_effort(
     status_code=status.HTTP_200_OK,
     response_model=list[DeviceResponse],
 )
-def list_devices(app_id: UUID, db: Session = Depends(get_db)):
+def list_devices(app_id: UUID4, db: Session = Depends(get_db)):
     application = db.get(Application, app_id)
     if not application:
         raise HTTPException(
@@ -143,7 +143,7 @@ def create_device(
     response_model=DeviceResponse,
 )
 def update_device(
-    device_id: UUID,
+    device_id: UUID4,
     payload: DeviceUpdate,
     db: Session = Depends(get_db),
 ):
@@ -163,7 +163,7 @@ def update_device(
 
 @router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_device(
-    device_id: UUID,
+    device_id: UUID4,
     db: Session = Depends(get_db),
     chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
 ):
