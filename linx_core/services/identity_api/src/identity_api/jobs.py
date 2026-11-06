@@ -22,8 +22,14 @@ def create_provisioning_job(
     tenant_id: UUID,
     application_id: UUID,
     max_attempts: int | None = None,
+    *,
+    commit: bool = True,
 ) -> Job:
-    """Cria (ou reaproveita) o job de provisionamento da aplicação."""
+    """Cria (ou reaproveita) o job de provisionamento da aplicação.
+
+    ``commit=False`` permite que o chamador grave o job e a outbox na mesma
+    transação da aplicação e da instância inicial.
+    """
     attempts = (
         settings.job_max_attempts if max_attempts is None else max_attempts
     )
@@ -45,8 +51,11 @@ def create_provisioning_job(
             routing_key=PROVISIONING_REQUESTED,
             max_attempts=attempts,
         )
-        db.commit()
+        if commit:
+            db.commit()
     except IntegrityError:
+        if not commit:
+            raise
         db.rollback()
         active = get_active_job(db, deduplication_key)
         if active is None:

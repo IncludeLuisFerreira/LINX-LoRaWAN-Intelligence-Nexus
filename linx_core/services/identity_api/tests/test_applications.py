@@ -2,7 +2,7 @@ from collections.abc import Generator
 from datetime import datetime
 from time import sleep
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import grpc
 import pytest
@@ -16,6 +16,7 @@ from linx_shared.core.rabbitmq import (
     tenant_user,
 )
 from linx_shared.db.base import engine, get_db
+from linx_shared.models.job import Job
 from linx_shared.schemas.application import ApplicationCreate
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -86,6 +87,18 @@ def _create_tenant(name: str = "Tenant Teste") -> str:
 
 def _applications_url(tenant_id: str) -> str:
     return f"/api/v1/tenant/{tenant_id}/applications"
+
+
+def _complete_provisioning_job(db_session, app_id: str) -> None:
+    """Finaliza o job automático para permitir o delete da aplicação."""
+    job = db_session.query(Job).filter(Job.subject_id == UUID(app_id)).one()
+    job.status = "succeeded"
+    db_session.commit()
+
+
+def _delete_application(db_session, tenant_id: str, app_id: str):
+    _complete_provisioning_job(db_session, app_id)
+    return client.delete(f"{_applications_url(tenant_id)}/{app_id}")
 
 
 def test_create_application_returns_created_with_full_body():
@@ -264,13 +277,13 @@ def test_patch_application_in_non_existent_tenant_returns_404():
     assert response.json() == {"detail": "Tenant not found!"}
 
 
-def test_delete_application_removes_it():
+def test_delete_application_removes_it(db_session):
     tenant_id = _create_tenant()
     created = client.post(
         _applications_url(tenant_id), json={"name": "Fazenda"}
     ).json()
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 204
 
@@ -337,13 +350,13 @@ def test_update_application_propagates_to_chirpstack(chirpstack):
     ]
 
 
-def test_delete_application_propagates_to_chirpstack(chirpstack):
+def test_delete_application_propagates_to_chirpstack(chirpstack, db_session):
     tenant_id = _create_tenant()
     created = client.post(
         _applications_url(tenant_id), json={"name": "Fazenda"}
     ).json()
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 204
     assert chirpstack.deleted_applications == [created["id"]]
@@ -383,7 +396,9 @@ def test_update_application_chirpstack_failure_still_returns_200(chirpstack):
     assert response.json()["name"] == "Fazenda Nova"
 
 
-def test_delete_application_chirpstack_failure_returns_502(chirpstack):
+def test_delete_application_chirpstack_failure_returns_502(
+    chirpstack, db_session
+):
     tenant_id = _create_tenant()
     created = client.post(
         _applications_url(tenant_id), json={"name": "Fazenda"}
@@ -392,7 +407,7 @@ def test_delete_application_chirpstack_failure_returns_502(chirpstack):
         "chirpstack", "delete_application", "boom"
     )
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 502
     assert response.json() == {
@@ -413,7 +428,14 @@ def test_create_application_persist_failure_compensates_in_chirpstack(
         def get(self, model, pk):
             return SimpleNamespace(id=pk)
 
+        def scalars(self, statement):
+            return SimpleNamespace(first=lambda: None)
+
         def add(self, obj) -> None:
+            if hasattr(obj, "id") and obj.id is None:
+                obj.id = uuid4()
+
+        def flush(self) -> None:
             return None
 
         def commit(self) -> None:
@@ -481,32 +503,34 @@ def test_create_application_rabbitmq_failure_returns_502_and_compensates(
     assert client.get(_applications_url(tenant_id)).json() == []
 
 
-def test_delete_application_removes_rabbitmq_user(rabbitmq):
+def test_delete_application_removes_rabbitmq_user(rabbitmq, db_session):
     tenant_id = _create_tenant()
     created = client.post(
         _applications_url(tenant_id), json={"name": "Fazenda"}
     ).json()
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 204
     assert rabbitmq.deleted_users == [tenant_user(created["id"])]
 
 
-def test_delete_application_deprovisions_container_and_network(provisioner):
+def test_delete_application_deprovisions_container_and_network(
+    provisioner, db_session
+):
     tenant_id = _create_tenant()
     created = client.post(
         _applications_url(tenant_id), json={"name": "Fazenda"}
     ).json()
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 204
     assert provisioner.deprovisioned == [created["id"]]
 
 
 def test_delete_application_deprovision_failure_returns_502(
-    chirpstack, provisioner
+    chirpstack, provisioner, db_session
 ):
     tenant_id = _create_tenant()
     created = client.post(
@@ -517,7 +541,7 @@ def test_delete_application_deprovision_failure_returns_502(
         grpc_code=None,
     )
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 502
     assert response.json() == {
@@ -534,7 +558,7 @@ def test_delete_application_deprovision_failure_returns_502(
 
 
 def test_delete_application_deprovision_unimplemented_skips_cleanup(
-    provisioner,
+    provisioner, db_session
 ):
     tenant_id = _create_tenant()
     created = client.post(
@@ -546,7 +570,7 @@ def test_delete_application_deprovision_unimplemented_skips_cleanup(
         grpc_code=grpc.StatusCode.UNIMPLEMENTED,
     )
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 204
     assert (
@@ -558,7 +582,7 @@ def test_delete_application_deprovision_unimplemented_skips_cleanup(
 
 
 def test_delete_application_deprovision_unavailable_returns_503(
-    chirpstack, provisioner
+    chirpstack, provisioner, db_session
 ):
     tenant_id = _create_tenant()
     created = client.post(
@@ -570,7 +594,7 @@ def test_delete_application_deprovision_unavailable_returns_503(
         grpc_code=grpc.StatusCode.UNAVAILABLE,
     )
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 503
     assert response.json() == {
@@ -604,13 +628,15 @@ def test_delete_application_with_active_provisioning_job_returns_409(
     assert provisioner.deprovisioned == []
 
 
-def test_delete_application_without_provisioner_skips_docker_cleanup():
+def test_delete_application_without_provisioner_skips_docker_cleanup(
+    db_session,
+):
     app.dependency_overrides[get_docker_provisioner_client] = lambda: None
     tenant_id = _create_tenant()
     created = client.post(
         _applications_url(tenant_id), json={"name": "Fazenda"}
     ).json()
 
-    response = client.delete(f"{_applications_url(tenant_id)}/{created['id']}")
+    response = _delete_application(db_session, tenant_id, created["id"])
 
     assert response.status_code == 204

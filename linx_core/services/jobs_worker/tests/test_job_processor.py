@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import pytest
 from linx_shared.jobs.constants import (
@@ -15,7 +16,10 @@ from linx_shared.jobs.handlers import (
     PermanentJobError,
     TransientJobError,
 )
+from linx_shared.models.application import Application
+from linx_shared.models.application_instance import ApplicationInstance
 from linx_shared.models.job_outbox import JobOutbox
+from linx_shared.models.tenant import Tenant
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -77,6 +81,28 @@ def _outbox(db_session, job_id):
 
 def _by_routing_key(rows):
     return {row.routing_key: row for row in rows}
+
+
+def _application_with_instance(db_session, job_factory):
+    tenant = Tenant(name=f"tenant-{uuid4()}")
+    db_session.add(tenant)
+    db_session.flush()
+    application = Application(
+        id=uuid4(),
+        tenant_id=tenant.id,
+        name="Fazenda",
+        description="",
+    )
+    db_session.add(application)
+    db_session.flush()
+    instance = ApplicationInstance(app_id=application.id, status="PENDING")
+    db_session.add(instance)
+    db_session.flush()
+    job = job_factory(
+        subject_id=application.id,
+        tenant_id=tenant.id,
+    )
+    return job, instance
 
 
 def test_success_writes_started_and_succeeded_without_terminal_status(
@@ -279,12 +305,12 @@ def test_exhausted_lease_fails_without_invoking_handler(
     db_session,
     job_factory,
 ):
-    job = job_factory(
-        status=JobStatus.RUNNING.value,
-        attempts=3,
-        max_attempts=3,
-        locked_until=datetime.now(timezone.utc) - timedelta(seconds=5),
-    )
+    job, instance = _application_with_instance(db_session, job_factory)
+    job.status = JobStatus.RUNNING.value
+    job.attempts = 3
+    job.max_attempts = 3
+    job.locked_until = datetime.now(timezone.utc) - timedelta(seconds=5)
+    db_session.flush()
     reaper = JobReaper(session_factory, interval_seconds=60)
     reaper.run_once()
     handler = StubHandler(result={"container_id": "container-1"})
@@ -306,6 +332,7 @@ def test_exhausted_lease_fails_without_invoking_handler(
     assert job.attempts == 4
     assert job.locked_until is None
     assert job.status == JobStatus.RUNNING.value
+    assert instance.status == "ERROR"
 
 
 def test_commit_failure_leaves_no_uncommitted_outbox_row(
@@ -357,3 +384,120 @@ def test_not_due_message_is_rescheduled_instead_of_lost(
     db_session.expire_all()
     assert job.attempts == 0
     assert job.next_attempt_at == next_attempt_at
+
+
+def test_success_marks_instance_running_with_container_data(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    job, instance = _application_with_instance(db_session, job_factory)
+    processor = _processor(
+        session_factory,
+        _registry(
+            StubHandler(
+                result={
+                    "container_id": "container-1",
+                    "port": 8421,
+                }
+            )
+        ),
+    )
+
+    processor.process(_envelope(job))
+
+    db_session.expire_all()
+    assert instance.status == "RUNNING"
+    assert instance.container_id == "container-1"
+    assert instance.port == 8421
+    assert instance.provisioned_at is not None
+
+
+def test_transient_failure_keeps_instance_provisioning(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    job, instance = _application_with_instance(db_session, job_factory)
+    processor = _processor(
+        session_factory,
+        _registry(StubHandler(error=TransientJobError("temporary"))),
+    )
+
+    processor.process(_envelope(job))
+
+    db_session.expire_all()
+    assert instance.status == "PROVISIONING"
+
+
+def test_permanent_failure_marks_instance_error(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    job, instance = _application_with_instance(db_session, job_factory)
+    processor = _processor(
+        session_factory,
+        _registry(StubHandler(error=PermanentJobError("invalid"))),
+    )
+
+    processor.process(_envelope(job))
+
+    db_session.expire_all()
+    assert instance.status == "ERROR"
+
+
+def test_exhausted_attempts_marks_instance_error(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    job, instance = _application_with_instance(db_session, job_factory)
+    job.max_attempts = 1
+    db_session.flush()
+    processor = _processor(
+        session_factory,
+        _registry(StubHandler(error=TransientJobError("temporary"))),
+    )
+
+    processor.process(_envelope(job))
+
+    db_session.expire_all()
+    assert instance.status == "ERROR"
+
+
+def test_non_provision_job_does_not_change_instance(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    job, instance = _application_with_instance(db_session, job_factory)
+    job.type = "unknown.job"
+    db_session.flush()
+    processor = _processor(session_factory, _registry())
+
+    processor.process(_envelope(job))
+
+    db_session.expire_all()
+    assert instance.status == "PENDING"
+
+
+def test_retry_after_success_does_not_regress_running_instance(
+    session_factory,
+    db_session,
+    job_factory,
+):
+    job, instance = _application_with_instance(db_session, job_factory)
+    job.status = JobStatus.RUNNING.value
+    job.attempts = 1
+    instance.status = "RUNNING"
+    db_session.flush()
+    processor = _processor(
+        session_factory,
+        _registry(StubHandler(error=TransientJobError("temporary"))),
+    )
+
+    processor.process(_envelope(job))
+
+    db_session.expire_all()
+    assert instance.status == "RUNNING"

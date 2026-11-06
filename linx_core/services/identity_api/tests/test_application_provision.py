@@ -3,8 +3,11 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from linx_shared.models.application import Application
+from linx_shared.models.application_instance import ApplicationInstance
 from linx_shared.models.job import Job
 from linx_shared.models.job_outbox import JobOutbox
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from identity_api.dependencies import get_chirpstack_client
@@ -57,6 +60,97 @@ def _provision_url(tenant_id: str, app_id: str) -> str:
 
 def _job_url(tenant_id: str, job_id: str) -> str:
     return f"/api/v1/tenant/{tenant_id}/jobs/{job_id}"
+
+
+def test_create_application_enqueues_provisioning_job(db_session):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    job = db_session.query(Job).filter(Job.subject_id == UUID(app_id)).one()
+    assert job.type == "provisioning.application"
+    assert job.status == "pending"
+    assert job.payload == {"application_id": app_id}
+
+    outbox = db_session.query(JobOutbox).one()
+    assert outbox.job_id == job.id
+    assert outbox.exchange == "linx.jobs"
+    assert outbox.routing_key == "provisioning.application.requested"
+
+
+def test_create_application_creates_pending_instance(db_session):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    instance = (
+        db_session.query(ApplicationInstance)
+        .filter(ApplicationInstance.app_id == UUID(app_id))
+        .one()
+    )
+    assert instance.status == "PENDING"
+    assert instance.container_id is None
+    assert instance.port is None
+    assert instance.provisioned_at is None
+
+
+def test_auto_provisioning_job_is_reused_by_provision_endpoint(db_session):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    auto_job = (
+        db_session.query(Job).filter(Job.subject_id == UUID(app_id)).one()
+    )
+
+    response = client.post(_provision_url(tenant_id, app_id))
+
+    assert response.status_code == 202
+    assert response.json()["job_id"] == str(auto_job.id)
+    assert (
+        db_session.query(Job).filter(Job.subject_id == UUID(app_id)).count()
+        == 1
+    )
+
+
+def test_create_application_rolls_back_all_rows_when_enqueue_fails(
+    db_session, monkeypatch
+):
+    from identity_api.routes import application as application_routes
+
+    original = application_routes.create_provisioning_job
+
+    def fail_after_enqueue(
+        db, tenant_id, application_id, max_attempts, *, commit
+    ):
+        original(
+            db,
+            tenant_id,
+            application_id,
+            max_attempts,
+            commit=False,
+        )
+        raise SQLAlchemyError("boom")
+
+    monkeypatch.setattr(
+        application_routes,
+        "create_provisioning_job",
+        fail_after_enqueue,
+    )
+    tenant_id = _create_tenant()
+    before_apps = db_session.query(Application).count()
+    before_instances = db_session.query(ApplicationInstance).count()
+    before_jobs = db_session.query(Job).count()
+    before_outbox = db_session.query(JobOutbox).count()
+
+    response = client.post(
+        f"/api/v1/tenant/{tenant_id}/applications",
+        json={"name": "Fazenda"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Failed to persist application!"}
+    assert db_session.query(Application).count() == before_apps
+    assert db_session.query(ApplicationInstance).count() == before_instances
+    assert db_session.query(Job).count() == before_jobs
+    assert db_session.query(JobOutbox).count() == before_outbox
 
 
 def test_provision_returns_202_with_pending_job():
@@ -182,11 +276,18 @@ def test_provision_uses_configured_max_attempts(db_session, monkeypatch):
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)
 
+    auto_job = (
+        db_session.query(Job).filter(Job.subject_id == UUID(app_id)).one()
+    )
+    auto_job.status = "succeeded"
+    db_session.commit()
+
     response = client.post(_provision_url(tenant_id, app_id))
 
     assert response.status_code == 202
     job = db_session.get(Job, UUID(response.json()["job_id"]))
     assert job is not None
+    assert job.id != auto_job.id
     assert job.max_attempts == 7
 
 

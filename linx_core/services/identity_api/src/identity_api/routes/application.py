@@ -16,6 +16,7 @@ from linx_shared.core.rabbitmq import (
 from linx_shared.db.base import get_db
 from linx_shared.jobs.constants import JobStatus
 from linx_shared.models.application import Application
+from linx_shared.models.application_instance import ApplicationInstance
 from linx_shared.models.tenant import Tenant
 from linx_shared.schemas.application import (
     ApplicationCreate,
@@ -134,7 +135,15 @@ def create_application(
         description=payload.description,
     )
     db.add(new_application)
+    db.add(ApplicationInstance(app_id=application_uuid, status="PENDING"))
     try:
+        create_provisioning_job(
+            db,
+            tenant_id,
+            application_uuid,
+            settings.job_max_attempts,
+            commit=False,
+        )
         db.commit()
     except SQLAlchemyError:
         db.rollback()
