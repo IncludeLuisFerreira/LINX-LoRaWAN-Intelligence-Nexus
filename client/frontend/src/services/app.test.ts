@@ -59,9 +59,9 @@ describe('applicationService', () => {
       data: { app_id: 'a1', status: 'RUNNING', container_id: 'c1' },
     });
 
-    const status = await applicationService.getStatus('a1');
+    const status = await applicationService.getStatus('t1', 'a1');
 
-    expect(mocked.get).toHaveBeenCalledWith('/applications/a1/status');
+    expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications/a1/status');
     expect(status).toBe('RUNNING');
   });
 
@@ -70,7 +70,7 @@ describe('applicationService', () => {
       data: { app_id: 'a1', status: 'exit 137' },
     });
 
-    await expect(applicationService.getStatus('a1')).rejects.toThrow(
+    await expect(applicationService.getStatus('t1', 'a1')).rejects.toThrow(
       'Status de provisionamento inválido: "exit 137"',
     );
   });

@@ -81,12 +81,16 @@ export const applicationService = {
    * `useProvisioningStatus`, não neste serviço. Valores fora do contrato
    * (backend ainda não implementado, ou retorno cru do docker inspect) são
    * rejeitados: o badge nunca recebe um estado não mapeado.
+   *
+   * O caminho é escopado pelo tenant: o backend valida o vínculo
+   * tenant/aplicação e devolve 404 para aplicações de outros tenants.
    */
   getStatus: async (
+    tenantId: string,
     applicationId: string,
   ): Promise<ProvisioningStatusValue> => {
     const response = await api.get<ApplicationStatusOutput>(
-      `/applications/${applicationId}/status`,
+      `/tenant/${tenantId}/applications/${applicationId}/status`,
     );
     const status = String(response.data?.status);
     if (!isProvisioningStatusValue(status)) {
