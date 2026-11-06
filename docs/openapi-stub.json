@@ -742,15 +742,25 @@
         }
       }
     },
-    "/api/v1/applications/{application_id}/status": {
+    "/api/v1/tenant/{tenant_id}/applications/{application_id}/status": {
       "get": {
         "tags": [
           "Application"
         ],
         "summary": "Get Application Status",
-        "description": "Retorna o status do container da aplica\u00e7\u00e3o lido do banco.\n\nA fonte da verdade \u00e9 a tabela `application_instances`, atualizada pelo\njobs_worker a cada ciclo de provisionamento. N\u00e3o inspeciona o Docker\ndiretamente: o valor reflete o resultado do \u00faltimo ciclo processado.",
-        "operationId": "get_application_status_api_v1_applications__application_id__status_get",
+        "description": "Retorna o status do container da aplica\u00e7\u00e3o, escopado pelo tenant.\n\nA fonte da verdade \u00e9 a tabela `application_instances`, atualizada pelo\njobs_worker a cada ciclo de provisionamento. N\u00e3o inspeciona o Docker\ndiretamente: o valor reflete o resultado do \u00faltimo ciclo processado.\n\nO v\u00ednculo tenant/aplica\u00e7\u00e3o \u00e9 validado no banco. Aplica\u00e7\u00e3o inexistente ou\npertencente a outro tenant retorna 404 (nunca 403), para n\u00e3o revelar a\nexist\u00eancia de aplica\u00e7\u00f5es de outros tenants.",
+        "operationId": "get_application_status_api_v1_tenant__tenant_id__applications__application_id__status_get",
         "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
           {
             "name": "application_id",
             "in": "path",
@@ -790,7 +800,7 @@
             }
           },
           "404": {
-            "description": "Application ou sua inst\u00e2ncia n\u00e3o encontrada."
+            "description": "Aplica\u00e7\u00e3o ou inst\u00e2ncia n\u00e3o encontrada."
           },
           "422": {
             "description": "Validation Error",

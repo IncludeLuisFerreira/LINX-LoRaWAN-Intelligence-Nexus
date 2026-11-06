@@ -197,11 +197,14 @@ describe('device nickname handlers', () => {
 
 describe('provisioning status handler', () => {
   it('progresses PENDING -> PROVISIONING -> RUNNING per application', async () => {
+    const tenantId = crypto.randomUUID();
     const appId = crypto.randomUUID();
     const readStatus = async () =>
       (
         (await (
-          await fetch(`${base}/applications/${appId}/status`)
+          await fetch(
+            `${base}/tenant/${tenantId}/applications/${appId}/status`,
+          )
         ).json()) as { status: string }
       ).status;
 
@@ -212,11 +215,14 @@ describe('provisioning status handler', () => {
   });
 
   it('honors the localStorage status override', async () => {
+    const tenantId = crypto.randomUUID();
     const appId = crypto.randomUUID();
     localStorage.setItem('linx:mock-provisioning-status', 'ERROR');
 
     try {
-      const res = await fetch(`${base}/applications/${appId}/status`);
+      const res = await fetch(
+        `${base}/tenant/${tenantId}/applications/${appId}/status`,
+      );
       const body = (await res.json()) as { status: string };
 
       expect(body.status).toBe('ERROR');

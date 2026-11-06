@@ -286,14 +286,17 @@ export const handlers = [
     },
   ),
 
-  http.get('*/api/v1/applications/:application_id/status', ({ params }) => {
-    const appId = String(params.application_id);
-    return HttpResponse.json({
-      app_id: appId,
-      status: nextMockProvisioningStatus(appId),
-      container_id: `mock-container-${appId}`,
-    });
-  }),
+  http.get(
+    '*/api/v1/tenant/:tenant_id/applications/:application_id/status',
+    ({ params }) => {
+      const appId = String(params.application_id);
+      return HttpResponse.json({
+        app_id: appId,
+        status: nextMockProvisioningStatus(appId),
+        container_id: `mock-container-${appId}`,
+      });
+    },
+  ),
 
   // --- DEVICE PROFILES ---
   http.get('*/api/v1/device-profile/', ({ request }) => {

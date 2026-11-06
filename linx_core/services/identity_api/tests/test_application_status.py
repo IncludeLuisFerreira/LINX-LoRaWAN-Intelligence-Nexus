@@ -1,6 +1,6 @@
 from collections.abc import Generator
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,8 +49,8 @@ def _create_application(tenant_id: str, name: str = "App Status") -> str:
     return response.json()["id"]
 
 
-def _status_url(app_id: str) -> str:
-    return f"/api/v1/applications/{app_id}/status"
+def _status_url(tenant_id: str, app_id: str) -> str:
+    return f"/api/v1/tenant/{tenant_id}/applications/{app_id}/status"
 
 
 def _set_instance(db_session, app_id: str, **values) -> None:
@@ -68,7 +68,7 @@ def test_status_returns_pending_for_new_instance():
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)
 
-    response = client.get(_status_url(app_id))
+    response = client.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 200
     body = response.json()
@@ -81,7 +81,7 @@ def test_status_returns_provisioning(db_session):
     app_id = _create_application(tenant_id)
     _set_instance(db_session, app_id, status="PROVISIONING")
 
-    response = client.get(_status_url(app_id))
+    response = client.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 200
     body = response.json()
@@ -102,7 +102,7 @@ def test_status_returns_running_with_metadata(db_session):
         provisioned_at=provisioned_at,
     )
 
-    response = client.get(_status_url(app_id))
+    response = client.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 200
     body = response.json()
@@ -118,14 +118,16 @@ def test_status_returns_error(db_session):
     app_id = _create_application(tenant_id)
     _set_instance(db_session, app_id, status="ERROR")
 
-    response = client.get(_status_url(app_id))
+    response = client.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 200
     assert response.json()["status"] == "ERROR"
 
 
 def test_status_unknown_application_returns_404():
-    response = client.get(_status_url("9b2f6a1e-0000-4000-8000-000000000000"))
+    tenant_id = _create_tenant()
+
+    response = client.get(_status_url(tenant_id, str(uuid4())))
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Application not found!"}
@@ -142,10 +144,52 @@ def test_status_missing_instance_returns_404(db_session):
     db_session.delete(instance)
     db_session.commit()
 
-    response = client.get(_status_url(app_id))
+    response = client.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Application instance not found!"}
+
+
+def test_status_cross_tenant_returns_404(db_session):
+    """Aplicação de um tenant não pode ser lida por outro tenant (RF-013).
+
+    O leak da tentativa 1 expunha `container_id`/`port` de qualquer aplicação
+    ao enumerar UUIDs. Com o escopo por tenant, requisitar a aplicação do
+    tenant A sob o tenant B devolve 404, sem revelar os metadados de A.
+    """
+    tenant_a = _create_tenant("Tenant A")
+    app_a = _create_application(tenant_a, "App A")
+    _set_instance(
+        db_session,
+        app_a,
+        status="RUNNING",
+        container_id="segredo-container-A",
+        port=9999,
+        provisioned_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    tenant_b = _create_tenant("Tenant B")
+
+    leaked = client.get(_status_url(tenant_b, app_a))
+    allowed = client.get(_status_url(tenant_a, app_a))
+
+    assert leaked.status_code == 404
+    assert leaked.json() == {"detail": "Application not found!"}
+    assert "segredo-container-A" not in leaked.text
+    assert "9999" not in leaked.text
+
+    assert allowed.status_code == 200
+    assert allowed.json()["container_id"] == "segredo-container-A"
+    assert allowed.json()["port"] == 9999
+
+
+def test_status_unknown_tenant_returns_404():
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.get(_status_url(str(uuid4()), app_id))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Application not found!"}
 
 
 def test_status_requires_service_token():
@@ -153,6 +197,6 @@ def test_status_requires_service_token():
     app_id = _create_application(tenant_id)
     anonymous = TestClient(app)
 
-    response = anonymous.get(_status_url(app_id))
+    response = anonymous.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 401
