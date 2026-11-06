@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import BeforeValidator
 
 
-def ensure_uuid_v4(value: object) -> object:
+def ensure_uuid_v4(value: object) -> UUID:
     """Normaliza e exige UUID versão 4.
 
     Aceita ``str`` ou ``UUID``. Rejeita formato inválido, UUID nulo e
