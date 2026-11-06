@@ -5,11 +5,22 @@ from telemetry_consumer.app import create_app
 
 
 class FakePool:
+    def __init__(self, *, ping=1, error=None):
+        self._ping = ping
+        self._error = error
+
+    async def fetchval(self, query):
+        if self._error is not None:
+            raise self._error
+        return self._ping
+
     async def close(self):
         pass
 
 
 class FakeConsumer:
+    connected = True
+
     def __init__(self, *args, **kwargs):
         self.started = False
         self.stopped = False
@@ -22,12 +33,16 @@ class FakeConsumer:
 
     def health(self):
         return {
-            "rabbitmq_connected": True,
+            "rabbitmq_connected": self.connected,
             "processed": 2,
             "failed": 0,
             "last_processed_at": "2026-10-08T12:00:00Z",
             "last_error": None,
         }
+
+
+class DisconnectedConsumer(FakeConsumer):
+    connected = False
 
 
 async def _fake_pool_factory(**kwargs):
@@ -38,29 +53,66 @@ async def _failing_pool_factory(**kwargs):
     raise RuntimeError("db down")
 
 
+async def _broken_ping_pool_factory(**kwargs):
+    return FakePool(error=RuntimeError("db down"))
+
+
 def test_health_reports_consumer_state():
     app = create_app(
         pool_factory=_fake_pool_factory, consumer_factory=FakeConsumer
     )
     with TestClient(app) as client:
-        body = client.get("/health").json()
+        response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
     assert body["status"] == "ok"
-    assert body["rabbitmq_connected"] is True
+    assert body["db"] is True
+    assert body["mqtt"] is True
     assert body["processed"] == 2
     assert body["failed"] == 0
     assert body["last_processed_at"] == "2026-10-08T12:00:00Z"
-    assert body["db_ok"] is True
     assert body["ws_connections"] == 0
 
 
-def test_health_tolerates_db_unavailable():
+def test_health_returns_503_when_db_unavailable():
     app = create_app(
         pool_factory=_failing_pool_factory, consumer_factory=FakeConsumer
     )
     with TestClient(app) as client:
-        body = client.get("/health").json()
-    assert body["status"] == "ok"
-    assert body["db_ok"] is False
+        response = client.get("/health")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["db"] is False
+    assert body["mqtt"] is True
+
+
+def test_health_returns_503_when_db_ping_fails():
+    app = create_app(
+        pool_factory=_broken_ping_pool_factory,
+        consumer_factory=FakeConsumer,
+    )
+    with TestClient(app) as client:
+        response = client.get("/health")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["db"] is False
+    assert body["mqtt"] is True
+
+
+def test_health_returns_503_when_consumer_disconnected():
+    app = create_app(
+        pool_factory=_fake_pool_factory,
+        consumer_factory=DisconnectedConsumer,
+    )
+    with TestClient(app) as client:
+        response = client.get("/health")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["db"] is True
+    assert body["mqtt"] is False
 
 
 def test_lifespan_starts_and_stops_consumer():

@@ -40,12 +40,32 @@ Toda mensagem recebe `ack`.
 
 | Método | Rota                         | Descrição                                              |
 | :----: | ---------------------------- | ------------------------------------------------------ |
-| `GET`  | `/health`                    | Estado do consumidor e do banco.                       |
+| `GET`  | `/health`                    | Estado do banco (`SELECT 1`) e do consumidor. `200`/`ok` ou `503`/`degraded`. |
 | `GET`  | `/telemetry`                 | Lista telemetria. Filtros `dev_eui`, `limit`, `before`; retorna `items` e `next_cursor`. Requer `X-Service-Token`. |
 | `WS`   | `/ws/telemetry/{app_id}`     | Stream em tempo real. Requer `X-Service-Token`; fecha com `4401` sem credencial e com `1008` se `app_id` não bate com `APP_ID`. O socket só é registrado após a autenticação. |
 
 `GET /telemetry` responde `503` quando o banco está indisponível. `limit` é
 limitado ao intervalo `1..1000` (default `100`).
+
+`GET /health` é público e retorna `200` somente quando o banco responde ao
+`SELECT 1` e o consumidor está conectado. Qualquer componente fora retorna
+`503` com `status: "degraded"`:
+
+```json
+{
+  "status": "ok",
+  "db": true,
+  "mqtt": true,
+  "processed": 0,
+  "failed": 0,
+  "last_processed_at": null,
+  "last_error": null,
+  "ws_connections": 0
+}
+```
+
+O campo `mqtt` representa o consumidor de entrada do tenant. Após a migração
+para RabbitMQ (#192), ele reflete a conexão AMQP, não um cliente MQTT direto.
 
 > **Credencial (#211):** o plano de dados por tenant exige o header
 > `X-Service-Token` (env `SERVICE_TOKEN`, o mesmo do plano de controle) em

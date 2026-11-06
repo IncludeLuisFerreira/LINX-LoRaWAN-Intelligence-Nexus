@@ -360,6 +360,36 @@ vai para a DLQ `linx.telemetry.{app_id}.dlq` e recebe ack.
 > `POST /ingest` foi **removida**: o RabbitMQ é o único caminho de ingestão.
 > Detalhes de isolamento: `docs/telemetry-consumer/rabbitmq-isolation.md`.
 
+### 5.5 Health check do tenant
+
+O `telemetry_consumer` expõe `GET /health` público para o healthcheck do
+container e para o plano de controle detectar tenant degradado. O endpoint
+executa `SELECT 1` no TimescaleDB e consulta o estado do consumidor:
+
+```json
+{
+  "status": "ok",
+  "db": true,
+  "mqtt": true,
+  "processed": 0,
+  "failed": 0,
+  "last_processed_at": null,
+  "last_error": null,
+  "ws_connections": 0
+}
+```
+
+- Banco e consumidor ok → `200` + `status: "ok"`.
+- Banco indisponível ou consumidor desconectado → `503` + `status: "degraded"`.
+- `db` reflete o resultado real do `SELECT 1` (não apenas a existência do pool).
+- `mqtt` reflete a conexão do consumidor de entrada. Após a migração para
+  RabbitMQ (#192), ele representa a conexão AMQP, não um cliente MQTT direto.
+
+```bash
+docker compose -f deploy/docker-compose.yml exec telemetry_consumer \
+  python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read().decode())"
+```
+
 ---
 
 ## 6. Fluxo REST — `identity_api`

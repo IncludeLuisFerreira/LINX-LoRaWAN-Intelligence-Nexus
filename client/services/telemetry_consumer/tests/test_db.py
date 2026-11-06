@@ -190,3 +190,36 @@ async def test_create_db_pool_rejects_blank_password():
         await db.create_db_pool(
             host="h", port=1, user="u", database="d", password="   "
         )
+
+
+class PingPool:
+    def __init__(self, result=1, error=None):
+        self.result = result
+        self.error = error
+        self.queries = []
+
+    async def fetchval(self, query):
+        self.queries.append(query)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_true_when_select_succeeds():
+    pool = PingPool(result=1)
+
+    assert await db.ping_db(pool) is True
+    assert pool.queries == ["SELECT 1"]
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_false_when_select_fails():
+    pool = PingPool(error=RuntimeError("db down"))
+
+    assert await db.ping_db(pool) is False
+
+
+@pytest.mark.asyncio
+async def test_ping_db_returns_false_without_pool():
+    assert await db.ping_db(None) is False

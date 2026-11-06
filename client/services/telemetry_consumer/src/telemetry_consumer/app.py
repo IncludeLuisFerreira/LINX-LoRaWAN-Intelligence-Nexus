@@ -3,12 +3,12 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Awaitable, Callable
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, status
 
 from telemetry_consumer.broadcaster import Broadcaster
 from telemetry_consumer.config import ConsumerSettings
 from telemetry_consumer.consumer import RabbitConsumer
-from telemetry_consumer.db import create_db_pool, insert_event
+from telemetry_consumer.db import create_db_pool, insert_event, ping_db
 from telemetry_consumer.routers.telemetry import router as telemetry_router
 
 logger = logging.getLogger(__name__)
@@ -116,16 +116,22 @@ def create_app(
     app.state.settings = app_settings
 
     @app.get("/health")
-    def health(request: Request) -> dict[str, Any]:
+    async def health(request: Request, response: Response) -> dict[str, Any]:
         state = request.app.state
         consumer_state = state.consumer.health()
+        db_ok = await ping_db(state.db_pool)
+        mqtt_ok = bool(consumer_state["rabbitmq_connected"])
+        healthy = db_ok and mqtt_ok
+        if not healthy:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
-            "status": "ok",
-            "rabbitmq_connected": consumer_state["rabbitmq_connected"],
-            "db_ok": state.db_pool is not None,
+            "status": "ok" if healthy else "degraded",
+            "db": db_ok,
+            "mqtt": mqtt_ok,
             "processed": consumer_state["processed"],
             "failed": consumer_state["failed"],
             "last_processed_at": consumer_state["last_processed_at"],
+            "last_error": consumer_state["last_error"],
             "ws_connections": state.broadcaster.count,
         }
 
