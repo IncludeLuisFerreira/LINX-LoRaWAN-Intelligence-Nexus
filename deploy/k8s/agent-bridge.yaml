@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-bridge
+  namespace: linx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent-bridge
+  template:
+    metadata:
+      labels:
+        app: agent-bridge
+    spec:
+      containers:
+        - name: agent-bridge
+          image: linx/agent-bridge:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-bridge
+  namespace: linx
+spec:
+  selector:
+    app: agent-bridge
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
