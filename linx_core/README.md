@@ -122,12 +122,17 @@ Serviço interno que cria e reaproveita containers Docker por aplicação. É o
 Contrato em `proto/linx_docker_provisioner.proto`. A chamada exige o metadado
 `authorization: Bearer <SERVICE_TOKEN>` e a porta não é publicada no host.
 
-## Provisionamento assíncrono (issue #58)
+## Provisionamento assíncrono (issues #58 e #60)
 
-O endpoint `POST .../provision` não executa mais o provisioner de forma
-síncrona. Ele cria um **job durável** e uma linha de **outbox** na mesma
-transação, responde `202 Accepted` com `Location` e deixa a execução para o
-`jobs_worker`.
+A criação de uma aplicação (`POST /api/v1/tenant/{id}/applications`) grava, na
+mesma transação, a `Application`, uma `ApplicationInstance` com status
+`PENDING` e o job de provisionamento com sua linha de `job_outbox`. A resposta
+`201 Created` não espera o container. O endpoint `POST .../provision` continua
+disponível para reenfileirar ou reaproveitar o job ativo da aplicação.
+
+Quando o endpoint manual precisa criar um job novo, ele grava o **job
+durável** e a linha de **outbox** na mesma transação, responde `202 Accepted`
+com `Location` e deixa a execução para o `jobs_worker`.
 
 Fluxo:
 
@@ -156,6 +161,11 @@ pending ──claim──> running ──sucesso──> succeeded
 - `succeeded`: resultado gravado em `result`.
 - `failed`: erro estruturado em `error` (`code`, `message`, `retryable`,
   `grpc_code`); a mensagem vai para a DLQ.
+
+O `jobs_worker` também mantém o status da `ApplicationInstance`: `PENDING`
+enquanto o job está na fila, `PROVISIONING` durante a execução, `RUNNING` no
+sucesso (com `container_id`, `port` e `provisioned_at`) e `ERROR` em falha
+terminal. Falhas transitórias mantêm `PROVISIONING` até a próxima tentativa.
 
 O provisioner:
 
@@ -359,7 +369,9 @@ verdade do estado de provisionamento. O model fica em
 
 O `UNIQUE (app_id)` garante no máximo uma instância por aplicação. O
 `CHECK` aceita apenas os estados `PENDING`, `PROVISIONING`, `RUNNING` e
-`ERROR`. O default `PENDING` é aplicado pelo banco e também pelo ORM.
+`ERROR`. O default `PENDING` é aplicado pelo banco e também pelo ORM. A linha
+é criada pelo `identity_api` na criação da aplicação e atualizada pelo
+`jobs_worker` conforme o ciclo do job de provisionamento.
 
 ## Contratos gRPC
 
