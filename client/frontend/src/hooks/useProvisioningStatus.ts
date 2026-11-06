@@ -30,6 +30,7 @@ export interface ProvisioningStatusState {
  * intervalo e são sinalizadas em `error`.
  */
 export function useProvisioningStatus(
+  tenantId: string,
   appId: string,
   intervalMs: number = PROVISIONING_POLL_INTERVAL_MS,
 ): ProvisioningStatusState {
@@ -41,7 +42,7 @@ export function useProvisioningStatus(
   }>({ appId, status: null, loading: false, error: null });
 
   useEffect(() => {
-    if (!appId) return;
+    if (!tenantId || !appId) return;
 
     let active = true;
     let inFlight = false;
@@ -67,7 +68,10 @@ export function useProvisioningStatus(
       );
 
       try {
-        const nextStatus = await applicationService.getStatus(appId);
+        const nextStatus = await applicationService.getStatus(
+          tenantId,
+          appId,
+        );
         if (!active) return;
 
         failures = 0;
@@ -103,7 +107,7 @@ export function useProvisioningStatus(
       active = false;
       stop();
     };
-  }, [appId, intervalMs]);
+  }, [tenantId, appId, intervalMs]);
 
   return {
     status: state.appId === appId ? state.status : null,

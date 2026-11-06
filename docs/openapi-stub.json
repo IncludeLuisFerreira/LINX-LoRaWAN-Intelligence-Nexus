@@ -742,6 +742,79 @@
         }
       }
     },
+    "/api/v1/tenant/{tenant_id}/applications/{application_id}/status": {
+      "get": {
+        "tags": [
+          "Application"
+        ],
+        "summary": "Get Application Status",
+        "description": "Retorna o status do container da aplica\u00e7\u00e3o, escopado pelo tenant.\n\nA fonte da verdade \u00e9 a tabela `application_instances`, atualizada pelo\njobs_worker a cada ciclo de provisionamento. N\u00e3o inspeciona o Docker\ndiretamente: o valor reflete o resultado do \u00faltimo ciclo processado.\n\nO v\u00ednculo tenant/aplica\u00e7\u00e3o \u00e9 validado no banco. Aplica\u00e7\u00e3o inexistente ou\npertencente a outro tenant retorna 404 (nunca 403), para n\u00e3o revelar a\nexist\u00eancia de aplica\u00e7\u00f5es de outros tenants.",
+        "operationId": "get_application_status_api_v1_tenant__tenant_id__applications__application_id__status_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "application_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Application Id"
+            }
+          },
+          {
+            "name": "X-Service-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Service-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationStatusResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Aplica\u00e7\u00e3o ou inst\u00e2ncia n\u00e3o encontrada."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tenant/{tenant_id}/jobs/{job_id}": {
       "get": {
         "tags": [
@@ -1533,6 +1606,66 @@
           "updated_at"
         ],
         "title": "ApplicationResponse"
+      },
+      "ApplicationStatusResponse": {
+        "properties": {
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "App Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PROVISIONING",
+              "RUNNING",
+              "ERROR"
+            ],
+            "title": "Status"
+          },
+          "container_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Id"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "provisioned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provisioned At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "app_id",
+          "status"
+        ],
+        "title": "ApplicationStatusResponse",
+        "description": "Estado do container de uma aplica\u00e7\u00e3o, lido da ApplicationInstance."
       },
       "ApplicationUpdate": {
         "properties": {

@@ -21,8 +21,14 @@ vi.mock('../services/app', () => ({
 
 const mockedGetStatus = applicationService.getStatus as unknown as Mock;
 
-function Probe({ appId }: { appId: string }) {
-  const { status, loading, error } = useProvisioningStatus(appId);
+function Probe({
+  tenantId,
+  appId,
+}: {
+  tenantId: string;
+  appId: string;
+}) {
+  const { status, loading, error } = useProvisioningStatus(tenantId, appId);
   return (
     <div>
       <span data-testid="status">{status ?? 'null'}</span>
@@ -39,6 +45,8 @@ async function advance(ms: number) {
 }
 
 describe('useProvisioningStatus', () => {
+  const TENANT = 'tenant-1';
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
@@ -49,10 +57,10 @@ describe('useProvisioningStatus', () => {
   it('polls immediately on mount', async () => {
     mockedGetStatus.mockResolvedValue('PENDING');
 
-    render(<Probe appId="app-1" />);
+    render(<Probe tenantId={TENANT} appId="app-1" />);
 
     expect(mockedGetStatus).toHaveBeenCalledTimes(1);
-    expect(mockedGetStatus).toHaveBeenCalledWith('app-1');
+    expect(mockedGetStatus).toHaveBeenCalledWith(TENANT, 'app-1');
 
     await advance(0);
 
@@ -65,7 +73,7 @@ describe('useProvisioningStatus', () => {
       .mockResolvedValueOnce('PROVISIONING')
       .mockResolvedValueOnce('RUNNING');
 
-    render(<Probe appId="app-1" />);
+    render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
     expect(screen.getByTestId('status')).toHaveTextContent('PENDING');
@@ -81,7 +89,7 @@ describe('useProvisioningStatus', () => {
   it('stops polling when the status reaches RUNNING', async () => {
     mockedGetStatus.mockResolvedValue('RUNNING');
 
-    render(<Probe appId="app-1" />);
+    render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
     expect(mockedGetStatus).toHaveBeenCalledTimes(1);
@@ -94,7 +102,7 @@ describe('useProvisioningStatus', () => {
   it('stops polling when the status reaches ERROR', async () => {
     mockedGetStatus.mockResolvedValue('ERROR');
 
-    render(<Probe appId="app-1" />);
+    render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
 
@@ -107,7 +115,7 @@ describe('useProvisioningStatus', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce('PENDING');
 
-    render(<Probe appId="app-1" />);
+    render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
     expect(screen.getByTestId('error')).not.toHaveTextContent('none');
@@ -122,7 +130,7 @@ describe('useProvisioningStatus', () => {
   it('stops and signals after consecutive failures', async () => {
     mockedGetStatus.mockRejectedValue(new Error('offline'));
 
-    render(<Probe appId="app-1" />);
+    render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
     await advance(PROVISIONING_POLL_INTERVAL_MS * (MAX_CONSECUTIVE_FAILURES - 1));
@@ -144,7 +152,7 @@ describe('useProvisioningStatus', () => {
       }),
     );
 
-    const { unmount } = render(<Probe appId="app-1" />);
+    const { unmount } = render(<Probe tenantId={TENANT} appId="app-1" />);
 
     expect(mockedGetStatus).toHaveBeenCalledTimes(1);
 
@@ -167,9 +175,9 @@ describe('useProvisioningStatus', () => {
     );
     mockedGetStatus.mockResolvedValue('PROVISIONING');
 
-    const { rerender } = render(<Probe appId="app-1" />);
+    const { rerender } = render(<Probe tenantId={TENANT} appId="app-1" />);
 
-    rerender(<Probe appId="app-2" />);
+    rerender(<Probe tenantId={TENANT} appId="app-2" />);
 
     await act(async () => {
       resolve('RUNNING');
@@ -181,7 +189,7 @@ describe('useProvisioningStatus', () => {
   });
 
   it('does nothing without an application id', async () => {
-    render(<Probe appId="" />);
+    render(<Probe tenantId={TENANT} appId="" />);
 
     await advance(PROVISIONING_POLL_INTERVAL_MS * 3);
 
@@ -191,15 +199,15 @@ describe('useProvisioningStatus', () => {
   it('restarts polling when the application changes', async () => {
     mockedGetStatus.mockResolvedValue('PENDING');
 
-    const { rerender } = render(<Probe appId="app-1" />);
+    const { rerender } = render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
-    expect(mockedGetStatus).toHaveBeenLastCalledWith('app-1');
+    expect(mockedGetStatus).toHaveBeenLastCalledWith(TENANT, 'app-1');
 
-    rerender(<Probe appId="app-2" />);
+    rerender(<Probe tenantId={TENANT} appId="app-2" />);
     expect(screen.getByTestId('status')).toHaveTextContent('null');
 
     await advance(0);
-    expect(mockedGetStatus).toHaveBeenLastCalledWith('app-2');
+    expect(mockedGetStatus).toHaveBeenLastCalledWith(TENANT, 'app-2');
   });
 });

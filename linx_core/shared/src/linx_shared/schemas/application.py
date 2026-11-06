@@ -1,7 +1,15 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+ApplicationStatusValue = Literal[
+    "PENDING",
+    "PROVISIONING",
+    "RUNNING",
+    "ERROR",
+]
 
 
 class ApplicationBase(BaseModel):
@@ -24,3 +32,15 @@ class ApplicationResponse(ApplicationBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+
+
+class ApplicationStatusResponse(BaseModel):
+    """Estado do container de uma aplicação, lido da ApplicationInstance."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    app_id: UUID
+    status: ApplicationStatusValue
+    container_id: str | None = None
+    port: int | None = None
+    provisioned_at: datetime | None = None
