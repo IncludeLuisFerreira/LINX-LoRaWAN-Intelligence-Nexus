@@ -7,6 +7,7 @@ configNode.h
 .env
 .env.local
 .env.*.local
+deploy/k8s/linx-secrets.env
 # Chaves OTAA do End Device (NAO versionar)
 nvs_secrets.h
 # Hash de senha do Mosquitto (issue #208) — gerar via gen-mosquitto-passwd.sh
