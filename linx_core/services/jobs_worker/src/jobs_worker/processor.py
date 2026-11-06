@@ -7,6 +7,7 @@ from typing import Any
 from linx_shared.jobs.constants import (
     JOB_DLX,
     JOB_EVENTS_EXCHANGE,
+    JOB_TYPE_PROVISION_APPLICATION,
     JobStatus,
 )
 from linx_shared.jobs.envelope import JobEnvelope, JobError, JobStatusEvent
@@ -16,6 +17,7 @@ from linx_shared.jobs.handlers import (
     TransientJobError,
 )
 from linx_shared.jobs.repository import claim_job, reschedule_not_due_job
+from linx_shared.models.application_instance import ApplicationInstance
 from linx_shared.models.job import Job
 from linx_shared.models.job_outbox import JobOutbox
 from sqlalchemy import func, select
@@ -149,6 +151,44 @@ class JobProcessor:
                 outcome,
             )
 
+    def _mark_instance(
+        self,
+        session: Session,
+        job: Job,
+        *,
+        status: str,
+        result: dict[str, Any] | None = None,
+        provisioned_at: datetime | None = None,
+    ) -> None:
+        """Atualiza a instância da aplicação, quando ela já existe."""
+        if job.type != JOB_TYPE_PROVISION_APPLICATION:
+            return
+
+        instance = session.scalars(
+            select(ApplicationInstance).where(
+                ApplicationInstance.app_id == job.subject_id
+            )
+        ).first()
+        if instance is None:
+            return
+        if (
+            status == "PROVISIONING"
+            and job.attempts > 1
+            and instance.status in ("RUNNING", "ERROR")
+        ):
+            return
+
+        instance.status = status
+        if result is not None:
+            container_id = result.get("container_id")
+            if container_id is not None:
+                instance.container_id = str(container_id)
+            port = result.get("port")
+            if port is not None:
+                instance.port = int(port)
+        if provisioned_at is not None:
+            instance.provisioned_at = provisioned_at
+
     def _event(
         self,
         session: Session,
@@ -218,6 +258,7 @@ class JobProcessor:
         envelope: JobEnvelope,
     ) -> None:
         self._event(session, job, JobStatus.RUNNING, suffix="started")
+        self._mark_instance(session, job, status="PROVISIONING")
 
     def _add_succeeded(
         self,
@@ -236,6 +277,13 @@ class JobProcessor:
             suffix="succeeded",
             result=result,
             finished_at=finished_at,
+        )
+        self._mark_instance(
+            session,
+            job,
+            status="RUNNING",
+            result=result,
+            provisioned_at=finished_at,
         )
 
     def _add_transient(
@@ -306,3 +354,4 @@ class JobProcessor:
             exchange=JOB_DLX,
             routing_key=f"{job.type}.dead",
         )
+        self._mark_instance(session, job, status="ERROR")
