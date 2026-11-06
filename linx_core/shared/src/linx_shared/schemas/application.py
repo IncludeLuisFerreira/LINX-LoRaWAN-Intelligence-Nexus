@@ -1,7 +1,8 @@
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from linx_shared.core.uuid4 import UUID4
 
 
 class ApplicationBase(BaseModel):
@@ -21,6 +22,6 @@ class ApplicationUpdate(BaseModel):
 class ApplicationResponse(ApplicationBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: UUID4
     created_at: datetime
     updated_at: datetime

@@ -1,5 +1,4 @@
 import logging
-from uuid import UUID
 
 import grpc
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -13,6 +12,7 @@ from linx_shared.core.rabbitmq import (
     tenant_namespace_regex,
     tenant_user,
 )
+from linx_shared.core.uuid4 import UUID4, ensure_uuid_v4
 from linx_shared.db.base import get_db
 from linx_shared.jobs.constants import JobStatus
 from linx_shared.models.application import Application
@@ -82,7 +82,7 @@ def _delete_tenant_user_best_effort(
     response_model=ApplicationResponse,
 )
 def create_application(
-    tenant_id: UUID,
+    tenant_id: UUID4,
     payload: ApplicationCreate,
     response: Response,
     db: Session = Depends(get_db),
@@ -109,7 +109,7 @@ def create_application(
         ) from exc
 
     try:
-        application_uuid = UUID(chirpstack_application_id)
+        application_uuid = ensure_uuid_v4(chirpstack_application_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -165,7 +165,7 @@ def create_application(
     status_code=status.HTTP_200_OK,
     response_model=list[ApplicationResponse],
 )
-def list_applications(tenant_id: UUID, db: Session = Depends(get_db)):
+def list_applications(tenant_id: UUID4, db: Session = Depends(get_db)):
     tenant = db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(
@@ -185,7 +185,7 @@ def list_applications(tenant_id: UUID, db: Session = Depends(get_db)):
     response_model=ApplicationResponse,
 )
 def get_application(
-    tenant_id: UUID, application_id: UUID, db: Session = Depends(get_db)
+    tenant_id: UUID4, application_id: UUID4, db: Session = Depends(get_db)
 ):
     tenant = db.get(Tenant, tenant_id)
     if not tenant:
@@ -214,8 +214,8 @@ def get_application(
     },
 )
 def provision_application(
-    tenant_id: UUID,
-    application_id: UUID,
+    tenant_id: UUID4,
+    application_id: UUID4,
     response: Response,
     db: Session = Depends(get_db),
 ):
@@ -261,8 +261,8 @@ def provision_application(
     response_model=ApplicationResponse,
 )
 def update_application(
-    tenant_id: UUID,
-    application_id: UUID,
+    tenant_id: UUID4,
+    application_id: UUID4,
     payload: ApplicationUpdate,
     db: Session = Depends(get_db),
     chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
@@ -306,8 +306,8 @@ def update_application(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_application(
-    tenant_id: UUID,
-    application_id: UUID,
+    tenant_id: UUID4,
+    application_id: UUID4,
     db: Session = Depends(get_db),
     chirpstack: ChirpStackClient = Depends(get_chirpstack_client),
     rabbitmq: RabbitMQClient = Depends(get_rabbitmq_client),

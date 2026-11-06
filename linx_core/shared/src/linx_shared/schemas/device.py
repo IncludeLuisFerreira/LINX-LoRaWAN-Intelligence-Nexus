@@ -1,7 +1,8 @@
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from linx_shared.core.uuid4 import UUID4
 
 _HEX16 = r"^[0-9a-fA-F]{16}$"
 _HEX32 = r"^[0-9a-fA-F]{32}$"
@@ -9,10 +10,10 @@ _HEX32 = r"^[0-9a-fA-F]{32}$"
 
 class DeviceCreate(BaseModel):
     dev_eui: str = Field(pattern=_HEX16)
-    app_id: UUID
+    app_id: UUID4
     join_eui: str = Field(pattern=_HEX16)
     app_key: str = Field(pattern=_HEX32)
-    device_profile_id: UUID
+    device_profile_id: UUID4
     nickname: str | None = Field(default=None, max_length=50)
 
     @field_validator("dev_eui", "join_eui", "app_key")
@@ -34,11 +35,11 @@ class DeviceCreate(BaseModel):
 class DeviceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: UUID4
     dev_eui: str
-    app_id: UUID
+    app_id: UUID4
     join_eui: str
-    device_profile_id: UUID
+    device_profile_id: UUID4
     nickname: str | None
     created_at: datetime
     updated_at: datetime

@@ -1,13 +1,13 @@
 from datetime import datetime
-from uuid import UUID
 
+from linx_shared.core.uuid4 import UUID4
 from linx_shared.jobs.constants import JobStatus
 from pydantic import BaseModel
 
 
 class JobAcceptedResponse(BaseModel):
-    job_id: UUID
-    application_id: UUID
+    job_id: UUID4
+    application_id: UUID4
     status: JobStatus
     created_at: datetime
 
@@ -20,10 +20,10 @@ class JobErrorResponse(BaseModel):
 
 
 class JobStatusResponse(BaseModel):
-    job_id: UUID
+    job_id: UUID4
     type: str
-    tenant_id: UUID
-    subject_id: UUID
+    tenant_id: UUID4
+    subject_id: UUID4
     status: JobStatus
     attempts: int
     max_attempts: int

@@ -1,7 +1,8 @@
 from datetime import datetime
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from linx_shared.core.uuid4 import UUID4
 
 
 class UserBase(BaseModel):
@@ -38,7 +39,7 @@ class UserUpdate(BaseModel):
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: UUID4
     email: EmailStr
     is_admin: bool
     is_active: bool
