@@ -169,7 +169,6 @@ activemq-data/
 *.sage.py
 
 # Environments
-.env
 .envrc
 .venv
 env/
@@ -177,9 +176,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
-#dependencies
-node_modules/
 
 # Spyder project settings
 .spyderproject
@@ -274,12 +270,6 @@ temp/
 
 firmware/
 
-
-# macOS-specific files
-.DS_Store
-
-# jetbrains setting folder
-.idea/
 
 # generated types
 .astro/

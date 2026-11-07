@@ -7,6 +7,7 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 
+from routing.backoff import retry_delay
 from routing.validation import ValidUplink, validate_message
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class MqttConsumer:
         password: str = "",
         connect_max_attempts: int = 5,
         connect_backoff_seconds: float = 1.0,
+        connect_backoff_max_seconds: float = 30.0,
         stop_event: threading.Event | None = None,
     ) -> None:
         self.broker_host = broker_host
@@ -62,6 +64,7 @@ class MqttConsumer:
         self.password = password
         self.connect_max_attempts = connect_max_attempts
         self.connect_backoff_seconds = connect_backoff_seconds
+        self.connect_backoff_max_seconds = connect_backoff_max_seconds
         self.stop_event = stop_event
         self.client: Any = None
 
@@ -156,7 +159,13 @@ class MqttConsumer:
                         self.connect_max_attempts,
                     )
                     return False
-                time.sleep(self.connect_backoff_seconds)
+                time.sleep(
+                    retry_delay(
+                        attempt,
+                        self.connect_backoff_seconds,
+                        self.connect_backoff_max_seconds,
+                    )
+                )
         return False
 
     def start(self) -> bool:
