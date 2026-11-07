@@ -25,7 +25,22 @@ describe('deviceService', () => {
     await deviceService.listByApp('app-1');
 
     expect(mocked.get).toHaveBeenCalledWith('/devices', {
-      params: { app_id: 'app-1' },
+      params: { app_id: 'app-1', skip: 0, limit: 100 },
+    });
+  });
+
+  it('fetches every page when a device list exceeds one page', async () => {
+    const page = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: `d${i}` }));
+    mocked.get
+      .mockResolvedValueOnce({ data: page(100) })
+      .mockResolvedValueOnce({ data: page(3) });
+
+    const devices = await deviceService.listByApp('app-1');
+
+    expect(devices).toHaveLength(103);
+    expect(mocked.get).toHaveBeenLastCalledWith('/devices', {
+      params: { app_id: 'app-1', skip: 100, limit: 100 },
     });
   });
 

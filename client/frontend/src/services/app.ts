@@ -1,4 +1,5 @@
 import { api } from './api';
+import { fetchAllPages } from './pagination';
 import type { TenantOutput } from './tenant';
 
 export interface ApplicationOutput {
@@ -59,12 +60,14 @@ export const applicationService = {
     return response.data;
   },
 
-  listByTenant: async (tenantId: string): Promise<ApplicationOutput[]> => {
-    const response = await api.get<ApplicationOutput[]>(
-      `/tenant/${tenantId}/applications`,
-    );
-    return response.data;
-  },
+  listByTenant: (tenantId: string): Promise<ApplicationOutput[]> =>
+    fetchAllPages(async (skip, limit) => {
+      const response = await api.get<ApplicationOutput[]>(
+        `/tenant/${tenantId}/applications`,
+        { params: { skip, limit } },
+      );
+      return response.data;
+    }),
 
   get: async (
     tenantId: string,

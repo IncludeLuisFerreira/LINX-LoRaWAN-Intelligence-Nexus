@@ -20,8 +20,11 @@ on:
       - ".github/workflows/backend-ci.yml"
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.12"
   POETRY_VERSION: "2.4.1"
+
+permissions:
+  contents: read
 
 jobs:
   lint:
@@ -36,13 +39,13 @@ jobs:
         working-directory: linx_core
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Poetry
         run: pipx install "poetry==${POETRY_VERSION}"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -89,13 +92,13 @@ jobs:
         working-directory: linx_core
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Poetry
         run: pipx install "poetry==${POETRY_VERSION}"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -121,13 +124,13 @@ jobs:
         working-directory: client/tenant_app
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Poetry
         run: pipx install "poetry==${POETRY_VERSION}"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -157,13 +160,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Poetry
         run: pipx install "poetry==${POETRY_VERSION}"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
