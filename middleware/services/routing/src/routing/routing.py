@@ -14,6 +14,8 @@ from routing.publisher import RabbitPublisher
 
 logger = logging.getLogger(__name__)
 
+_RABBIT_ATTEMPT_TIMEOUT_SECONDS = 10.0
+
 
 class IngestService:
     """Consome uplinks MQTT e publica envelopes no RabbitMQ."""
@@ -28,6 +30,8 @@ class IngestService:
                 settings.rabbit_connect_backoff_seconds,
                 settings.rabbit_connect_backoff_max_seconds,
             )
+            + settings.rabbit_connect_max_attempts
+            * _RABBIT_ATTEMPT_TIMEOUT_SECONDS
             + 5.0
         )
         self.consumer = MqttConsumer(

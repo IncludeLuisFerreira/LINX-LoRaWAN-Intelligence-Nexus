@@ -34,7 +34,8 @@ class IdentitySettings(Settings):
     def _validate_chirpstack_tls(
         cls, value: bool, info: ValidationInfo
     ) -> bool:
-        if info.data.get("environment") == "production" and not value:
+        environment = str(info.data.get("environment", "")).strip().lower()
+        if environment == "production" and not value:
             raise ValueError(
                 "CHIRPSTACK_USE_TLS must be true in production; "
                 "configure the ChirpStack CA certificate and use TLS."

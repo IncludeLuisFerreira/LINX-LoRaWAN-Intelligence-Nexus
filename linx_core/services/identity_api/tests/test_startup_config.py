@@ -76,6 +76,16 @@ def test_production_rejects_chirpstack_without_tls(monkeypatch):
         IdentitySettings(_env_file=None)
 
 
+@pytest.mark.parametrize("environment", ["Production", " production "])
+def test_production_guard_ignores_case_and_spaces(monkeypatch, environment):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("ENVIRONMENT", environment)
+    monkeypatch.setenv("CHIRPSTACK_USE_TLS", "false")
+
+    with pytest.raises(ValidationError, match="CHIRPSTACK_USE_TLS"):
+        IdentitySettings(_env_file=None)
+
+
 def test_development_allows_chirpstack_without_tls(monkeypatch):
     _valid_env(monkeypatch)
     monkeypatch.setenv("ENVIRONMENT", "development")

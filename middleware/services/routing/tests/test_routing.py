@@ -172,7 +172,7 @@ def test_join_timeout_covers_jittered_exponential_backoff(monkeypatch):
 
     service = IngestService()
     try:
-        assert service._join_timeout == 20.0
+        assert service._join_timeout == 15.0 + 5 * 10.0 + 5.0
         assert service.publisher._backoff_max_seconds == 30.0
         assert service.consumer.connect_backoff_max_seconds == 30.0
     finally:
