@@ -419,6 +419,29 @@
             }
           },
           {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
             "name": "X-Service-Token",
             "in": "header",
             "required": false,
@@ -675,7 +698,7 @@
           "Application"
         ],
         "summary": "Provision Application",
-        "description": "Enfileira o provisionamento ass\u00edncrono do container da aplica\u00e7\u00e3o.\n\nO identity_api valida o v\u00ednculo tenant/application no banco e grava o\njob e a mensagem de outbox na mesma transa\u00e7\u00e3o. A execu\u00e7\u00e3o fica a cargo\ndo worker de provisionamento, consumindo a fila pelo broker.",
+        "description": "Enfileira o provisionamento assíncrono do container da aplicação.\n\nO identity_api valida o vínculo tenant/application no banco e grava o\njob e a mensagem de outbox na mesma transação. A execução fica a cargo\ndo worker de provisionamento, consumindo a fila pelo broker.",
         "operationId": "provision_application_api_v1_tenant__tenant_id__applications__application_id__provision_post",
         "parameters": [
           {
@@ -748,7 +771,7 @@
           "Application"
         ],
         "summary": "Get Application Status",
-        "description": "Retorna o status do container da aplica\u00e7\u00e3o, escopado pelo tenant.\n\nA fonte da verdade \u00e9 a tabela `application_instances`, atualizada pelo\njobs_worker a cada ciclo de provisionamento. N\u00e3o inspeciona o Docker\ndiretamente: o valor reflete o resultado do \u00faltimo ciclo processado.\n\nO v\u00ednculo tenant/aplica\u00e7\u00e3o \u00e9 validado no banco. Aplica\u00e7\u00e3o inexistente ou\npertencente a outro tenant retorna 404 (nunca 403), para n\u00e3o revelar a\nexist\u00eancia de aplica\u00e7\u00f5es de outros tenants.",
+        "description": "Retorna o status do container da aplicação, escopado pelo tenant.\n\nA fonte da verdade é a tabela `application_instances`, atualizada pelo\njobs_worker a cada ciclo de provisionamento. Não inspeciona o Docker\ndiretamente: o valor reflete o resultado do último ciclo processado.\n\nO vínculo tenant/aplicação é validado no banco. Aplicação inexistente ou\npertencente a outro tenant retorna 404 (nunca 403), para não revelar a\nexistência de aplicações de outros tenants.",
         "operationId": "get_application_status_api_v1_tenant__tenant_id__applications__application_id__status_get",
         "parameters": [
           {
@@ -800,7 +823,7 @@
             }
           },
           "404": {
-            "description": "Aplica\u00e7\u00e3o ou inst\u00e2ncia n\u00e3o encontrada."
+            "description": "Aplicação ou instância não encontrada."
           },
           "422": {
             "description": "Validation Error",
@@ -904,6 +927,29 @@
               "type": "string",
               "format": "uuid",
               "title": "App Id"
+            }
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
             }
           },
           {
@@ -1665,7 +1711,7 @@
           "status"
         ],
         "title": "ApplicationStatusResponse",
-        "description": "Estado do container de uma aplica\u00e7\u00e3o, lido da ApplicationInstance."
+        "description": "Estado do container de uma aplicação, lido da ApplicationInstance."
       },
       "ApplicationUpdate": {
         "properties": {
