@@ -4,6 +4,10 @@ import linx_shared.models  # noqa: F401
 from alembic import context
 from linx_shared.core.config import settings
 from linx_shared.db.base_class import Base
+from linx_shared.db.migration_lock import (
+    acquire_migration_lock,
+    release_migration_lock,
+)
 from sqlalchemy import engine_from_config, pool
 
 # this is the Alembic Config object, which provides
@@ -64,13 +68,18 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+    with connectable.connect() as lock_connection:
+        acquire_migration_lock(lock_connection)
+        try:
+            with connectable.connect() as connection:
+                context.configure(
+                    connection=connection, target_metadata=target_metadata
+                )
 
-        with context.begin_transaction():
-            context.run_migrations()
+                with context.begin_transaction():
+                    context.run_migrations()
+        finally:
+            release_migration_lock(lock_connection)
 
 
 if context.is_offline_mode():
