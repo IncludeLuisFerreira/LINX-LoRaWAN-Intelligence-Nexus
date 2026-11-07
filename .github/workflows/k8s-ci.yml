@@ -1,0 +1,43 @@
+name: k8s-ci
+
+on:
+  pull_request:
+    paths:
+      - "deploy/k8s/**"
+      - "deploy/overlays/**"
+      - ".github/workflows/k8s-ci.yml"
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - "deploy/k8s/**"
+      - "deploy/overlays/**"
+      - ".github/workflows/k8s-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  manifests:
+    name: Validate k8s manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Render base manifests
+        run: |
+          out="$(kubectl kustomize deploy/k8s)"
+          test -n "$out"
+          echo "$out" | grep -Eq 'kind: (Namespace|ConfigMap|PersistentVolumeClaim|Deployment|Service)'
+
+      - name: Render dockerhub overlay
+        run: |
+          out="$(kubectl kustomize deploy/overlays/dockerhub)"
+          test -n "$out"
+
+      - name: Render ecr overlay
+        run: |
+          out="$(kubectl kustomize deploy/overlays/ecr)"
+          test -n "$out"

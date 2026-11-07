@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10linx_agent.proto\x12\x04linx\x1a\x1fgoogle/protobuf/timestamp.proto\"\x17\n\x05\x41ppId\x12\x0e\n\x06\x61pp_id\x18\x01 \x01(\t\"\x88\x01\n\tAppConfig\x12\x0e\n\x06\x61pp_id\x18\x01 \x01(\t\x12\x0f\n\x07\x64\x62_host\x18\x02 \x01(\t\x12\x0f\n\x07\x64\x62_port\x18\x03 \x01(\r\x12\x0f\n\x07\x64\x62_name\x18\x04 \x01(\t\x12\x0f\n\x07\x64\x62_user\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x62_password\x18\x06 \x01(\t\x12\x12\n\nmqtt_topic\x18\x07 \x01(\t\"\x8b\x01\n\x0eTelemetryEvent\x12\x0f\n\x07\x64\x65v_eui\x18\x01 \x01(\t\x12-\n\ttimestamp\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07payload\x18\x03 \x01(\t\x12\x0c\n\x04rssi\x18\x04 \x01(\x05\x12\x0b\n\x03snr\x18\x05 \x01(\x01\x12\r\n\x05\x66_cnt\x18\x06 \x01(\r\"b\n\x04Rule\x12\n\n\x02id\x18\x01 \x01(\t\x12\x14\n\x0csensor_field\x18\x02 \x01(\t\x12\x10\n\x08operator\x18\x03 \x01(\t\x12\x11\n\tthreshold\x18\x04 \x01(\x01\x12\x13\n\x0b\x61\x63tion_type\x18\x05 \x01(\t\">\n\tViolation\x12\x0f\n\x07rule_id\x18\x01 \x01(\t\x12\x0f\n\x07\x64\x65v_eui\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\" \n\x03\x41\x63k\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t2\xc1\x01\n\x0b\x41gentBridge\x12,\n\x0cGetAppConfig\x12\x0b.linx.AppId\x1a\x0f.linx.AppConfig\x12\x32\n\x0fIngestTelemetry\x12\x14.linx.TelemetryEvent\x1a\t.linx.Ack\x12!\n\x08SyncRule\x12\n.linx.Rule\x1a\t.linx.Ack\x12-\n\x0fReportViolation\x12\x0f.linx.Violation\x1a\t.linx.Ackb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10linx_agent.proto\x12\x04linx\x1a\x1fgoogle/protobuf/timestamp.proto\"\x17\n\x05\x41ppId\x12\x0e\n\x06\x61pp_id\x18\x01 \x01(\t\"\x88\x01\n\tAppConfig\x12\x0e\n\x06\x61pp_id\x18\x01 \x01(\t\x12\x0f\n\x07\x64\x62_host\x18\x02 \x01(\t\x12\x0f\n\x07\x64\x62_port\x18\x03 \x01(\r\x12\x0f\n\x07\x64\x62_name\x18\x04 \x01(\t\x12\x0f\n\x07\x64\x62_user\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x62_password\x18\x06 \x01(\t\x12\x12\n\nmqtt_topic\x18\x07 \x01(\t\"\x9d\x01\n\x0eTelemetryEvent\x12\x0f\n\x07\x64\x65v_eui\x18\x01 \x01(\t\x12-\n\ttimestamp\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0f\n\x07payload\x18\x03 \x01(\t\x12\x0c\n\x04rssi\x18\x04 \x01(\x05\x12\x0b\n\x03snr\x18\x05 \x01(\x01\x12\r\n\x05\x66_cnt\x18\x06 \x01(\r\x12\x10\n\x08\x65vent_id\x18\x07 \x01(\t\"b\n\x04Rule\x12\n\n\x02id\x18\x01 \x01(\t\x12\x14\n\x0csensor_field\x18\x02 \x01(\t\x12\x10\n\x08operator\x18\x03 \x01(\t\x12\x11\n\tthreshold\x18\x04 \x01(\x01\x12\x13\n\x0b\x61\x63tion_type\x18\x05 \x01(\t\"T\n\tViolation\x12\x0f\n\x07rule_id\x18\x01 \x01(\t\x12\x0f\n\x07\x64\x65v_eui\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\x14\n\x0cviolation_id\x18\x04 \x01(\t\" \n\x03\x41\x63k\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t2\xc1\x01\n\x0b\x41gentBridge\x12,\n\x0cGetAppConfig\x12\x0b.linx.AppId\x1a\x0f.linx.AppConfig\x12\x32\n\x0fIngestTelemetry\x12\x14.linx.TelemetryEvent\x1a\t.linx.Ack\x12!\n\x08SyncRule\x12\n.linx.Rule\x1a\t.linx.Ack\x12-\n\x0fReportViolation\x12\x0f.linx.Violation\x1a\t.linx.Ackb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -37,13 +37,13 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_APPCONFIG']._serialized_start=85
   _globals['_APPCONFIG']._serialized_end=221
   _globals['_TELEMETRYEVENT']._serialized_start=224
-  _globals['_TELEMETRYEVENT']._serialized_end=363
-  _globals['_RULE']._serialized_start=365
-  _globals['_RULE']._serialized_end=463
-  _globals['_VIOLATION']._serialized_start=465
-  _globals['_VIOLATION']._serialized_end=527
-  _globals['_ACK']._serialized_start=529
-  _globals['_ACK']._serialized_end=561
-  _globals['_AGENTBRIDGE']._serialized_start=564
-  _globals['_AGENTBRIDGE']._serialized_end=757
+  _globals['_TELEMETRYEVENT']._serialized_end=381
+  _globals['_RULE']._serialized_start=383
+  _globals['_RULE']._serialized_end=481
+  _globals['_VIOLATION']._serialized_start=483
+  _globals['_VIOLATION']._serialized_end=567
+  _globals['_ACK']._serialized_start=569
+  _globals['_ACK']._serialized_end=601
+  _globals['_AGENTBRIDGE']._serialized_start=604
+  _globals['_AGENTBRIDGE']._serialized_end=797
 # @@protoc_insertion_point(module_scope)

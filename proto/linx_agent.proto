@@ -39,6 +39,7 @@ message TelemetryEvent {
   int32 rssi = 4;      // INT no schema
   double snr = 5;      // FLOAT (float8) no schema
   uint32 f_cnt = 6;    // opcional, p/ ordenação/dedup
+  string event_id = 7;  // UUIDv4 único do evento
 }
 
 message Rule {
@@ -53,6 +54,7 @@ message Violation {
   string rule_id = 1;
   string dev_eui = 2;
   string message = 3;
+  string violation_id = 4;  // UUIDv4 único da violação
 }
 
 message Ack {

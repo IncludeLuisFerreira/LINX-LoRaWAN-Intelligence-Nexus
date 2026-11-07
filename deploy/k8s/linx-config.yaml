@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linx-config
+  namespace: linx
+data:
+  GRPC_HOST: "0.0.0.0"
+  GRPC_PORT: "50051"
+  ENVIRONMENT: "production"
+  RABBITMQ_VHOST: "/"
+  # RabbitMQ no cluster é pendência futura; valor informativo, não bloqueia os
+  # pods desta issue (identity_api só usa o management client em operações de
+  # tenant, não no startup).
+  RABBITMQ_AMQP_HOST: "rabbitmq.linx.svc.cluster.local:5672"
+  RABBITMQ_MANAGEMENT_URL: "http://rabbitmq.linx.svc.cluster.local:15672"
+  # ChirpStack não está no cluster; "localhost:8080" aponta para o próprio pod.
+  # Ajuste para um host real antes de usar tenant/application/device no cluster.
+  CHIRPSTACK_HOST: "localhost:8080"

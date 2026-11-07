@@ -1,0 +1,92 @@
+# As migrations do Alembic ficam em um initContainer exclusivo para evitar a
+# race de duas réplicas rodando "alembic upgrade head" ao mesmo tempo. O
+# container principal sobe só o uvicorn (o docker-entrypoint.sh do Compose
+# continua valendo para o caminho de Compose).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-api
+  namespace: linx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: identity-api
+  template:
+    metadata:
+      labels:
+        app: identity-api
+    spec:
+      initContainers:
+        - name: wait-for-db
+          image: includeluisferreira/identity-api:dev
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - linx_shared.db.wait
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
+        - name: migrate
+          image: includeluisferreira/identity-api:dev
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - alembic
+            - -c
+            - /app/alembic.ini
+            - upgrade
+            - head
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
+      containers:
+        - name: identity-api
+          image: includeluisferreira/identity-api:dev
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - uvicorn
+            - identity_api.main:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: identity-api
+  namespace: linx
+spec:
+  selector:
+    app: identity-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
