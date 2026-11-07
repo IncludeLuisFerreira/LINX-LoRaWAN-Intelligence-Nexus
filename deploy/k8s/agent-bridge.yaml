@@ -13,10 +13,23 @@ spec:
       labels:
         app: agent-bridge
     spec:
+      initContainers:
+        - name: wait-for-db
+          image: includeluisferreira/agent-bridge:dev
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - linx_shared.db.wait
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
       containers:
         - name: agent-bridge
-          image: linx/agent-bridge:dev
-          imagePullPolicy: IfNotPresent
+          image: includeluisferreira/agent-bridge:dev
+          imagePullPolicy: Always
           ports:
             - name: grpc
               containerPort: 50051

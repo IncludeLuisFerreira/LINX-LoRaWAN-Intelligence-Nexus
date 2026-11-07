@@ -18,9 +18,21 @@ spec:
         app: identity-api
     spec:
       initContainers:
+        - name: wait-for-db
+          image: includeluisferreira/identity-api:dev
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - linx_shared.db.wait
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
         - name: migrate
-          image: linx/identity-api:dev
-          imagePullPolicy: IfNotPresent
+          image: includeluisferreira/identity-api:dev
+          imagePullPolicy: Always
           command:
             - python
             - -m
@@ -36,8 +48,8 @@ spec:
                 name: linx-secrets
       containers:
         - name: identity-api
-          image: linx/identity-api:dev
-          imagePullPolicy: IfNotPresent
+          image: includeluisferreira/identity-api:dev
+          imagePullPolicy: Always
           command:
             - python
             - -m
@@ -61,8 +73,7 @@ spec:
               port: http
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /health
+            tcpSocket:
               port: http
             periodSeconds: 20
             failureThreshold: 3
