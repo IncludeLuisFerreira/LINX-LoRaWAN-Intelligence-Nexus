@@ -10,7 +10,7 @@ fallback offline existe apenas para clusters sem acesso a registry.
 ## Pré-requisitos
 
 - Cluster k3s local (recomendado: `k3d cluster create linx`) **ou** acesso ao
-  k3s da sandbox provisionado por `infra/k3s-aws-sandbox`.
+  k3s da sandbox provisionado por `infra/terraform`.
 - `kubectl` (context apontando para o cluster).
 - `grpcurl` (evidência gRPC).
 - Imagem `busybox` para o teste de DNS.
@@ -94,7 +94,7 @@ apply (veja a seção seguinte). Aplique primeiro e faça o patch em seguida; os
 pods podem ficar em `ImagePullBackOff` até a política nova chegar:
 
 ```bash
-kubectl apply -k deploy/k8s
+kubectl apply -k infra/kubernetes
 
 kubectl -n linx patch deployment identity-api --type=strategic -p '{
   "spec":{"template":{"spec":{
@@ -127,15 +127,15 @@ Secret; crie-o primeiro e depois copie/preencha o template. Os serviços rejeita
 placeholders (`change-me`) no startup:
 
 ```bash
-kubectl apply -f deploy/k8s/namespace.yaml
+kubectl apply -f infra/kubernetes/base/namespace.yaml
 
-cp deploy/k8s/linx-secrets.example.env deploy/k8s/linx-secrets.env
+cp infra/kubernetes/linx-secrets.example.env infra/kubernetes/linx-secrets.env
 # editar linx-secrets.env; no laboratório DATABASE_URL aponta para
 # postgres.linx.svc.cluster.local:5432
 
 # idempotente: pode rodar de novo sem "AlreadyExists"
 kubectl create secret generic linx-secrets -n linx \
-  --from-env-file=deploy/k8s/linx-secrets.env \
+  --from-env-file=infra/kubernetes/linx-secrets.env \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -145,12 +145,12 @@ template: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
 `SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
 `RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD` e `RABBITMQ_TENANT_SECRET`.
 
-`deploy/k8s/linx-secrets.env` está no `.gitignore` — nunca versionar.
+`infra/kubernetes/linx-secrets.env` está no `.gitignore` — nunca versionar.
 
 ### Banco externo (RDS, Cloud SQL etc.)
 
 Para apontar para um banco gerenciado, altere **somente** `DATABASE_URL` em
-`deploy/k8s/linx-secrets.env` (usuário, senha, host, porta e database) e recrie o
+`infra/kubernetes/linx-secrets.env` (usuário, senha, host, porta e database) e recrie o
 Secret com o comando acima. Nenhum manifest precisa mudar. Exemplo de formato:
 
 ```dotenv
@@ -200,10 +200,10 @@ não expõe HTTP. O `wait-for-db` cobre a disponibilidade inicial do banco. O
 Caminho padrão (Docker Hub):
 
 ```bash
-kubectl apply -k deploy/k8s
+kubectl apply -k infra/kubernetes
 ```
 
-> `kubectl apply -f deploy/k8s/` **não funciona**: o diretório contém um
+> `kubectl apply -f infra/kubernetes/` **não funciona**: o diretório contém um
 > `kustomization.yaml`, que o `apply -f` tenta interpretar como recurso e
 > falha. Use sempre `kubectl apply -k` para este diretório. (O critério de
 > aceite da issue #257 menciona `-f`; interprete-o como `-k`.)
@@ -212,17 +212,17 @@ O overlay `dockerhub` apenas referencia a mesma base e serve como comando
 explícito para o laboratório:
 
 ```bash
-kubectl apply -k deploy/overlays/dockerhub
+kubectl apply -k infra/kubernetes/overlays/dockerhub
 ```
 
 ### Exemplo ECR (AWS/empresa)
 
-`deploy/overlays/ecr` é um **exemplo editável**, não um overlay pronto para
+`infra/kubernetes/overlays/ecr` é um **exemplo editável**, não um overlay pronto para
 aplicar: o Kustomize não interpola variáveis de ambiente. Copie ou edite o
 arquivo e substitua `<AWS_ACCOUNT_ID>`, `<AWS_REGION>` e `<SHORT_SHA>`:
 
 ```yaml
-# deploy/overlays/ecr/kustomization.yaml (trecho)
+# infra/kubernetes/overlays/ecr/kustomization.yaml (trecho)
 images:
   - name: includeluisferreira/identity-api
     newName: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/identity-api
@@ -235,8 +235,8 @@ images:
 Valide a sintaxe e aplique depois de editar:
 
 ```bash
-kubectl kustomize deploy/overlays/ecr >/dev/null
-kubectl apply -k deploy/overlays/ecr
+kubectl kustomize infra/kubernetes/overlays/ecr >/dev/null
+kubectl apply -k infra/kubernetes/overlays/ecr
 ```
 
 Se tiver o binário `kustomize`, também pode usar
@@ -372,11 +372,11 @@ não execute isto contra um cluster compartilhado ou com dados reais.
 
 ```bash
 # 1. Remove os recursos do namespace e o namespace em si
-#    (kubectl delete -k deploy/k8s já remove o namespace via namespace.yaml)
-kubectl delete -k deploy/k8s
+#    (kubectl delete -k infra/kubernetes já remove o namespace via namespace.yaml)
+kubectl delete -k infra/kubernetes
 
 # 2. Remove o Secret local (nunca foi versionado; está no .gitignore)
-rm -f deploy/k8s/linx-secrets.env
+rm -f infra/kubernetes/linx-secrets.env
 
 # 3. Opcional: apaga o cluster local e as imagens de desenvolvimento
 #    (isto remove o contexto kubectl; para voltar, rode "Criar o cluster local")
@@ -407,7 +407,7 @@ offline.
 - A tag `dev` é mutável e usada pelo laboratório. Para produção, fixe uma tag
   `sha-*` ou um digest em um overlay; `latest` e `dev` não são referências
   imutáveis.
-- `deploy/overlays/ecr` é um exemplo editável com placeholders; não o aplique sem
+- `infra/kubernetes/overlays/ecr` é um exemplo editável com placeholders; não o aplique sem
   substituir `<AWS_ACCOUNT_ID>`, `<AWS_REGION>` e `<SHORT_SHA>`.
 - O load balancing de Service ClusterIP é L4 (por conexão); uma conexão gRPC
   longa fica presa a um único pod. Balanceamento por chamada exigiria headless

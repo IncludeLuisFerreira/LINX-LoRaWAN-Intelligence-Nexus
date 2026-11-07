@@ -6,7 +6,7 @@
 
 **Goal:** Expor `agent_bridge` e `identity_api` no k3s via CoreDNS (`<svc>.linx.svc.cluster.local`) e fechar a lacuna de UUIDv4 no envelope AMQP de telemetria.
 
-**Architecture:** Manifestos declarativos em `deploy/k8s/` aplicáveis com `kubectl apply -k` (kustomization nativa do kubectl, sem Helm). Um Postgres mínimo (1 réplica + PVC `local-path` do k3s) sustenta as dependências de banco dentro do cluster para que as evidências (DNS, `grpcurl`, `/health`) sejam reais, não só `dry-run`. Imagens construídas localmente e importadas no cluster (k3d/kind local; `k3s ctr images import` na sandbox AWS — Learner Lab não tem registry).
+**Architecture:** Manifestos declarativos em `infra/kubernetes/` aplicáveis com `kubectl apply -k` (kustomization nativa do kubectl, sem Helm). Um Postgres mínimo (1 réplica + PVC `local-path` do k3s) sustenta as dependências de banco dentro do cluster para que as evidências (DNS, `grpcurl`, `/health`) sejam reais, não só `dry-run`. Imagens construídas localmente e importadas no cluster (k3d/kind local; `k3s ctr images import` na sandbox AWS — Learner Lab não tem registry).
 
 **Tech Stack:** Kubernetes (k3s, apps/v1), kubectl kustomize, Postgres 15-alpine, Python 3.12, pytest.
 
@@ -26,7 +26,7 @@
 - Namespace fixo: `linx`. Labels: `app: <nome-do-servico>`. APIs estáveis (`apps/v1`, `v1`).
 - Nenhum segredo real commitado: apenas `linx-secrets.example.env`; o Secret real é criado imperativamente (AGENTS.md §5).
 - Commits: Conventional Commits em português com `(#257)`; `git add` arquivo por arquivo; push só com autorização.
-- Validação de manifesto: `kubectl apply -k deploy/k8s --dry-run=client` deve passar sem erro antes de cada commit.
+- Validação de manifesto: `kubectl apply -k infra/kubernetes --dry-run=client` deve passar sem erro antes de cada commit.
 - `pytest` do serviço tocado deve passar antes do commit (config em `pyproject.toml`).
 - Limitação conhecida a registrar no README/relatório: LB de Service ClusterIP é L4 (por conexão); conexão gRPC longa fica presa a um pod. Headless service + client-side LB fica fora de escopo.
 
@@ -43,16 +43,16 @@
 ### Task 1: Namespace, Postgres mínimo, ConfigMap, Secret example, kustomization
 
 **Files:**
-- Create: `deploy/k8s/namespace.yaml`
-- Create: `deploy/k8s/postgres.yaml`
-- Create: `deploy/k8s/linx-config.yaml`
-- Create: `deploy/k8s/linx-secrets.example.env`
-- Create: `deploy/k8s/kustomization.yaml`
+- Create: `infra/kubernetes/base/namespace.yaml`
+- Create: `infra/kubernetes/base/postgres.yaml`
+- Create: `infra/kubernetes/base/linx-config.yaml`
+- Create: `infra/kubernetes/linx-secrets.example.env`
+- Create: `infra/kubernetes/base/kustomization.yaml`
 
 **Interfaces:**
 - Produces: namespace `linx`; Service DNS `postgres.linx.svc.cluster.local:5432`; ConfigMap `linx-config` (chaves: `GRPC_HOST=0.0.0.0`, `GRPC_PORT=50051`, `ENVIRONMENT=production`, `CHIRPSTACK_HOST`, `RABBITMQ_AMQP_HOST`, `RABBITMQ_MANAGEMENT_URL`, `RABBITMQ_VHOST=/`); Secret `linx-secrets` (chaves esperadas: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`, `RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD`, `RABBITMQ_TENANT_SECRET`). Tasks 2 e 3 consomem esses nomes.
 
-- [ ] **Step 1: Criar `deploy/k8s/namespace.yaml`**
+- [ ] **Step 1: Criar `infra/kubernetes/base/namespace.yaml`**
 
 ```yaml
 apiVersion: v1
@@ -61,19 +61,19 @@ metadata:
   name: linx
 ```
 
-- [ ] **Step 2: Criar `deploy/k8s/postgres.yaml`**
+- [ ] **Step 2: Criar `infra/kubernetes/base/postgres.yaml`**
 
 Deployment `postgres` (1 réplica — banco não se escala com `replicas`), imagem `postgres:15-alpine`, env `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB` vindos de `secretRef: linx-secrets`, `readinessProbe` exec `pg_isready -U $(POSTGRES_USER) -d $(POSTGRES_DB)`, `volumeMounts` em `/var/lib/postgresql/data` via PVC `postgres-data` (1Gi, `storageClassName: local-path`), Service ClusterIP `postgres` porta 5432. Comentário no arquivo: "Postgres efêmero para evidência de service discovery; dados de produção não pertencem a este manifest".
 
-- [ ] **Step 3: Criar `deploy/k8s/linx-config.yaml`**
+- [ ] **Step 3: Criar `infra/kubernetes/base/linx-config.yaml`**
 
 ConfigMap `linx-config` com as chaves não-sensíveis listadas em Interfaces. Hosts internos apontam para nomes DNS do cluster (ex.: `RABBITMQ_AMQP_HOST: rabbitmq.linx.svc.cluster.local:5672` com comentário de que RabbitMQ no k8s é pendência — valor informativo, não bloqueia os pods desta issue).
 
-- [ ] **Step 4: Criar `deploy/k8s/linx-secrets.example.env`**
+- [ ] **Step 4: Criar `infra/kubernetes/linx-secrets.example.env`**
 
-Template com as chaves de Interfaces e valores placeholder (`change-me`), com header de comentário: "copie para linx-secrets.env (NÃO commitar), preencha, e crie com `kubectl create secret generic linx-secrets -n linx --from-env-file=linx-secrets.env`". Adicionar `deploy/k8s/linx-secrets.env` ao `.gitignore`.
+Template com as chaves de Interfaces e valores placeholder (`change-me`), com header de comentário: "copie para linx-secrets.env (NÃO commitar), preencha, e crie com `kubectl create secret generic linx-secrets -n linx --from-env-file=linx-secrets.env`". Adicionar `infra/kubernetes/linx-secrets.env` ao `.gitignore`.
 
-- [ ] **Step 5: Criar `deploy/k8s/kustomization.yaml`**
+- [ ] **Step 5: Criar `infra/kubernetes/base/kustomization.yaml`**
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -89,13 +89,13 @@ Comentar as duas últimas linhas até as Tasks 2/3 existirem, ou criar os arquiv
 
 - [ ] **Step 6: Validar dry-run**
 
-Run: `kubectl apply -k deploy/k8s --dry-run=client`
+Run: `kubectl apply -k infra/kubernetes --dry-run=client`
 Expected: recursos de namespace/postgres/configmap criados (dry-run), sem erro de schema.
 
 - [ ] **Step 7: Commit** (aguardando autorização)
 
 ```bash
-git add deploy/k8s/namespace.yaml deploy/k8s/postgres.yaml deploy/k8s/linx-config.yaml deploy/k8s/linx-secrets.example.env deploy/k8s/kustomization.yaml .gitignore
+git add infra/kubernetes/base/namespace.yaml infra/kubernetes/base/postgres.yaml infra/kubernetes/base/linx-config.yaml infra/kubernetes/linx-secrets.example.env infra/kubernetes/base/kustomization.yaml .gitignore
 git commit -m "feat(k8s): namespace, postgres minimo e config base para service discovery (#257)"
 ```
 
@@ -104,13 +104,13 @@ git commit -m "feat(k8s): namespace, postgres minimo e config base para service 
 ### Task 2: Deployment + Service do agent-bridge
 
 **Files:**
-- Create: `deploy/k8s/agent-bridge.yaml`
+- Create: `infra/kubernetes/base/agent-bridge.yaml`
 
 **Interfaces:**
 - Consumes: namespace `linx`, ConfigMap `linx-config`, Secret `linx-secrets` (Task 1).
 - Produces: Service DNS `agent-bridge.linx.svc.cluster.local:50051`; Deployment `agent-bridge` com label `app: agent-bridge`.
 
-- [ ] **Step 1: Criar `deploy/k8s/agent-bridge.yaml`**
+- [ ] **Step 1: Criar `infra/kubernetes/base/agent-bridge.yaml`**
 
 ```yaml
 apiVersion: apps/v1
@@ -161,13 +161,13 @@ spec:
 
 - [ ] **Step 2: Validar dry-run**
 
-Run: `kubectl apply -f deploy/k8s/agent-bridge.yaml --dry-run=client`
+Run: `kubectl apply -f infra/kubernetes/base/agent-bridge.yaml --dry-run=client`
 Expected: `deployment.apps/agent-bridge created (dry run)` + `service/agent-bridge created (dry run)`.
 
 - [ ] **Step 3: Commit** (aguardando autorização)
 
 ```bash
-git add deploy/k8s/agent-bridge.yaml deploy/k8s/kustomization.yaml
+git add infra/kubernetes/base/agent-bridge.yaml infra/kubernetes/base/kustomization.yaml
 git commit -m "feat(k8s): Deployment e Service do agent-bridge com DNS interno (#257)"
 ```
 
@@ -176,25 +176,25 @@ git commit -m "feat(k8s): Deployment e Service do agent-bridge com DNS interno (
 ### Task 3: Deployment + Service do identity-api
 
 **Files:**
-- Create: `deploy/k8s/identity-api.yaml`
+- Create: `infra/kubernetes/base/identity-api.yaml`
 
 **Interfaces:**
 - Consumes: Task 1 (namespace/config/secret), `postgres` Service.
 - Produces: Service DNS `identity-api.linx.svc.cluster.local:8000`; padrão initContainer-de-migração que outros serviços FastAPI futuros copiam.
 
-- [ ] **Step 1: Criar `deploy/k8s/identity-api.yaml`**
+- [ ] **Step 1: Criar `infra/kubernetes/base/identity-api.yaml`**
 
 Deployment `identity-api`, `replicas: 2`, label `app: identity-api`, imagem `linx/identity-api:dev`, `envFrom` configmap+secret. **initContainer `migrate`** com `command: ["python", "-m", "alembic", "-c", "/app/alembic.ini", "upgrade", "head"]` (mesma imagem; evita a race de migrations do entrypoint entre as 2 réplicas — ver Review Focus 2). Container principal com `command: ["python", "-m", "uvicorn", "identity_api.main:app", "--host", "0.0.0.0", "--port", "8000"]` (sobrescreve o entrypoint do compose; o `docker-entrypoint.sh` continua sendo o caminho do compose). Probes: `httpGet /health` porta 8000 (readiness `periodSeconds: 10`, liveness `periodSeconds: 20`, `failureThreshold: 3`). Service ClusterIP `identity-api` porta 8000.
 
 - [ ] **Step 2: Validar dry-run**
 
-Run: `kubectl apply -f deploy/k8s/identity-api.yaml --dry-run=client`
+Run: `kubectl apply -f infra/kubernetes/base/identity-api.yaml --dry-run=client`
 Expected: `deployment.apps/identity-api created (dry run)` + `service/identity-api created (dry run)`.
 
 - [ ] **Step 3: Commit** (aguardando autorização)
 
 ```bash
-git add deploy/k8s/identity-api.yaml deploy/k8s/kustomization.yaml
+git add infra/kubernetes/base/identity-api.yaml infra/kubernetes/base/kustomization.yaml
 git commit -m "feat(k8s): Deployment e Service do identity-api com initContainer de migrations (#257)"
 ```
 
@@ -259,20 +259,20 @@ git commit -m "feat(routing): envelope_id UUIDv4 no envelope AMQP de telemetria 
 ### Task 5: README de operação e evidências de validação
 
 **Files:**
-- Create: `deploy/k8s/README.md`
+- Create: `infra/kubernetes/README.md`
 
 **Interfaces:**
 - Consumes: todos os manifests das Tasks 1–3.
 - Produces: runbook reproduzível usado no relatório técnico da Entrega 3.
 
-- [ ] **Step 1: Escrever `deploy/k8s/README.md`**
+- [ ] **Step 1: Escrever `infra/kubernetes/README.md`**
 
 Seções (português):
-1. **Pré-requisitos**: k3d (`k3d cluster create linx`) ou acesso ao k3s da sandbox (`infra/k3s-aws-sandbox`); `kubectl`; `grpcurl`; imagem `busybox` para teste de DNS.
+1. **Pré-requisitos**: k3d (`k3d cluster create linx`) ou acesso ao k3s da sandbox (`infra/terraform`); `kubectl`; `grpcurl`; imagem `busybox` para teste de DNS.
 2. **Build das imagens**: `docker build -t linx/identity-api:dev -f linx_core/services/identity_api/Dockerfile linx_core` e `docker build -t linx/agent-bridge:dev -f linx_core/services/agent_bridge/Dockerfile linx_core`.
 3. **Import no cluster**: local `k3d image import -c linx linx/identity-api:dev linx/agent-bridge:dev`; sandbox AWS `docker save ... | ssh ... 'sudo k3s ctr images import -'`.
-4. **Secret**: copiar `linx-secrets.example.env` → `linx-secrets.env`, preencher, `kubectl create secret generic linx-secrets -n linx --from-env-file=deploy/k8s/linx-secrets.env`.
-5. **Apply**: `kubectl apply -k deploy/k8s`.
+4. **Secret**: copiar `linx-secrets.example.env` → `linx-secrets.env`, preencher, `kubectl create secret generic linx-secrets -n linx --from-env-file=infra/kubernetes/linx-secrets.env`.
+5. **Apply**: `kubectl apply -k infra/kubernetes`.
 6. **Evidências** (comandos + saída esperada): ver Step 2.
 
 - [ ] **Step 2: Bloco de evidências no README (comandos exatos)**
@@ -298,7 +298,7 @@ Seguir o runbook do zero em cluster local (k3d). Toda evidência do Step 2 preci
 - [ ] **Step 4: Commit** (aguardando autorização)
 
 ```bash
-git add deploy/k8s/README.md
+git add infra/kubernetes/README.md
 git commit -m "docs(k8s): runbook de deploy e evidencias de service discovery (#257)"
 ```
 

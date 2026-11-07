@@ -3,16 +3,14 @@ name: k8s-ci
 on:
   pull_request:
     paths:
-      - "deploy/k8s/**"
-      - "deploy/overlays/**"
+      - "infra/kubernetes/**"
       - ".github/workflows/k8s-ci.yml"
   push:
     branches:
       - develop
       - main
     paths:
-      - "deploy/k8s/**"
-      - "deploy/overlays/**"
+      - "infra/kubernetes/**"
       - ".github/workflows/k8s-ci.yml"
 
 permissions:
@@ -28,16 +26,16 @@ jobs:
 
       - name: Render base manifests
         run: |
-          out="$(kubectl kustomize deploy/k8s)"
+          out="$(kubectl kustomize infra/kubernetes)"
           test -n "$out"
           echo "$out" | grep -Eq 'kind: (Namespace|ConfigMap|PersistentVolumeClaim|Deployment|Service)'
 
       - name: Render dockerhub overlay
         run: |
-          out="$(kubectl kustomize deploy/overlays/dockerhub)"
+          out="$(kubectl kustomize infra/kubernetes/overlays/dockerhub)"
           test -n "$out"
 
       - name: Render ecr overlay
         run: |
-          out="$(kubectl kustomize deploy/overlays/ecr)"
+          out="$(kubectl kustomize infra/kubernetes/overlays/ecr)"
           test -n "$out"

@@ -6,7 +6,7 @@
 
 ## 1. Intenção e porquê
 
-Hoje o `deploy/k8s` depende de imagens construídas localmente e importadas
+Hoje o `infra/kubernetes` depende de imagens construídas localmente e importadas
 diretamente no containerd do cluster (`docker save | ctr images import`). Isso
 funciona apenas em um cluster local e cria atrito para usar o mesmo deployment
 na AWS ou em outra empresa.
@@ -29,9 +29,9 @@ conectar de forma confiável ao Postgres dentro do cluster.
   URL string` seguido do retry do `docker-entrypoint.sh`.
 - O Deployment usado no teste não tem `envFrom` nem `env`; o Secret `linx-env`
   existe em arquivo, mas não foi aplicado no cluster.
-- O Secret de teste aponta `DATABASE_URL` para `db:5432`; no `deploy/k8s` o
+- O Secret de teste aponta `DATABASE_URL` para `db:5432`; no `infra/kubernetes` o
   Service do Postgres se chama `postgres`.
-- O `deploy/k8s/identity-api.yaml` usa `linx/identity-api:dev` e o
+- O `infra/kubernetes/base/identity-api.yaml` usa `linx/identity-api:dev` e o
   `agent-bridge.yaml` usa `linx/agent-bridge:dev`, ambos com import local.
 - O initContainer de migration roda em cada réplica (`replicas: 2`), sem lock,
   criando risco de duas migrations concorrentes.
@@ -129,33 +129,35 @@ usar `IfNotPresent`.
 
 ### 7.2 Estrutura Kustomize
 
-Manter os arquivos atuais como base para não quebrar `kubectl apply -k deploy/k8s`:
+Manter os arquivos atuais como base para não quebrar `kubectl apply -k infra/kubernetes`:
 
 ```text
-deploy/k8s/
-  kustomization.yaml          # base + imagens Docker Hub (padrão)
-  namespace.yaml
-  postgres.yaml
-  linx-config.yaml
-  identity-api.yaml
-  agent-bridge.yaml
+infra/kubernetes/
+  kustomization.yaml          # raiz: aponta para base/
   linx-secrets.example.env
   README.md
-deploy/overlays/
-  dockerhub/kustomization.yaml   # explícito para o laboratório
-  ecr/kustomization.yaml         # exemplo para AWS/empresa
+  base/
+    kustomization.yaml        # base
+    namespace.yaml
+    postgres.yaml
+    linx-config.yaml
+    identity-api.yaml         # imagem Docker Hub, envFrom, probes
+    agent-bridge.yaml         # imagem Docker Hub, envFrom
+  overlays/
+    dockerhub/kustomization.yaml   # explícito para o laboratório
+    ecr/kustomization.yaml         # exemplo para AWS/empresa
 ```
 
 - A base referencia `includeluisferreira/identity-api:dev` e
   `includeluisferreira/agent-bridge:dev`.
-- `deploy/overlays/dockerhub` apenas referencia a base, servindo de comando
+- `infra/kubernetes/overlays/dockerhub` apenas referencia a base, servindo de comando
   explícito.
-- `deploy/overlays/ecr` é um **exemplo editável**, não um overlay aplicável sem
+- `infra/kubernetes/overlays/ecr` é um **exemplo editável**, não um overlay aplicável sem
   configuração: Kustomize não interpola variáveis de ambiente. Ele contém
   placeholders explícitos (`<AWS_ACCOUNT_ID>`, `<AWS_REGION>`) e instruções no
   README para o operador copiar/editar ou usar `kustomize edit set image`.
   O patch opcional de `imagePullSecrets` fica comentado.
-- O `README.md` passa a documentar `kubectl apply -k deploy/k8s` como padrão e o
+- O `README.md` passa a documentar `kubectl apply -k infra/kubernetes` como padrão e o
   fluxo de cópia/edição do overlay ECR como caminho AWS/empresa. O overlay de
   exemplo não entra na validação automática de `--dry-run`.
 
@@ -294,14 +296,14 @@ evitar duas publicações simultâneas da mesma imagem.
 
 | Arquivo | Mudança |
 | --- | --- |
-| `deploy/k8s/identity-api.yaml` | Imagem Docker Hub, `imagePullPolicy: Always`, `envFrom`, initContainers `wait-for-db` e `migrate`. |
-| `deploy/k8s/agent-bridge.yaml` | Imagem Docker Hub, `imagePullPolicy: Always`, `envFrom`, initContainer `wait-for-db`. |
-| `deploy/k8s/postgres.yaml` | `strategy: Recreate`, liveness probe. |
-| `deploy/k8s/kustomization.yaml` | Mantém a lista de resources da base; as imagens Docker Hub ficam nos manifests e são sobrescritas pelos overlays. |
-| `deploy/overlays/dockerhub/kustomization.yaml` | Overlay explícito do laboratório. |
-| `deploy/overlays/ecr/kustomization.yaml` | Exemplo de troca de registry + `imagePullSecrets`. |
-| `deploy/k8s/linx-secrets.example.env` | Comentário e validação das chaves; host `postgres`. |
-| `deploy/k8s/README.md` | Runbook sem import local como padrão; Docker Hub, overlays, validação e rollback. |
+| `infra/kubernetes/base/identity-api.yaml` | Imagem Docker Hub, `imagePullPolicy: Always`, `envFrom`, initContainers `wait-for-db` e `migrate`. |
+| `infra/kubernetes/base/agent-bridge.yaml` | Imagem Docker Hub, `imagePullPolicy: Always`, `envFrom`, initContainer `wait-for-db`. |
+| `infra/kubernetes/base/postgres.yaml` | `strategy: Recreate`, liveness probe. |
+| `infra/kubernetes/base/kustomization.yaml` | Mantém a lista de resources da base; as imagens Docker Hub ficam nos manifests e são sobrescritas pelos overlays. |
+| `infra/kubernetes/overlays/dockerhub/kustomization.yaml` | Overlay explícito do laboratório. |
+| `infra/kubernetes/overlays/ecr/kustomization.yaml` | Exemplo de troca de registry + `imagePullSecrets`. |
+| `infra/kubernetes/linx-secrets.example.env` | Comentário e validação das chaves; host `postgres`. |
+| `infra/kubernetes/README.md` | Runbook sem import local como padrão; Docker Hub, overlays, validação e rollback. |
 | `linx_core/shared/src/linx_shared/db/wait.py` | Utilitário de espera/validação do banco. |
 | `linx_core/shared/tests/test_db_wait.py` | Testes do utilitário. |
 | `linx_core/services/identity_api/migrations/env.py` | Advisory lock antes das migrations. |
@@ -314,9 +316,9 @@ evitar duas publicações simultâneas da mesma imagem.
 
 ### 10.1 Local (kind/k3s)
 
-1. `kubectl apply -k deploy/k8s --dry-run=client` sem erro.
+1. `kubectl apply -k infra/kubernetes --dry-run=client` sem erro.
 2. Criar namespace e Secret com valores reais.
-3. `kubectl apply -k deploy/k8s`.
+3. `kubectl apply -k infra/kubernetes`.
 4. `kubectl -n linx get pods`: 2x identity-api, 2x agent-bridge e 1x postgres
    `Running`.
 5. `kubectl -n linx describe pod -l app=identity-api`: evento de pull aponta para

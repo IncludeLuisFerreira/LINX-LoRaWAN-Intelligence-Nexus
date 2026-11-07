@@ -21,12 +21,12 @@
 - `imagePullPolicy: Always` enquanto a tag for mutável.
 - `DATABASE_URL` do laboratório:
   `postgresql+psycopg://<user>:<pass>@postgres.linx.svc.cluster.local:5432/<db>`.
-- Nenhum segredo real commitado; apenas `deploy/k8s/linx-secrets.example.env`.
+- Nenhum segredo real commitado; apenas `infra/kubernetes/linx-secrets.example.env`.
 - Workflows só publicam quando mudarem os paths do serviço ou `linx_core/shared/**`.
 - Branch de trabalho: `feat/257-k8s-service-discovery`. PR de tracking: #260.
 - Cada bloco implementado deve virar um comentário na PR #260 com arquivos, comandos e resultados reais.
 - Commits: Conventional Commits em português com `(#257)`; `git add` arquivo por arquivo.
-- Antes de cada commit: `kubectl apply -k deploy/k8s --dry-run=client` e os testes da área tocada devem passar.
+- Antes de cada commit: `kubectl apply -k infra/kubernetes --dry-run=client` e os testes da área tocada devem passar.
 - Testes Python: `poetry -C linx_core/shared run pytest ...` e
   `poetry -C linx_core/services/identity_api run pytest ...`.
 - Não executar comandos destrutivos no working tree compartilhado.
@@ -48,16 +48,18 @@
   publish-linx-core-image.yml        # workflow_call reutilizável
   publish-identity-api-image.yml     # caller com paths do identity-api
   publish-agent-bridge-image.yml     # caller com paths do agent-bridge
-deploy/k8s/
-  identity-api.yaml                  # imagem DH, envFrom, initContainers, probes
-  agent-bridge.yaml                  # imagem DH, envFrom, initContainer
-  postgres.yaml                      # Recreate + liveness
+infra/kubernetes/
   linx-secrets.example.env           # chaves e host corretos
-  kustomization.yaml                 # base
   README.md                          # runbook
-deploy/overlays/
-  dockerhub/kustomization.yaml       # overlay explícito
-  ecr/kustomization.yaml             # exemplo editável
+  kustomization.yaml                 # raiz: aponta para base/
+  base/
+    identity-api.yaml                # imagem DH, envFrom, initContainers, probes
+    agent-bridge.yaml                # imagem DH, envFrom, initContainer
+    postgres.yaml                    # Recreate + liveness
+    kustomization.yaml               # base
+  overlays/
+    dockerhub/kustomization.yaml     # overlay explícito
+    ecr/kustomization.yaml           # exemplo editável
 linx_core/shared/src/linx_shared/db/
   wait.py                            # espera/valida DATABASE_URL
   migration_lock.py                  # advisory lock do Alembic
@@ -350,10 +352,10 @@ git commit -m "feat(identity-api): serializa migrations do alembic com advisory 
 ### Task 3: Manifests com Docker Hub, banco e probes
 
 **Files:**
-- Modify: `deploy/k8s/identity-api.yaml`
-- Modify: `deploy/k8s/agent-bridge.yaml`
-- Modify: `deploy/k8s/postgres.yaml`
-- Modify: `deploy/k8s/linx-secrets.example.env`
+- Modify: `infra/kubernetes/base/identity-api.yaml`
+- Modify: `infra/kubernetes/base/agent-bridge.yaml`
+- Modify: `infra/kubernetes/base/postgres.yaml`
+- Modify: `infra/kubernetes/linx-secrets.example.env`
 
 **Interfaces:**
 - Consumes: `linx_shared.db.wait` (Task 1).
@@ -425,7 +427,7 @@ Atualizar o comentário para dizer que placeholders são rejeitados no startup.
 
 - [ ] **Step 5: Validar manifests**
 
-Run: `kubectl apply -k deploy/k8s --dry-run=client`
+Run: `kubectl apply -k infra/kubernetes --dry-run=client`
 
 Expected: `namespace/linx ... (dry run)`, `deployment.apps/identity-api ...`,
 `deployment.apps/agent-bridge ...`, `deployment.apps/postgres ...`, sem erro de
@@ -434,8 +436,8 @@ schema.
 - [ ] **Step 6: Commit (aguardando autorização)**
 
 ```bash
-git add deploy/k8s/identity-api.yaml deploy/k8s/agent-bridge.yaml \
-  deploy/k8s/postgres.yaml deploy/k8s/linx-secrets.example.env
+git add infra/kubernetes/base/identity-api.yaml infra/kubernetes/base/agent-bridge.yaml \
+  infra/kubernetes/base/postgres.yaml infra/kubernetes/linx-secrets.example.env
 git commit -m "feat(k8s): imagens do docker hub, initContainers de banco e probes (#257)"
 ```
 
@@ -444,35 +446,35 @@ git commit -m "feat(k8s): imagens do docker hub, initContainers de banco e probe
 ### Task 4: Overlays de registry
 
 **Files:**
-- Create: `deploy/overlays/dockerhub/kustomization.yaml`
-- Create: `deploy/overlays/ecr/kustomization.yaml`
+- Create: `infra/kubernetes/overlays/dockerhub/kustomization.yaml`
+- Create: `infra/kubernetes/overlays/ecr/kustomization.yaml`
 
 **Interfaces:**
-- Consumes: base `deploy/k8s`.
-- Produces: `kubectl apply -k deploy/overlays/dockerhub` como comando
+- Consumes: base `infra/kubernetes/base`.
+- Produces: `kubectl apply -k infra/kubernetes/overlays/dockerhub` como comando
   explícito do laboratório.
 - Produces: exemplo editável de ECR/registry privado.
 
 - [ ] **Step 1: Criar o overlay Docker Hub**
 
-`deploy/overlays/dockerhub/kustomization.yaml`:
+`infra/kubernetes/overlays/dockerhub/kustomization.yaml`:
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../k8s
+  - ../../base
 ```
 
 - [ ] **Step 2: Criar o exemplo ECR**
 
-`deploy/overlays/ecr/kustomization.yaml`:
+`infra/kubernetes/overlays/ecr/kustomization.yaml`:
 
 ```yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../k8s
+  - ../../base
 images:
   - name: includeluisferreira/identity-api
     newName: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/identity-api
@@ -500,8 +502,8 @@ placeholders e só então aplique.
 Run:
 
 ```bash
-kubectl kustomize deploy/overlays/dockerhub >/dev/null
-kubectl kustomize deploy/overlays/ecr >/dev/null
+kubectl kustomize infra/kubernetes/overlays/dockerhub >/dev/null
+kubectl kustomize infra/kubernetes/overlays/ecr >/dev/null
 ```
 
 Expected: ambos geram YAML sem erro; o overlay ECR mostra os placeholders
@@ -510,8 +512,8 @@ literalmente (Kustomize não interpola variáveis).
 - [ ] **Step 4: Commit (aguardando autorização)**
 
 ```bash
-git add deploy/overlays/dockerhub/kustomization.yaml \
-  deploy/overlays/ecr/kustomization.yaml
+git add infra/kubernetes/overlays/dockerhub/kustomization.yaml \
+  infra/kubernetes/overlays/ecr/kustomization.yaml
 git commit -m "feat(k8s): overlays de registry docker hub e exemplo ecr (#257)"
 ```
 
@@ -729,7 +731,7 @@ git commit -m "ci: publica imagens do linx core apenas quando seus arquivos muda
 ### Task 6: Runbook do README
 
 **Files:**
-- Modify: `deploy/k8s/README.md`
+- Modify: `infra/kubernetes/README.md`
 
 **Interfaces:**
 - Consumes: Tasks 1–5.
@@ -768,8 +770,8 @@ Explicar:
 
 Incluir:
 
-- `kubectl apply -k deploy/k8s` (Docker Hub);
-- `kubectl apply -k deploy/overlays/dockerhub`;
+- `kubectl apply -k infra/kubernetes` (Docker Hub);
+- `kubectl apply -k infra/kubernetes/overlays/dockerhub`;
 - exemplo ECR (copiar/editar placeholders);
 - matriz de paths dos workflows;
 - tags `dev`, `latest`, `sha-*`;
@@ -781,9 +783,9 @@ Incluir:
 Executar pelo menos:
 
 ```bash
-kubectl apply -k deploy/k8s --dry-run=client
-kubectl kustomize deploy/overlays/dockerhub >/dev/null
-kubectl kustomize deploy/overlays/ecr >/dev/null
+kubectl apply -k infra/kubernetes --dry-run=client
+kubectl kustomize infra/kubernetes/overlays/dockerhub >/dev/null
+kubectl kustomize infra/kubernetes/overlays/ecr >/dev/null
 ```
 
 Expected: sem erros.
@@ -791,7 +793,7 @@ Expected: sem erros.
 - [ ] **Step 6: Commit (aguardando autorização)**
 
 ```bash
-git add deploy/k8s/README.md
+git add infra/kubernetes/README.md
 git commit -m "docs(k8s): runbook de imagens docker hub, migrations e overlays (#257)"
 ```
 
@@ -828,16 +830,16 @@ Expected: ambos `linux/amd64`.
 - [ ] **Step 3: Criar namespace/Secret e aplicar**
 
 ```bash
-kubectl apply -f deploy/k8s/namespace.yaml
+kubectl apply -f infra/kubernetes/base/namespace.yaml
 
-cp deploy/k8s/linx-secrets.example.env deploy/k8s/linx-secrets.env
+cp infra/kubernetes/linx-secrets.example.env infra/kubernetes/linx-secrets.env
 # editar com credenciais reais; DATABASE_URL deve apontar para postgres.linx.svc.cluster.local
 
 kubectl create secret generic linx-secrets -n linx \
-  --from-env-file=deploy/k8s/linx-secrets.env \
+  --from-env-file=infra/kubernetes/linx-secrets.env \
   --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl apply -k deploy/k8s
+kubectl apply -k infra/kubernetes
 ```
 
 - [ ] **Step 4: Verificar pull do Docker Hub e pods**
