@@ -397,7 +397,9 @@ offline.
 - O load balancing de Service ClusterIP é L4 (por conexão); uma conexão gRPC
   longa fica presa a um único pod. Balanceamento por chamada exigiria headless
   service + client-side LB — fora de escopo desta issue.
-- O Postgres deste manifest é efêmero (PVC `local-path`) e existe apenas para
-  sustentar as evidências. Dados de produção não pertencem aqui.
+- O Postgres deste manifest é efêmero (PVC sem `storageClassName`: usa a
+  StorageClass padrão do cluster — `local-path` no k3s, `standard` no kind, o
+  default em outros ambientes) e existe apenas para sustentar as evidências.
+  Dados de produção não pertencem aqui.
 - RabbitMQ no cluster é pendência; `RABBITMQ_AMQP_HOST`/`RABBITMQ_MANAGEMENT_URL`
   no ConfigMap são informativos e não bloqueiam os pods desta issue.
