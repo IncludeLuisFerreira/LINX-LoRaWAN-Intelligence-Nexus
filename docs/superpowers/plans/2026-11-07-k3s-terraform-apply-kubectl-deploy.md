@@ -18,7 +18,7 @@
 - A porta 6443 permanece restrita à VPC (`10.0.0.0/16`); **não** abrir para o público e **não** reescrever o `server` do kubeconfig para IP público.
 - `kubectl` roda **no master via SSH** (usuário `ubuntu`, AMI jammy 22.04), nunca no runner contra a API.
 - Readiness por `cloud-init status --wait` + `kubectl wait`, **sem** loop de `sleep`.
-- Secret `linx-secrets` criado numa **única sessão SSH** lendo `$LINX_SECRETS_ENV` de `/dev/stdin`; nunca `echo` do conteúdo.
+- Secret `linx-secrets` criado numa **única sessão SSH** lendo `$LINX_SECRETS_ENV` de `/dev/stdin` (`echo "$LINX_SECRETS_ENV" | ssh ...`); nunca expor o conteúdo em log aberto nem em arquivo temporário.
 - Nunca commitar `tfstate`/`tfplan`/`linx-secrets.env`/chave privada (`.gitignore` de `infra/terraform` já cobre).
 - Deploy consome imagens Docker Hub `:dev` da base (`kubectl apply -k infra/kubernetes`); não publicar imagens (escopo #257).
 - `git add` explícito, arquivo por arquivo; nunca `git add .`/`git add -A`/`git commit -a`.
@@ -28,7 +28,7 @@
 ## Review Focus
 
 - Bucket/tabela não existirem no `terraform init` → init falha logo no primeiro job. (Task 1 bootstrap; Task 4 runbook.)
-- `LINX_SECRETS_ENV` vazar em log se o runner rodar com `set -x` → secret de GitHub nunca sofre `echo`, só pipe para `/dev/stdin`. (Task 3.)
+- `LINX_SECRETS_ENV` vazar em log se o runner rodar com `set -x` → entregar via pipe único para `/dev/stdin` (nunca `echo` solto para o log nem arquivo temporário). (Task 3.)
 - `kubectl wait` expirar porque os workers nunca ficam `Ready` (join falhou) → comando tem `--timeout=120s` e o job falha explicitamente, sem falso verde. (Task 3 + Task 5.)
 - Secret `linx-secrets` ausente ou com placeholder `change-me` → pods em CrashLoopBackOff. (Task 3 cria o Secret antes do apply; Task 5 valida chaves reais.)
 - Nome de bucket colidir (já em uso global) → bootstrap ajusta para nome único antes de qualquer commit. (Task 1.)
