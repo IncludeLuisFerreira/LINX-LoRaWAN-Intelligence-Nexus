@@ -71,25 +71,6 @@ export const Cpu = (p: IconProps) => (
   </Base>
 );
 
-export const Search = (p: IconProps) => (
-  <Base {...p}>
-    <circle cx="11" cy="11" r="7" />
-    <path d="m21 21-4.3-4.3" />
-  </Base>
-);
-
-export const Refresh = (p: IconProps) => (
-  <Base {...p}>
-    <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
-  </Base>
-);
-
-export const Close = (p: IconProps) => (
-  <Base {...p}>
-    <path d="M18 6 6 18M6 6l12 12" />
-  </Base>
-);
-
 export const Device = (p: IconProps) => (
   <Base {...p}>
     <rect x="5" y="5" width="14" height="14" rx="2" />
