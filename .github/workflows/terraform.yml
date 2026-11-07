@@ -11,14 +11,13 @@ on:
       - main
 
 permissions:
-  id-token: write
   contents: read
   pull-requests: write
 
 jobs:
-  # -------------------------------------------------------------
-  # JOB 1: Roda em PRs e Commits para validar e planejar
-  # -------------------------------------------------------------
+  # Valida e planeja em PRs e commits para develop/main.
+  # Apply não roda no CI: sem state remoto, os recursos criados no
+  # runner ficariam órfãos. Execute o apply localmente.
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
@@ -30,9 +29,6 @@ jobs:
     env:
       AWS_REGION: "us-east-1"
       TF_VAR_key_name: ${{ vars.TF_VAR_KEY_NAME }}
-
-    outputs:
-      plan-outcome: ${{ steps.plan.outcome }}
 
     steps:
       - name: Checkout Código
@@ -94,45 +90,3 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-  # -------------------------------------------------------------
-  # JOB 2: Executa o APPLY - Bloqueado por aprovação manual
-  # -------------------------------------------------------------
-  terraform-apply:
-    name: "Terraform Apply (Aprovação Manual)"
-    needs: terraform-plan
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-
-    # Aprovação manual pelo Environment production
-    environment: production
-
-    defaults:
-      run:
-        working-directory: infra/terraform
-
-    env:
-      AWS_REGION: "us-east-1"
-      TF_VAR_key_name: ${{ vars.TF_VAR_KEY_NAME }}
-
-    steps:
-      - name: Checkout Código
-        uses: actions/checkout@v4
-
-      - name: Configurar Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.9.0"
-
-      - name: Configurar Credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        run: terraform init
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false
