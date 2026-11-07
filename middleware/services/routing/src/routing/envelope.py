@@ -1,4 +1,5 @@
 from typing import Any
+from uuid import uuid4
 
 from routing.validation import ValidUplink
 
@@ -9,6 +10,7 @@ def routing_key(app_id: str, dev_eui: str, event_type: str) -> str:
 
 def build_envelope(uplink: ValidUplink) -> dict[str, Any]:
     envelope: dict[str, Any] = {
+        "envelope_id": str(uuid4()),
         "app_id": uplink.app_id,
         "dev_eui": uplink.dev_eui,
         "event_type": uplink.event_type,
