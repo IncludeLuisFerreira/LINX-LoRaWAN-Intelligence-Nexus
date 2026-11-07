@@ -1,0 +1,23 @@
+name: Publish Agent Bridge Image
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - "linx_core/services/agent_bridge/**"
+      - "linx_core/shared/**"
+      - ".github/workflows/publish-agent-bridge-image.yml"
+      - ".github/workflows/publish-linx-core-image.yml"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    uses: ./.github/workflows/publish-linx-core-image.yml
+    with:
+      service: agent_bridge
+      dockerfile: services/agent_bridge/Dockerfile
+      repository: includeluisferreira/agent-bridge
+      context: linx_core
+    secrets: inherit
