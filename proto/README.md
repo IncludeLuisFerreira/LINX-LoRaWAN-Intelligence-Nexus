@@ -63,6 +63,7 @@ A geração dos stubs Python é feita na issue #20.
 | `rssi`      | int32                    | 4 | RSSI (INT no schema)                       |
 | `snr`       | double                   | 5 | SNR (FLOAT/float8 no schema)               |
 | `f_cnt`     | uint32                   | 6 | Frame counter (opcional, ordenação/dedup)  |
+| `event_id`  | string                   | 7 | UUIDv4 único do evento                     |
 
 ### `Rule`
 
@@ -76,11 +77,12 @@ A geração dos stubs Python é feita na issue #20.
 
 ### `Violation`
 
-| Campo     | Tipo   | # | Descrição                            |
-| --------- | ------ | - | ------------------------------------ |
-| `rule_id` | string | 1 | Regra violada                        |
-| `dev_eui` | string | 2 | Dispositivo que disparou a violação  |
-| `message` | string | 3 | Descrição da violação                |
+| Campo          | Tipo   | # | Descrição                           |
+| -------------- | ------ | - | ----------------------------------- |
+| `rule_id`      | string | 1 | Regra violada                       |
+| `dev_eui`      | string | 2 | Dispositivo que disparou a violação |
+| `message`      | string | 3 | Descrição da violação               |
+| `violation_id` | string | 4 | UUIDv4 único da violação            |
 
 ### `Ack`
 
