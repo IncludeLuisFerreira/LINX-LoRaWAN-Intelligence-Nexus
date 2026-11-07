@@ -49,15 +49,17 @@
   publish-identity-api-image.yml     # caller com paths do identity-api
   publish-agent-bridge-image.yml     # caller com paths do agent-bridge
 infra/kubernetes/
-  identity-api.yaml                  # imagem DH, envFrom, initContainers, probes
-  agent-bridge.yaml                  # imagem DH, envFrom, initContainer
-  postgres.yaml                      # Recreate + liveness
   linx-secrets.example.env           # chaves e host corretos
-  kustomization.yaml                 # base
   README.md                          # runbook
-infra/kubernetes/overlays/
-  dockerhub/kustomization.yaml       # overlay explícito
-  ecr/kustomization.yaml             # exemplo editável
+  kustomization.yaml                 # raiz: aponta para base/
+  base/
+    identity-api.yaml                # imagem DH, envFrom, initContainers, probes
+    agent-bridge.yaml                # imagem DH, envFrom, initContainer
+    postgres.yaml                    # Recreate + liveness
+    kustomization.yaml               # base
+  overlays/
+    dockerhub/kustomization.yaml     # overlay explícito
+    ecr/kustomization.yaml           # exemplo editável
 linx_core/shared/src/linx_shared/db/
   wait.py                            # espera/valida DATABASE_URL
   migration_lock.py                  # advisory lock do Alembic
@@ -448,7 +450,7 @@ git commit -m "feat(k8s): imagens do docker hub, initContainers de banco e probe
 - Create: `infra/kubernetes/overlays/ecr/kustomization.yaml`
 
 **Interfaces:**
-- Consumes: base `infra/kubernetes`.
+- Consumes: base `infra/kubernetes/base`.
 - Produces: `kubectl apply -k infra/kubernetes/overlays/dockerhub` como comando
   explícito do laboratório.
 - Produces: exemplo editável de ECR/registry privado.
