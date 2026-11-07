@@ -426,7 +426,8 @@ Resposta esperada (`200`):
 | `GRPC_PORT`          | Porta do `agent_bridge`.                                         | `50051`                         |
 | `CHIRPSTACK_HOST`    | Endereço gRPC do ChirpStack.                                     | `localhost:8080`                |
 | `CHIRPSTACK_API_TOKEN` | Token Bearer de acesso à API do ChirpStack.                    | *(obrigatório)*                 |
-| `CHIRPSTACK_DEVICE_PROFILE_ID` | UUID do Device Profile usado ao provisionar devices.  | *(vazio)*                       |
+| `CHIRPSTACK_USE_TLS` | Exige TLS na conexão gRPC com o ChirpStack (falha em produção se `false`). | `true`             |
+| `CHIRPSTACK_CA_CERT` | CA usada para validar o certificado do ChirpStack.              | *(vazio)*                       |
 | `SERVICE_TOKEN`      | Token do plano de controle e da chamada gRPC (mín. 32 chars).    | *(obrigatório)*                 |
 | `DOCKER_GID`         | GID do grupo dono de `/var/run/docker.sock`.                     | `990`                           |
 | `RABBITMQ_ADMIN_USER` | Usuário admin do broker (Compose).                              | `linx`                          |
