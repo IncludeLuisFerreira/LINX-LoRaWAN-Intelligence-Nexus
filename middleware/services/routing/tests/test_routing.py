@@ -157,6 +157,28 @@ def test_stop_does_not_close_publisher_when_thread_alive():
     service.publisher.close.assert_not_called()
 
 
+def test_join_timeout_covers_jittered_exponential_backoff(monkeypatch):
+    from routing import routing as routing_module
+
+    monkeypatch.setattr(
+        routing_module.settings, "rabbit_connect_max_attempts", 5
+    )
+    monkeypatch.setattr(
+        routing_module.settings, "rabbit_connect_backoff_seconds", 1.0
+    )
+    monkeypatch.setattr(
+        routing_module.settings, "rabbit_connect_backoff_max_seconds", 30.0
+    )
+
+    service = IngestService()
+    try:
+        assert service._join_timeout == 20.0
+        assert service.publisher._backoff_max_seconds == 30.0
+        assert service.consumer.connect_backoff_max_seconds == 30.0
+    finally:
+        service.publisher.close()
+
+
 def test_wiring_builds_queue_consumer_and_publisher():
     service = IngestService()
     try:

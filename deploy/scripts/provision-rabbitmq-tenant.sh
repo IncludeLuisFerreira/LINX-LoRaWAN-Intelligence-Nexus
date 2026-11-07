@@ -47,5 +47,6 @@ curl -fsS -u "${ADMIN_USER}:${ADMIN_PASSWORD}" \
   -H 'content-type: application/json' \
   -d "{\"configure\": \"${REGEX}\", \"write\": \"${REGEX}\", \"read\": \"${REGEX}\"}"
 
-echo "OK. RABBIT_URL do tenant:"
-echo "amqp://${USER}:${PASSWORD}@<amqp-host>/${ENCODED_VHOST}"
+echo "OK. Usuário ${USER} provisionado no vhost ${VHOST}."
+echo "RABBIT_URL (senha omitida; derive com linx_shared.core.rabbitmq):"
+echo "amqp://${USER}:<password>@<amqp-host>/${ENCODED_VHOST}"

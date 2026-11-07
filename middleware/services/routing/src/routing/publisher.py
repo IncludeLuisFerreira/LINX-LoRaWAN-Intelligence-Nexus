@@ -5,6 +5,8 @@ from typing import Any
 
 import rabbitpy
 
+from routing.backoff import retry_delay
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,12 +25,14 @@ class RabbitPublisher:
         exchange_prefix: str,
         connect_max_attempts: int = 5,
         backoff_seconds: float = 1.0,
+        backoff_max_seconds: float = 30.0,
         audit_queue: str | None = None,
     ) -> None:
         self._url = url
         self._exchange_prefix = exchange_prefix
         self._connect_max_attempts = connect_max_attempts
         self._backoff_seconds = backoff_seconds
+        self._backoff_max_seconds = backoff_max_seconds
         self._audit_queue_name = audit_queue
         self._connection: Any = None
         self._channel: Any = None
@@ -107,7 +111,13 @@ class RabbitPublisher:
                 )
                 self.close()
                 if attempt < self._connect_max_attempts:
-                    time.sleep(self._backoff_seconds)
+                    time.sleep(
+                        retry_delay(
+                            attempt,
+                            self._backoff_seconds,
+                            self._backoff_max_seconds,
+                        )
+                    )
 
         logger.error(
             "não foi possível conectar ao RabbitMQ após %d tentativas",
@@ -148,7 +158,13 @@ class RabbitPublisher:
                 )
             self.close()
             if attempt < self._connect_max_attempts:
-                time.sleep(self._backoff_seconds)
+                time.sleep(
+                    retry_delay(
+                        attempt,
+                        self._backoff_seconds,
+                        self._backoff_max_seconds,
+                    )
+                )
 
         logger.error(
             "não foi possível publicar na rota %r após %d tentativas; "
