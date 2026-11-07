@@ -240,9 +240,12 @@ Expected: PASS.
 Run: `cd client/services/telemetry_consumer && python -m pytest tests/ -v`
 Expected: PASS (campo aditivo não quebra consumidor).
 
-- [ ] **Step 5: Comentar na issue #258**
+- [ ] **Step 5: Padronizar UUIDv4 nos payloads gRPC**
 
-Registrar que o interceptor gRPC da #258 deve injetar também `x-request-id: <uuid4>` na metadata, cobrindo o requisito de UUIDv4 nos payloads gRPC sem alterar os `.proto`.
+Adicionar `event_id` (UUIDv4) a `TelemetryEvent` e `violation_id` (UUIDv4) a
+`Violation` em `proto/linx_agent.proto`, regenerar os stubs com
+`bash scripts/gen_proto.sh` e documentar os campos em `proto/README.md`.
+Coberto por teste de round-trip em `linx_core/shared/tests/test_grpc_contract.py`.
 
 - [ ] **Step 6: Commit** (aguardando autorização)
 

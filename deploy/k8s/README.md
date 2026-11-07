@@ -70,10 +70,12 @@ espera, direto no containerd do nó:
 # k3d local
 # Não use `k3d image import`: o modo padrão sofre race (k3d#1484) e o
 # --mode=direct pode travar em deadlock no k3d v5.9.0. Importe direto no
-# containerd do nó do cluster:
-SERVER_NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-docker save includeluisferreira/identity-api:dev includeluisferreira/agent-bridge:dev \
-  | docker exec -i "$SERVER_NODE" ctr -n k8s.io images import -
+# containerd de TODOS os nós (senão pods agendados nos demais nós ficam em
+# ImagePullBackOff):
+for node in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do
+  docker save includeluisferreira/identity-api:dev includeluisferreira/agent-bridge:dev \
+    | docker exec -i "$node" ctr -n k8s.io images import -
+done
 ```
 
 ```bash
@@ -81,6 +83,9 @@ docker save includeluisferreira/identity-api:dev includeluisferreira/agent-bridg
 docker save includeluisferreira/identity-api:dev includeluisferreira/agent-bridge:dev \
   | ssh <host> 'sudo k3s ctr images import -'
 ```
+
+No k3s single-node a importação cai no único nó; em clusters multi-node, use o
+loop acima.
 
 Como a base usa `imagePullPolicy: Always`, o kubelet ainda tentaria o registry.
 Depois do import, troque a política para `IfNotPresent` **apenas neste ambiente**
@@ -197,6 +202,11 @@ Caminho padrão (Docker Hub):
 ```bash
 kubectl apply -k deploy/k8s
 ```
+
+> `kubectl apply -f deploy/k8s/` **não funciona**: o diretório contém um
+> `kustomization.yaml`, que o `apply -f` tenta interpretar como recurso e
+> falha. Use sempre `kubectl apply -k` para este diretório. (O critério de
+> aceite da issue #257 menciona `-f`; interprete-o como `-k`.)
 
 O overlay `dockerhub` apenas referencia a mesma base e serve como comando
 explícito para o laboratório:
@@ -362,8 +372,8 @@ não execute isto contra um cluster compartilhado ou com dados reais.
 
 ```bash
 # 1. Remove os recursos do namespace e o namespace em si
+#    (kubectl delete -k deploy/k8s já remove o namespace via namespace.yaml)
 kubectl delete -k deploy/k8s
-kubectl delete namespace linx
 
 # 2. Remove o Secret local (nunca foi versionado; está no .gitignore)
 rm -f deploy/k8s/linx-secrets.env
@@ -408,3 +418,6 @@ offline.
   Dados de produção não pertencem aqui.
 - RabbitMQ no cluster é pendência; `RABBITMQ_AMQP_HOST`/`RABBITMQ_MANAGEMENT_URL`
   no ConfigMap são informativos e não bloqueiam os pods desta issue.
+- ChirpStack não existe neste cluster; `CHIRPSTACK_HOST: localhost:8080` aponta
+  para o próprio pod. Operações de tenant/application/device que chamam o
+  ChirpStack vão falhar até que `CHIRPSTACK_HOST` aponte para um host real.

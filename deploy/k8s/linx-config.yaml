@@ -13,4 +13,6 @@ data:
   # tenant, não no startup).
   RABBITMQ_AMQP_HOST: "rabbitmq.linx.svc.cluster.local:5672"
   RABBITMQ_MANAGEMENT_URL: "http://rabbitmq.linx.svc.cluster.local:15672"
+  # ChirpStack não está no cluster; "localhost:8080" aponta para o próprio pod.
+  # Ajuste para um host real antes de usar tenant/application/device no cluster.
   CHIRPSTACK_HOST: "localhost:8080"
