@@ -346,6 +346,15 @@ sed -i \
   docs/superpowers/plans/2026-11-06-k8s-service-discovery.md \
   docs/superpowers/plans/2026-11-07-k8s-dockerhub-images.md \
   docs/superpowers/specs/2026-11-07-k8s-dockerhub-images-design.md
+
+sed -i -E \
+  's#infra/kubernetes/(namespace|postgres|linx-config|agent-bridge|identity-api|kustomization)\.yaml#infra/kubernetes/base/\1.yaml#g' \
+  docs/superpowers/plans/2026-11-06-k8s-service-discovery.md \
+  docs/superpowers/plans/2026-11-07-k8s-dockerhub-images.md \
+  docs/superpowers/specs/2026-11-07-k8s-dockerhub-images-design.md
+
+sed -i 's|\.\./\.\./k8s|../../base|g' \
+  docs/superpowers/plans/2026-11-07-k8s-dockerhub-images.md
 ```
 
 - [ ] **Step 2: Varredura global de caminhos antigos**
@@ -372,8 +381,9 @@ Expected: sem saída.
 - [ ] **Step 4: Revalidar tudo**
 
 ```bash
-kubectl kustomize infra/kubernetes >/tmp/k8s-base-final.yaml
-grep -c '^kind:' /tmp/k8s-base-final.yaml
+kubectl kustomize infra/kubernetes >/tmp/opencode/k8s-base-final.yaml
+grep -c '^kind:' /tmp/opencode/k8s-base-final.yaml
+kubectl kustomize infra/kubernetes/base >/dev/null
 kubectl kustomize infra/kubernetes/overlays/dockerhub >/dev/null
 kubectl kustomize infra/kubernetes/overlays/ecr >/dev/null
 terraform -chdir=infra/terraform fmt -check
