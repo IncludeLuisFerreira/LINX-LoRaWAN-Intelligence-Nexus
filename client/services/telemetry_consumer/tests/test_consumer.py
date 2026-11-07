@@ -2,6 +2,8 @@ import asyncio
 import json
 import threading
 
+import pytest
+
 import telemetry_consumer.consumer as consumer_module
 from telemetry_consumer.config import ConsumerSettings
 from telemetry_consumer.consumer import RabbitConsumer
@@ -100,6 +102,30 @@ def test_retry_count_is_initial_plus_max_retries():
     consumer = RabbitConsumer(settings, None, _fail, channel=FakeChannel())
     consumer._handle_message(FakeMessage(json.dumps(VALID_ENVELOPE).encode()))
     assert calls["n"] == 3
+
+
+def test_retry_backoff_uses_jittered_exponential_delay(monkeypatch):
+    delays = []
+    monkeypatch.setattr(consumer_module.time, "sleep", delays.append)
+    monkeypatch.setattr(
+        consumer_module.random, "uniform", lambda low, high: high
+    )
+
+    async def _fail(envelope):
+        raise RuntimeError("db down")
+
+    settings = ConsumerSettings(
+        app_id="app-1",
+        consumer_max_retries=2,
+        consumer_retry_backoff_seconds=1.0,
+        consumer_retry_backoff_max_seconds=8.0,
+    )
+    consumer = RabbitConsumer(settings, None, _fail, channel=FakeChannel())
+
+    with pytest.raises(RuntimeError):
+        consumer._process_with_retry(VALID_ENVELOPE)
+
+    assert delays == [1.0, 2.0]
 
 
 def test_invalid_json_goes_to_dlq_and_acks():

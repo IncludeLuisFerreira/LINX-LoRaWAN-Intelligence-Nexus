@@ -20,11 +20,6 @@ def tenant_user(app_id: str) -> str:
     return f"tenant.{app_id}"
 
 
-def namespace_prefix(app_id: str) -> str:
-    """Prefixo do namespace da aplicação no broker."""
-    return f"{NAMESPACE_PREFIX}.{app_id}"
-
-
 def tenant_namespace_regex(app_id: str) -> str:
     """Regex de permissão casando apenas o namespace da aplicação.
 

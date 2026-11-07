@@ -15,5 +15,9 @@ SELECT create_hypertable('telemetry', 'time', if_not_exists => TRUE);
 CREATE INDEX IF NOT EXISTS telemetry_dev_eui_time_idx
     ON telemetry (dev_eui, time DESC);
 
+-- Filtro dominante da leitura REST/WS: WHERE app_id = $2 ORDER BY time DESC.
+CREATE INDEX IF NOT EXISTS telemetry_app_id_time_idx
+    ON telemetry (app_id, time DESC);
+
 CREATE UNIQUE INDEX IF NOT EXISTS telemetry_dedup_idx
     ON telemetry (app_id, dev_eui, time, event_type);

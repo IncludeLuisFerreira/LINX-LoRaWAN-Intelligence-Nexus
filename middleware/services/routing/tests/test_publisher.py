@@ -134,6 +134,34 @@ def test_connect_retries_then_succeeds(monkeypatch, fake_rabbit):
     assert attempts["n"] == 3
 
 
+def test_connect_uses_jittered_exponential_backoff(monkeypatch, fake_rabbit):
+    delays = []
+    monkeypatch.setattr("routing.publisher.time.sleep", delays.append)
+    monkeypatch.setattr(
+        "routing.backoff.random.uniform", lambda low, high: high
+    )
+    real_connection = fake_rabbit.Connection
+    attempts = {"n": 0}
+
+    def flaky(url):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise OSError("offline")
+        return real_connection(url)
+
+    fake_rabbit.Connection = flaky
+    pub = RabbitPublisher(
+        "amqp://h",
+        "linx.telemetry",
+        connect_max_attempts=3,
+        backoff_seconds=1.0,
+        backoff_max_seconds=8.0,
+    )
+
+    assert pub.connect() is True
+    assert delays == [1.0, 2.0]
+
+
 def test_connect_gives_up_and_returns_false(monkeypatch, fake_rabbit, caplog):
     monkeypatch.setattr("routing.publisher.time.sleep", lambda *_: None)
     fake_rabbit.Connection = MagicMock(side_effect=OSError("offline"))
