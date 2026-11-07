@@ -20,4 +20,6 @@ jobs:
       dockerfile: services/agent_bridge/Dockerfile
       repository: includeluisferreira/agent-bridge
       context: linx_core
-    secrets: inherit
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
