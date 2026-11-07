@@ -1,7 +1,7 @@
 import logging
 
 import grpc
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from linx_shared.clients.docker_provisioner import (
     DockerProvisionerClient,
     ProvisionerClientError,
@@ -23,6 +23,7 @@ from linx_shared.schemas.application import (
     ApplicationResponse,
     ApplicationUpdate,
 )
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -165,7 +166,12 @@ def create_application(
     status_code=status.HTTP_200_OK,
     response_model=list[ApplicationResponse],
 )
-def list_applications(tenant_id: UUID4, db: Session = Depends(get_db)):
+def list_applications(
+    tenant_id: UUID4,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
     tenant = db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(
@@ -173,9 +179,13 @@ def list_applications(tenant_id: UUID4, db: Session = Depends(get_db)):
             detail="Tenant not found!",
         )
 
-    applications = (
-        db.query(Application).filter(Application.tenant_id == tenant_id).all()
-    )
+    applications = db.scalars(
+        select(Application)
+        .filter(Application.tenant_id == tenant_id)
+        .order_by(Application.created_at, Application.id)
+        .offset(skip)
+        .limit(limit)
+    ).all()
     return applications
 
 

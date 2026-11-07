@@ -196,6 +196,25 @@ def test_start_retries_connect_until_success(monkeypatch):
     fake_client.loop_forever.assert_called_once()
 
 
+def test_connect_uses_jittered_exponential_backoff(monkeypatch):
+    delays = []
+    monkeypatch.setattr("routing.consumer.time.sleep", delays.append)
+    monkeypatch.setattr(
+        "routing.backoff.random.uniform", lambda low, high: high
+    )
+    consumer, _ = _consumer(
+        connect_max_attempts=3, connect_backoff_seconds=1.0
+    )
+    consumer.client.connect.side_effect = [
+        OSError("offline"),
+        OSError("offline"),
+        None,
+    ]
+
+    assert consumer._connect() is True
+    assert delays == [1.0, 2.0]
+
+
 def test_start_gives_up_after_max_connect_attempts(monkeypatch, caplog):
     monkeypatch.setattr("routing.consumer.time.sleep", lambda *_: None)
     consumer, _ = _consumer(connect_max_attempts=3)

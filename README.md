@@ -61,7 +61,7 @@ npm install
 npm run dev
 ```
 
-> ChirpStack UI em `http://localhost:8080` (`admin`/`admin`). REST do core em `http://localhost:8000` (`/docs`). Dashboard em `http://localhost:5173`.
+> ChirpStack UI em `http://localhost:8080` (`admin`/`admin` — **troque a senha no primeiro acesso**). REST do core em `http://localhost:8000` (`/docs`). Dashboard em `http://localhost:5173`.
 
 ## Stacks (Makefile)
 
