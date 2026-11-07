@@ -24,7 +24,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 # Serializa plan (PR/push) e apply/destroy (manual): uma execução por vez,
 # sem cancelar a anterior, para proteger o state remoto do Terraform.
@@ -38,6 +37,10 @@ jobs:
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
 
     defaults:
       run:
@@ -140,16 +143,17 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
         run: terraform init
 
       - name: Terraform Apply ou Destroy
+        env:
+          TF_VAR_key_name: ${{ github.event.inputs.key_name }}
         run: |
           terraform ${{ github.event.inputs.action }} \
-            -var="key_name=${{ github.event.inputs.key_name }}" \
-            -auto-approve
+            -input=false -no-color -auto-approve
 
       # A partir daqui, apenas no apply: no destroy a instância master é
       # removida pelo próprio Terraform, não há destino para SSH/deploy.
@@ -165,9 +169,15 @@ jobs:
           MASTER_IP=$(terraform output -raw master_public_ip)
           echo "MASTER_IP=${MASTER_IP}" >> $GITHUB_ENV
 
+      # Na primeira inicialização o sshd pode demorar a subir logo após o
+      # apply; retry limitado para popular o known_hosts antes do primeiro ssh.
       - name: Registrar host key do master
         if: ${{ github.event.inputs.action == 'apply' }}
-        run: ssh-keyscan -H $MASTER_IP >> ~/.ssh/known_hosts
+        run: |
+          for i in $(seq 1 30); do
+            ssh-keyscan -H "$MASTER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 5
+          done
 
       # Readiness sem retry cego: falha se o cloud-init não concluir ou os
       # nós não ficarem Ready dentro do timeout.
