@@ -16,7 +16,7 @@ A conectividade LoRaWAN é provida pela rede de Gateways operada pela própria s
 - `linx_core/` — Microsserviços do plano de controle: `shared/` (biblioteca comum `linx_shared`) e `services/` com `identity_api/` (REST) e `agent_bridge/` (gRPC); integra com ChirpStack/MQTT e orquestra o provisionamento.
 - `middleware/` — Camada de middleware: `services/routing/` roteia uplinks MQTT do ChirpStack para a exchange RabbitMQ do tenant; `services/client_agent/` é o agente por tenant (health + cliente gRPC ao Linx Core). A validação de credenciais do plano de controle fica no `identity_api` (`linx_core/`).
 - `client/` — Ambiente isolado do cliente: dashboard (`frontend/`), consumidor de telemetria (`services/telemetry_consumer/`) e TimescaleDB (`db/`).
-- `infra/` — Stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL).
+- `infra/` — Infraestrutura base: stack ChirpStack v4 dockerizada (Network Server, Gateway Bridge, MQTT, PostgreSQL), manifests Kubernetes em `kubernetes/` e cluster K3s em Terraform em `terraform/`.
 - `proto/` — Contrato gRPC compartilhado (`linx_agent.proto`) entre Linx Core e Client Agent.
 
 > Documentação completa do produto: [`PRD_PLATAFORMA_IOT.md`](PRD_PLATAFORMA_IOT.md)
@@ -40,10 +40,12 @@ LINX/
 │   ├── frontend/           #   Dashboard web (React + Vite + TailwindCSS)
 │   ├── services/           #   telemetry_consumer (ingestão AMQP + REST/WS)
 │   └── db/                 #   Schema TimescaleDB
-├── infra/                  # ChirpStack v4 + MQTT + PostgreSQL (Docker Compose)
+├── infra/                  # Infraestrutura base (Compose, Kubernetes e Terraform)
 │   ├── docker-compose.yml         # Stack completa ChirpStack v4
 │   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
-│   └── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
+│   ├── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
+│   ├── kubernetes/         # Manifestos K8s (kustomize) e overlays
+│   └── terraform/          # Cluster K3s na AWS Sandbox
 ├── proto/                  # Contrato gRPC compartilhado (AgentBridge)
 │   └── linx_agent.proto    # service AgentBridge (proto3)
 ├── deploy/                 # Stack full-stack (nginx + TLS + todos os serviços) + schema
