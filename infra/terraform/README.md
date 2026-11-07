@@ -62,10 +62,10 @@ default `vockey`). Pela CLI:
 
 ```bash
 # apply: cria/atualiza a infraestrutura e faz o deploy dos manifests
-gh workflow run terraform.yml -f action=apply -f key_name=vockey
+gh workflow run terraform.yml --ref develop -f action=apply -f key_name=vockey
 
 # destroy: remove a infraestrutura provisionada pelo Terraform
-gh workflow run terraform.yml -f action=destroy -f key_name=vockey
+gh workflow run terraform.yml --ref develop -f action=destroy -f key_name=vockey
 ```
 
 O que esperar de cada ação:
@@ -90,8 +90,8 @@ Configuração em **Settings → Secrets and variables → Actions**:
 - **Variável de repositório** (aba *Variables*, **não** é secret):
   `TF_VAR_KEY_NAME` com o nome da EC2 Key Pair (ex.: `vockey`). O job
   `terraform-plan` a injeta como `TF_VAR_key_name`; como `variable "key_name"`
-  não tem `default` no `main.tf`, sem essa variável o plan fica vermelho em
-  push/PR (key pair com nome vazio).
+  não tem `default` no `main.tf`, sem essa variável o plan falha em push/PR com
+  o erro `No value for required variable` (variável `key_name` sem default).
 
 ## Deploy dos manifests
 
@@ -111,6 +111,10 @@ Depois do `terraform apply`, o job `orchestration` executa:
    `kubectl apply -f -` dentro do master. O efeito é o mesmo de rodar
    `kubectl apply -k infra/kubernetes` na máquina master (fluxo local
    documentado em [`infra/kubernetes/README.md`](../kubernetes/README.md)).
+
+As imagens referenciadas são as tags `:dev` do Docker Hub (base
+`infra/kubernetes`) — informação útil ao depurar `ImagePullBackOff` (tag
+inexistente ou registry inacessível).
 
 O Secret `linx-secrets` é o mesmo conjunto de chaves de
 `infra/kubernetes/linx-secrets.example.env`. Alterou uma credencial? Atualize o
@@ -144,6 +148,10 @@ Valide o `/health` do `identity-api` com `port-forward` **no master** (a API nã
 kubectl -n linx port-forward svc/identity-api 8000:8000 &
 curl -s http://localhost:8000/health   # {"status":"ok","db":true}
 ```
+
+Saudável: `{"status":"ok","db":true}`. Degradada —
+`{"status":"degraded","db":false}` — indica problema no Secret `linx-secrets`
+ou no acesso ao banco.
 
 `kubectl port-forward` também pode ser aberto a partir da sua máquina com um
 túnel SSH, útil quando você não quer manter sessão interativa no master:
