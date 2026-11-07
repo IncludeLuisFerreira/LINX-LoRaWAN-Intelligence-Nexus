@@ -26,7 +26,12 @@ docker build -t linx/agent-bridge:dev  -f linx_core/services/agent_bridge/Docker
 - **k3d local:**
 
   ```bash
-  k3d image import -c linx linx/identity-api:dev linx/agent-bridge:dev
+  # Não use `k3d image import`: o modo padrão sofre race (k3d#1484) e o
+  # --mode=direct pode travar em deadlock no k3d v5.9.0. Importe direto no
+  # containerd do nó do cluster:
+  SERVER_NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+  docker save linx/identity-api:dev linx/agent-bridge:dev \
+    | docker exec -i "$SERVER_NODE" ctr -n k8s.io images import -
   ```
 
 - **sandbox AWS (sem registry no Learner Lab):**
