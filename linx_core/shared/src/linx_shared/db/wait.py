@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 
@@ -31,7 +32,7 @@ def _validate_url(database_url: str) -> str:
         )
     try:
         make_url(candidate).get_dialect()
-    except (ArgumentError, NoSuchModuleError) as exc:
+    except (ArgumentError, NoSuchModuleError, ValueError) as exc:
         raise DatabaseNotReadyError(
             f"DATABASE_URL is not a valid SQLAlchemy URL: {exc}"
         ) from exc
@@ -57,7 +58,7 @@ def wait_for_db(
     *,
     timeout_seconds: float = 60.0,
     interval_seconds: float = 2.0,
-    connect_timeout: int = 2,
+    connect_timeout: int | None = None,
 ) -> None:
     """Aguarda o banco aceitar conexões, útil em initContainers.
 
@@ -65,6 +66,19 @@ def wait_for_db(
     valor é validado e usado como veio. Levanta ``DatabaseNotReadyError``
     quando a URL é inválida ou o timeout expira sem sucesso.
     """
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise DatabaseNotReadyError(
+            "timeout_seconds must be a finite number greater than 0, got "
+            f"{timeout_seconds!r}"
+        )
+    if not math.isfinite(interval_seconds) or interval_seconds < 0:
+        raise DatabaseNotReadyError(
+            "interval_seconds must be a finite number greater than or equal "
+            f"to 0, got {interval_seconds!r}"
+        )
+    if connect_timeout is None:
+        connect_timeout = settings.db_connect_timeout
+
     raw_url = settings.database_url if database_url is None else database_url
     url = _validate_url(raw_url)
     deadline = time.monotonic() + timeout_seconds
@@ -105,12 +119,18 @@ def _timeout_from_env(default: float = 300.0) -> float:
     if raw is None or raw == "":
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError as exc:
         raise DatabaseNotReadyError(
             "WAIT_DB_TIMEOUT_SECONDS must be a number of seconds, got "
             f"{raw!r}"
         ) from exc
+    if not math.isfinite(value) or value <= 0:
+        raise DatabaseNotReadyError(
+            "WAIT_DB_TIMEOUT_SECONDS must be a finite number of seconds "
+            f"greater than 0, got {raw!r}"
+        )
+    return value
 
 
 if __name__ == "__main__":
