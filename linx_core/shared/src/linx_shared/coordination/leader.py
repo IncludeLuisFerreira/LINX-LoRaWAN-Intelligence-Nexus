@@ -14,14 +14,21 @@ import json
 import logging
 import os
 import ssl
+import threading
 import urllib.error
 import urllib.request
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 LEASE_API_VERSION = "coordination.k8s.io/v1"
+
+DEFAULT_LEASE_DURATION_SECONDS = 15
+DEFAULT_RENEW_DEADLINE_SECONDS = 10
+DEFAULT_RETRY_PERIOD_SECONDS = 2.0
 
 _SERVICE_ACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
 
@@ -185,3 +192,182 @@ class InClusterLeaseClient:
         if result is None:  # inalcançável: 404 em PUT vira exceção
             raise LeaderElectionError("replace retornou resposta vazia")
         return result
+
+
+class K8sLeaderElector:
+    """Disputa um ``Lease`` do Kubernetes e sinaliza liderança.
+
+    A réplica que detém o ``Lease`` (e consegue renová-lo) é a líder. As
+    demais tentam adquirir quando o ``Lease`` expira. A liderança é exposta
+    pelos callbacks ``on_started_leading``/``on_stopped_leading``; o parâmetro
+    ``clock`` (injável) existe para testes determinísticos.
+    """
+
+    def __init__(
+        self,
+        *,
+        client: LeaseClient,
+        identity: str,
+        namespace: str = "linx",
+        lease_name: str = "jobs-worker",
+        lease_duration_seconds: int = DEFAULT_LEASE_DURATION_SECONDS,
+        renew_deadline_seconds: int = DEFAULT_RENEW_DEADLINE_SECONDS,
+        retry_period_seconds: float = DEFAULT_RETRY_PERIOD_SECONDS,
+        clock: Callable[[], datetime] | None = None,
+        on_started_leading: Callable[[], None] | None = None,
+        on_stopped_leading: Callable[[], None] | None = None,
+    ) -> None:
+        self._client = client
+        self._identity = identity
+        self._namespace = namespace
+        self._lease_name = lease_name
+        self._lease_duration_seconds = lease_duration_seconds
+        self._renew_deadline_seconds = renew_deadline_seconds
+        self._retry_period_seconds = retry_period_seconds
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._on_started_leading = on_started_leading
+        self._on_stopped_leading = on_stopped_leading
+
+    def _now(self) -> datetime:
+        return self._clock()
+
+    def _now_iso(self) -> str:
+        return self._now().isoformat(timespec="microseconds")
+
+    @staticmethod
+    def _lease_renew_time(lease: dict[str, Any]) -> datetime:
+        return datetime.fromisoformat(lease["spec"]["renewTime"])
+
+    def _is_expired(self, lease: dict[str, Any]) -> bool:
+        renew = self._lease_renew_time(lease)
+        limit = renew + timedelta(seconds=self._lease_duration_seconds)
+        return limit <= self._now()
+
+    def _lease_body(
+        self,
+        *,
+        renew_time: str,
+        acquire_time: str,
+        resource_version: str | None = None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "name": self._lease_name,
+            "namespace": self._namespace,
+        }
+        if resource_version is not None:
+            metadata["resourceVersion"] = resource_version
+        return {
+            "apiVersion": LEASE_API_VERSION,
+            "kind": "Lease",
+            "metadata": metadata,
+            "spec": {
+                "holderIdentity": self._identity,
+                "leaseDurationSeconds": self._lease_duration_seconds,
+                "acquireTime": acquire_time,
+                "renewTime": renew_time,
+            },
+        }
+
+    def _try_acquire(self) -> bool:
+        lease = self._client.get(self._namespace, self._lease_name)
+        now_iso = self._now_iso()
+        if lease is None:
+            try:
+                self._client.create(
+                    self._namespace,
+                    self._lease_name,
+                    self._lease_body(renew_time=now_iso, acquire_time=now_iso),
+                )
+                return True
+            except LeaseConflictError:
+                return False
+        holder = lease.get("spec", {}).get("holderIdentity")
+        if holder == self._identity or self._is_expired(lease):
+            try:
+                self._client.replace(
+                    self._namespace,
+                    self._lease_name,
+                    self._lease_body(
+                        renew_time=now_iso,
+                        acquire_time=(
+                            lease["spec"].get("acquireTime") or now_iso
+                        ),
+                        resource_version=lease["metadata"].get(
+                            "resourceVersion"
+                        ),
+                    ),
+                )
+                return True
+            except (LeaseConflictError, LeaseNotFoundError):
+                return False
+        return False
+
+    def _try_renew(self) -> bool:
+        lease = self._client.get(self._namespace, self._lease_name)
+        if lease is None:
+            return False
+        holder = lease.get("spec", {}).get("holderIdentity")
+        if holder != self._identity:
+            return False
+        try:
+            self._client.replace(
+                self._namespace,
+                self._lease_name,
+                self._lease_body(
+                    renew_time=self._now_iso(),
+                    acquire_time=(
+                        lease["spec"].get("acquireTime") or self._now_iso()
+                    ),
+                    resource_version=lease["metadata"].get("resourceVersion"),
+                ),
+            )
+            logger.info("leader election: renewed")
+            return True
+        except (LeaseConflictError, LeaseNotFoundError):
+            return False
+
+    def run(self, stop_event: threading.Event) -> None:
+        leading = False
+        last_renewed: datetime | None = None
+        while not stop_event.is_set():
+            if not leading:
+                if self._try_acquire():
+                    leading = True
+                    last_renewed = self._now()
+                    logger.info("leader election: acquired")
+                    if self._on_started_leading is not None:
+                        self._on_started_leading()
+                else:
+                    stop_event.wait(self._retry_period_seconds)
+                continue
+
+            while leading and not stop_event.is_set():
+                stop_event.wait(self._retry_period_seconds)
+                if stop_event.is_set():
+                    break
+                if last_renewed is not None and (
+                    self._now() - last_renewed
+                ) >= timedelta(seconds=self._renew_deadline_seconds):
+                    leading = False
+                    self._notify_lost()
+                    break
+                try:
+                    renewed = self._try_renew()
+                except LeaderElectionError:
+                    # API temporariamente indisponível: o deadline acima
+                    # derruba a liderança se ficarmos sem renovar.
+                    logger.warning(
+                        "leader election: falha ao renovar (API indisponível)"
+                    )
+                    continue
+                if renewed:
+                    last_renewed = self._now()
+                else:
+                    leading = False
+                    self._notify_lost()
+                    break
+
+    def _notify_lost(self) -> None:
+        logger.info("leader election: lost")
+        if self._on_stopped_leading is not None:
+            self._on_stopped_leading()
