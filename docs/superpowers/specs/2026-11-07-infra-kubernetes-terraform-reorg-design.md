@@ -1,8 +1,8 @@
 # Reorganização dos módulos Kubernetes e Terraform em `infra/` (design)
 
 **Data:** 2026-11-07
-**Status:** aguardando aprovação
-**Issue:** a definir antes da execução (proposta: nova issue `chore(infra)`; não reutilizar #257, que é service discovery)
+**Status:** implementado
+**Issue:** #272
 
 ## Intenção e por quê
 
@@ -85,7 +85,8 @@ Compose, nginx e scripts que não pertencem a Kubernetes.
 
 | Origem | Destino |
 | --- | --- |
-| `deploy/k8s/*` (6 YAML + README + exemplo de secrets) | `infra/kubernetes/` |
+| `deploy/k8s/` (6 YAML) | `infra/kubernetes/base/` |
+| `deploy/k8s/README.md` e `linx-secrets.example.env` | `infra/kubernetes/` |
 | `deploy/overlays/dockerhub/` | `infra/kubernetes/overlays/dockerhub/` |
 | `deploy/overlays/ecr/` | `infra/kubernetes/overlays/ecr/` |
 | `infra/k3s-aws-sandbox/main.tf` | `infra/terraform/main.tf` |
@@ -101,8 +102,8 @@ Arquivos vivos:
   `infra/kubernetes`, `deploy/overlays` → `infra/kubernetes/overlays`,
   `infra/k3s-aws-sandbox` → `infra/terraform`).
 - `infra/kubernetes/linx-secrets.example.env`: comentários de caminho.
-- `infra/kubernetes/overlays/dockerhub/kustomization.yaml`: `../../k8s` → `../..`.
-- `infra/kubernetes/overlays/ecr/kustomization.yaml`: `../../k8s` → `../..`.
+- `infra/kubernetes/overlays/dockerhub/kustomization.yaml`: `../../k8s` → `../../base`.
+- `infra/kubernetes/overlays/ecr/kustomization.yaml`: `../../k8s` → `../../base`.
 - `docs/estrutura_de_pastas/estrutura.md` e `docs/index.md`: descrever
   `infra/kubernetes` e `infra/terraform` na árvore de pastas.
 

@@ -133,17 +133,19 @@ Manter os arquivos atuais como base para não quebrar `kubectl apply -k infra/ku
 
 ```text
 infra/kubernetes/
-  kustomization.yaml          # base + imagens Docker Hub (padrão)
-  namespace.yaml
-  postgres.yaml
-  linx-config.yaml
-  identity-api.yaml
-  agent-bridge.yaml
+  kustomization.yaml          # raiz: aponta para base/
   linx-secrets.example.env
   README.md
-infra/kubernetes/overlays/
-  dockerhub/kustomization.yaml   # explícito para o laboratório
-  ecr/kustomization.yaml         # exemplo para AWS/empresa
+  base/
+    kustomization.yaml        # base
+    namespace.yaml
+    postgres.yaml
+    linx-config.yaml
+    identity-api.yaml         # imagem Docker Hub, envFrom, probes
+    agent-bridge.yaml         # imagem Docker Hub, envFrom
+  overlays/
+    dockerhub/kustomization.yaml   # explícito para o laboratório
+    ecr/kustomization.yaml         # exemplo para AWS/empresa
 ```
 
 - A base referencia `includeluisferreira/identity-api:dev` e
