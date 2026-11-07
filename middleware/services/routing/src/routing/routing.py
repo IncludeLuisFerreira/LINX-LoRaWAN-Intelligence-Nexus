@@ -6,6 +6,7 @@ import signal
 import sys
 import threading
 
+from routing.backoff import total_backoff_seconds
 from routing.config import settings
 from routing.consumer import MqttConsumer
 from routing.envelope import build_envelope, routing_key
@@ -22,8 +23,11 @@ class IngestService:
         self._stop_event = threading.Event()
         self._publisher_thread: threading.Thread | None = None
         self._join_timeout = (
-            settings.rabbit_connect_max_attempts
-            * settings.rabbit_connect_backoff_seconds
+            total_backoff_seconds(
+                settings.rabbit_connect_max_attempts,
+                settings.rabbit_connect_backoff_seconds,
+                settings.rabbit_connect_backoff_max_seconds,
+            )
             + 5.0
         )
         self.consumer = MqttConsumer(
@@ -38,6 +42,9 @@ class IngestService:
             password=settings.mqtt_password,
             connect_max_attempts=settings.mqtt_connect_max_attempts,
             connect_backoff_seconds=settings.mqtt_connect_backoff_seconds,
+            connect_backoff_max_seconds=(
+                settings.mqtt_connect_backoff_max_seconds
+            ),
             stop_event=self._stop_event,
         )
         self.publisher = RabbitPublisher(
@@ -45,6 +52,7 @@ class IngestService:
             settings.rabbit_exchange_prefix,
             settings.rabbit_connect_max_attempts,
             settings.rabbit_connect_backoff_seconds,
+            settings.rabbit_connect_backoff_max_seconds,
             audit_queue=settings.rabbit_audit_queue,
         )
 

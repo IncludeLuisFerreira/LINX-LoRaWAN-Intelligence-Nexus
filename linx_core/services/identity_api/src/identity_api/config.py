@@ -3,7 +3,7 @@ from linx_shared.core.config import (
     require_connection_string,
     require_secret,
 )
-from pydantic import field_validator
+from pydantic import ValidationInfo, field_validator
 
 
 class IdentitySettings(Settings):
@@ -11,7 +11,7 @@ class IdentitySettings(Settings):
 
     chirpstack_host: str = "localhost:8080"
     chirpstack_api_token: str = ""
-    chirpstack_use_tls: bool = False
+    chirpstack_use_tls: bool = True
     chirpstack_ca_cert: str | None = None
 
     rabbitmq_management_url: str = "http://rabbitmq:15672"
@@ -28,6 +28,18 @@ class IdentitySettings(Settings):
     # continuam podendo excluir aplicações sem depender do Docker.
     provisioner_grpc_host: str = ""
     provisioner_grpc_timeout_seconds: float = 10.0
+
+    @field_validator("chirpstack_use_tls")
+    @classmethod
+    def _validate_chirpstack_tls(
+        cls, value: bool, info: ValidationInfo
+    ) -> bool:
+        if info.data.get("environment") == "production" and not value:
+            raise ValueError(
+                "CHIRPSTACK_USE_TLS must be true in production; "
+                "configure the ChirpStack CA certificate and use TLS."
+            )
+        return value
 
     @field_validator("provisioner_grpc_host")
     @classmethod

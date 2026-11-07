@@ -59,6 +59,33 @@ def test_startup_rejects_default_database_credentials(monkeypatch):
         IdentitySettings(_env_file=None)
 
 
+def test_chirpstack_tls_is_enabled_by_default(monkeypatch):
+    _valid_env(monkeypatch)
+
+    settings = IdentitySettings(_env_file=None)
+
+    assert settings.chirpstack_use_tls is True
+
+
+def test_production_rejects_chirpstack_without_tls(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("CHIRPSTACK_USE_TLS", "false")
+
+    with pytest.raises(ValidationError, match="CHIRPSTACK_USE_TLS"):
+        IdentitySettings(_env_file=None)
+
+
+def test_development_allows_chirpstack_without_tls(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("CHIRPSTACK_USE_TLS", "false")
+
+    settings = IdentitySettings(_env_file=None)
+
+    assert settings.chirpstack_use_tls is False
+
+
 def test_startup_rejects_non_positive_job_max_attempts(monkeypatch):
     _valid_env(monkeypatch)
     monkeypatch.setenv("JOB_MAX_ATTEMPTS", "0")

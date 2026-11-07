@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures
 import json
 import logging
+import random
 import threading
 import time
 from datetime import datetime, timezone
@@ -22,6 +23,16 @@ REQUIRED_FIELDS = (
     "payload",
     "timestamp",
 )
+
+
+def _retry_delay(
+    attempt: int, base_seconds: float, max_seconds: float
+) -> float:
+    """Atraso exponencial com jitter completo, limitado por ``max_seconds``."""
+    if base_seconds <= 0:
+        return 0.0
+    ceiling = min(max_seconds, base_seconds * (2 ** (attempt - 1)))
+    return random.uniform(0, ceiling)
 
 
 class RabbitConsumer:
@@ -264,7 +275,13 @@ class RabbitConsumer:
                     exc,
                 )
                 if attempt < total_attempts:
-                    time.sleep(self._settings.consumer_retry_backoff_seconds)
+                    time.sleep(
+                        _retry_delay(
+                            attempt,
+                            self._settings.consumer_retry_backoff_seconds,
+                            self._settings.consumer_retry_backoff_max_seconds,
+                        )
+                    )
         if last_exc is not None:
             raise last_exc
         raise RuntimeError("handler falhou sem exceção")
