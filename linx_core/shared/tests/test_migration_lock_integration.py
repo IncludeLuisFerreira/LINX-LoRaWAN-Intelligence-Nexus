@@ -11,25 +11,32 @@ from linx_shared.db.migration_lock import (
     release_migration_lock,
 )
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
-DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# A conftest compartilhada injeta um ``DATABASE_URL`` default (inacessível fora
-# do CI) para que a engine base seja construída durante a coleta. Usar esse
-# valor como gatilho do teste faria a suíte completa tentar conectar num banco
-# inexistente e falhar. ``TEST_DATABASE_URL`` é o opt-in explícito para um
-# Postgres descartável.
+def _resolve_database_url() -> str | None:
+    """URL do Postgres para o teste de integração.
+
+    Em CI (GitHub Actions define ``CI=true``) usa ``DATABASE_URL``, que o
+    ``backend-ci.yml`` aponta para o serviço Postgres real. Localmente exige o
+    opt-in explícito ``TEST_DATABASE_URL``, porque a conftest compartilhada
+    injeta um ``DATABASE_URL`` default inacessível fora do CI.
+    """
+    if os.environ.get("CI"):
+        return os.environ.get("DATABASE_URL")
+    return os.environ.get("TEST_DATABASE_URL")
+
+
 pytestmark = pytest.mark.skipif(
-    not TEST_DATABASE_URL,
-    reason="TEST_DATABASE_URL is not set; set it to a throwaway Postgres URL "
-    "to run this integration test",
+    not _resolve_database_url(),
+    reason="TEST_DATABASE_URL is not set (or DATABASE_URL when CI=true); "
+    "set TEST_DATABASE_URL to a throwaway Postgres URL to run this "
+    "integration test",
 )
 
 
 def _database_url() -> str:
-    url = TEST_DATABASE_URL or DATABASE_URL
+    url = _resolve_database_url()
     if url is None:
-        pytest.skip("TEST_DATABASE_URL and DATABASE_URL are both unset")
+        pytest.skip("no Postgres URL configured for the integration test")
     return url
 
 
