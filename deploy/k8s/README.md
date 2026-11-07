@@ -11,6 +11,18 @@ CoreDNS do k3s. Namespace `linx`, aplicação via `kubectl apply -k`.
 - `grpcurl` (evidência gRPC).
 - Imagem `busybox` para o teste de DNS.
 
+## Criar o cluster local (k3d)
+
+Pule esta seção apenas se já tiver um cluster acessível. Se você executou a
+limpeza/reset ou o contexto `kubectl` sumiu, **crie o cluster antes de tudo** —
+sem ele, o import e o apply falham.
+
+```bash
+k3d cluster create linx
+kubectl wait --for=condition=Ready node/k3d-linx-server-0 --timeout=180s
+kubectl config current-context   # deve mostrar k3d-linx
+```
+
 ## Build das imagens
 
 O Compose só define `build:`, sem nome de imagem. Os manifests esperam as tags
@@ -40,15 +52,21 @@ docker build -t linx/agent-bridge:dev  -f linx_core/services/agent_bridge/Docker
   docker save linx/identity-api:dev linx/agent-bridge:dev | ssh <host> 'sudo k3s ctr images import -'
   ```
 
-## Secret
+## Namespace e Secret
 
-Nenhum segredo real é commitado. Copie o template, preencha e crie o Secret
-antes do apply (os serviços rejeitam placeholder no startup):
+Nenhum segredo real é commitado. O namespace precisa existir **antes** do
+Secret; crie-o primeiro e depois copie/preencha o template (os serviços rejeitam
+placeholder no startup):
 
 ```bash
+kubectl apply -f deploy/k8s/namespace.yaml
+
 cp deploy/k8s/linx-secrets.example.env deploy/k8s/linx-secrets.env
 # editar linx-secrets.env (DATABASE_URL aponta para postgres.linx.svc.cluster.local:5432)
-kubectl create secret generic linx-secrets -n linx --from-env-file=deploy/k8s/linx-secrets.env
+# idempotente: pode rodar de novo sem "AlreadyExists"
+kubectl create secret generic linx-secrets -n linx \
+  --from-env-file=deploy/k8s/linx-secrets.env \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 `deploy/k8s/linx-secrets.env` está no `.gitignore` — nunca versionar.
@@ -76,8 +94,9 @@ kubectl -n linx run dns-test --rm -it --image=busybox:1.36 --restart=Never -- \
   nslookup identity-api.linx.svc.cluster.local
 
 kubectl -n linx port-forward svc/agent-bridge 50051:50051 &
-grpcurl -plaintext localhost:50051 list
-# lista o serviço AgentBridge do proto/linx_agent.proto
+# o servidor não habilita reflection; informe o proto local ao grpcurl:
+grpcurl -plaintext -import-path proto -proto linx_agent.proto localhost:50051 list
+# lista o serviço linx.AgentBridge do proto/linx_agent.proto
 
 kubectl -n linx port-forward svc/identity-api 8000:8000 &
 curl -s http://localhost:8000/health
@@ -100,6 +119,7 @@ kubectl delete namespace linx
 rm -f deploy/k8s/linx-secrets.env
 
 # 3. Opcional: apaga o cluster local e as imagens de desenvolvimento
+#    (isto remove o contexto kubectl; para voltar, rode "Criar o cluster local")
 k3d cluster delete linx
 docker rmi linx/identity-api:dev linx/agent-bridge:dev
 ```
@@ -114,8 +134,9 @@ kubectl get ns linx -o json \
   | kubectl replace --raw /api/v1/namespaces/linx/finalize -f -
 ```
 
-Depois é só repetir o fluxo desde o início: criar cluster, buildar imagens,
-importar no containerd, recriar o Secret e aplicar o kustomize.
+Depois é só repetir o README a partir de **Criar o cluster local (k3d)**:
+criar cluster → buildar imagens → importar no containerd → namespace/Secret →
+aplicar o kustomize.
 
 ## Limitações conhecidas
 
