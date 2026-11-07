@@ -1,6 +1,6 @@
 ###############################################################################
 # Terraform — Cluster K3s leve na AWS Sandbox (Learner Lab)
-# Região: us-east-1 | Backend local (sem S3 remoto)
+# Região: us-east-1 | Backend remoto S3 + lock DynamoDB
 ###############################################################################
 
 terraform {
@@ -16,7 +16,13 @@ terraform {
       version = "~> 3.0"
     }
   }
-  # Backend local por padrão — nada de S3 remoto.
+
+  backend "s3" {
+    bucket         = "linx-k3s-tfstate" # ajustar para nome globalmente único
+    key            = "terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "linx-k3s-tfstate-lock"
+  }
 }
 
 provider "aws" {
