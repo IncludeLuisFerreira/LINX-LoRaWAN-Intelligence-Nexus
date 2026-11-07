@@ -471,6 +471,58 @@ def test_list_devices_returns_only_devices_of_app(chirpstack):
     assert len(data) == 2
 
 
+def test_list_devices_paginates_with_skip_and_limit(chirpstack):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    created = [
+        client.post(
+            "/api/v1/devices",
+            json=_payload(app_id, dev_eui=eui),
+        ).json()
+        for eui in (
+            "1122334455667788",
+            "2233445566778899",
+            "3344556677889900",
+        )
+    ]
+
+    first_page = client.get(
+        "/api/v1/devices", params={"app_id": app_id, "skip": 0, "limit": 2}
+    )
+    second_page = client.get(
+        "/api/v1/devices", params={"app_id": app_id, "skip": 2, "limit": 2}
+    )
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    first_ids = {device["id"] for device in first_page.json()}
+    second_ids = {device["id"] for device in second_page.json()}
+    assert len(first_ids) == 2
+    assert len(second_ids) == 1
+    assert first_ids.isdisjoint(second_ids)
+    assert first_ids | second_ids == {device["id"] for device in created}
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"skip": -1},
+        {"limit": 0},
+        {"limit": 101},
+    ],
+)
+def test_list_devices_rejects_invalid_pagination(chirpstack, params):
+    tenant_id = _create_tenant()
+    app_id = _create_application(tenant_id)
+
+    response = client.get(
+        "/api/v1/devices", params={"app_id": app_id, **params}
+    )
+
+    assert response.status_code == 422
+
+
 def test_list_devices_in_empty_app_returns_empty_list(chirpstack):
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)

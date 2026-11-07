@@ -1,7 +1,7 @@
 import logging
 
 from chirpstack_api import api
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from linx_shared.core.exceptions import ExternalServiceError
 from linx_shared.core.uuid4 import UUID4
 from linx_shared.db.base import get_db
@@ -12,6 +12,7 @@ from linx_shared.schemas.device import (
     DeviceResponse,
     DeviceUpdate,
 )
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -39,7 +40,12 @@ def _delete_device_best_effort(
     status_code=status.HTTP_200_OK,
     response_model=list[DeviceResponse],
 )
-def list_devices(app_id: UUID4, db: Session = Depends(get_db)):
+def list_devices(
+    app_id: UUID4,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
     application = db.get(Application, app_id)
     if not application:
         raise HTTPException(
@@ -47,7 +53,13 @@ def list_devices(app_id: UUID4, db: Session = Depends(get_db)):
             detail="Application not found!",
         )
 
-    devices = db.query(Device).filter(Device.app_id == app_id).all()
+    devices = db.scalars(
+        select(Device)
+        .filter(Device.app_id == app_id)
+        .order_by(Device.created_at, Device.id)
+        .offset(skip)
+        .limit(limit)
+    ).all()
     return devices
 
 
