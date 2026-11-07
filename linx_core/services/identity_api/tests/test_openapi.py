@@ -71,6 +71,20 @@ def test_openapi_exposes_device_nickname_and_patch():
     assert set(schemas["DeviceUpdate"]["properties"]) == {"nickname"}
 
 
+def test_openapi_list_endpoints_expose_pagination():
+    paths = _openapi()["paths"]
+
+    for path in (
+        "/api/v1/devices",
+        "/api/v1/tenant/{tenant_id}/applications",
+    ):
+        parameters = {
+            parameter["name"]
+            for parameter in paths[path]["get"].get("parameters", [])
+        }
+        assert {"skip", "limit"} <= parameters
+
+
 def test_openapi_stub_file_matches_live_spec():
     stub = json.loads(STUB_PATH.read_text())
 
