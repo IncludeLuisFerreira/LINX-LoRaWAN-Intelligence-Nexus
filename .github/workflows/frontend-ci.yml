@@ -62,3 +62,8 @@ jobs:
         run: ./scripts/check-nginx-template.sh
         working-directory: ./client/frontend
 
+      - name: Security headers guard
+        run: |
+          ./scripts/check-security-headers.sh
+          python3 scripts/test_check_security_headers.py
+
