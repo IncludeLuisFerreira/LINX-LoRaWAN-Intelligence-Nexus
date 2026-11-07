@@ -10,6 +10,12 @@ on:
       - "linx_core/shared/**"
       - ".github/workflows/publish-agent-bridge-image.yml"
       - ".github/workflows/publish-linx-core-image.yml"
+  pull_request:
+    paths:
+      - "linx_core/services/agent_bridge/**"
+      - "linx_core/shared/**"
+      - ".github/workflows/publish-agent-bridge-image.yml"
+      - ".github/workflows/publish-linx-core-image.yml"
   workflow_dispatch:
 
 jobs:
@@ -20,6 +26,7 @@ jobs:
       dockerfile: services/agent_bridge/Dockerfile
       repository: includeluisferreira/agent-bridge
       context: linx_core
+      push: ${{ github.event_name != 'pull_request' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

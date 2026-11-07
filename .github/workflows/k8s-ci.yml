@@ -1,0 +1,81 @@
+name: k8s-ci
+
+on:
+  pull_request:
+    paths:
+      - "deploy/k8s/**"
+      - "deploy/overlays/**"
+      - ".github/workflows/k8s-ci.yml"
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - "deploy/k8s/**"
+      - "deploy/overlays/**"
+      - ".github/workflows/k8s-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  manifests:
+    name: Validate k8s manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Render base manifests
+        run: |
+          out="$(kubectl kustomize deploy/k8s)"
+          test -n "$out" && echo "$out"
+
+      - name: Render dockerhub overlay
+        run: |
+          out="$(kubectl kustomize deploy/overlays/dockerhub)"
+          test -n "$out" && echo "$out"
+
+      - name: Render ecr overlay
+        run: |
+          out="$(kubectl kustomize deploy/overlays/ecr)"
+          test -n "$out" && echo "$out"
+
+      - name: Dry-run apply base
+        run: kubectl apply --dry-run=client --validate=false -k deploy/k8s
+
+      - name: Dry-run apply dockerhub overlay
+        run: kubectl apply --dry-run=client --validate=false -k deploy/overlays/dockerhub
+
+      - name: Parse YAML with PyYAML
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import sys
+
+          import yaml
+
+          files = sorted(
+              pathlib.Path("deploy/k8s").rglob("*.yaml")
+          ) + sorted(
+              pathlib.Path("deploy/k8s").rglob("*.yml")
+          ) + sorted(
+              pathlib.Path("deploy/overlays").rglob("*.yaml")
+          ) + sorted(
+              pathlib.Path("deploy/overlays").rglob("*.yml")
+          )
+
+          failed = False
+          for path in files:
+              try:
+                  with path.open() as fh:
+                      list(yaml.safe_load_all(fh))
+              except Exception as exc:  # noqa: BLE001
+                  print(f"{path}: {exc}", file=sys.stderr)
+                  failed = True
+
+          if failed:
+              sys.exit(1)
+
+          print(f"Parsed {len(files)} YAML files")
+          PY

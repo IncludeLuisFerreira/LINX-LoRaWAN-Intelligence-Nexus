@@ -11,6 +11,13 @@ on:
       - "linx_core/alembic.ini"
       - ".github/workflows/publish-identity-api-image.yml"
       - ".github/workflows/publish-linx-core-image.yml"
+  pull_request:
+    paths:
+      - "linx_core/services/identity_api/**"
+      - "linx_core/shared/**"
+      - "linx_core/alembic.ini"
+      - ".github/workflows/publish-identity-api-image.yml"
+      - ".github/workflows/publish-linx-core-image.yml"
   workflow_dispatch:
 
 jobs:
@@ -21,6 +28,7 @@ jobs:
       dockerfile: services/identity_api/Dockerfile
       repository: includeluisferreira/identity-api
       context: linx_core
+      push: ${{ github.event_name != 'pull_request' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
