@@ -130,11 +130,13 @@ Expected: apenas os três arquivos movidos no commit.
 ## Task 2: Mover manifests Kubernetes e overlays
 
 **Files:**
-- Move: `deploy/k8s/*` → `infra/kubernetes/*`
+- Move: `deploy/k8s/*` → `infra/kubernetes/base/*` (exceto README e exemplo de secrets, que ficam na raiz)
 - Move: `deploy/overlays/dockerhub/` → `infra/kubernetes/overlays/dockerhub/`
 - Move: `deploy/overlays/ecr/` → `infra/kubernetes/overlays/ecr/`
+- Create: `infra/kubernetes/kustomization.yaml` (raiz, aponta para `base`)
 - Modify: `infra/kubernetes/overlays/dockerhub/kustomization.yaml`
 - Modify: `infra/kubernetes/overlays/ecr/kustomization.yaml`
+- Modify: `.github/workflows/k8s-ci.yml` (adicionado pela #257 após o plano inicial)
 
 **Interfaces:**
 - Consumes: nada da Task 1.
@@ -145,6 +147,20 @@ Expected: apenas os três arquivos movidos no commit.
 ```bash
 git mv deploy/k8s infra/kubernetes
 git mv deploy/overlays infra/kubernetes/overlays
+mkdir -p infra/kubernetes/base
+for f in namespace.yaml postgres.yaml linx-config.yaml agent-bridge.yaml \
+  identity-api.yaml kustomization.yaml; do
+  git mv "infra/kubernetes/$f" "infra/kubernetes/base/$f"
+done
+```
+
+Criar `infra/kubernetes/kustomization.yaml` na raiz:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - base
 ```
 
 - [ ] **Step 2: Corrigir caminho relativo da base nos dois overlays**
@@ -161,7 +177,7 @@ por:
 
 ```yaml
 resources:
-  - ../..
+  - ../../base
 ```
 
 - [ ] **Step 3: Confirmar que `deploy/` não tem mais diretórios Kubernetes**
@@ -172,23 +188,47 @@ Expected: sem `deploy/k8s` e sem `deploy/overlays`; `deploy/nginx` e `deploy/scr
 - [ ] **Step 4: Validar render da base e dos overlays**
 
 ```bash
-kubectl kustomize infra/kubernetes >/tmp/k8s-base-new.yaml
-grep -c '^kind:' /tmp/k8s-base-new.yaml
+kubectl kustomize infra/kubernetes >/tmp/opencode/k8s-base-new.yaml
+grep -c '^kind:' /tmp/opencode/k8s-base-new.yaml
+kubectl kustomize infra/kubernetes/base >/dev/null
 kubectl kustomize infra/kubernetes/overlays/dockerhub >/dev/null
 kubectl kustomize infra/kubernetes/overlays/ecr >/dev/null
 ```
 
-Expected: contagem `9`; os dois overlays sem erro.
+Expected: contagem `9`; base e os dois overlays sem erro.
 
-- [ ] **Step 5: Commitar move e correção dos overlays**
+- [ ] **Step 5: Atualizar paths e comandos do CI de K8s**
+
+Em `.github/workflows/k8s-ci.yml`, trocar todas as ocorrências de
+`deploy/k8s` por `infra/kubernetes` e `deploy/overlays` por
+`infra/kubernetes/overlays`. Os blocos `paths` devem ficar:
+
+```yaml
+      - "infra/kubernetes/**"
+      - ".github/workflows/k8s-ci.yml"
+```
+
+E os comandos de render:
+
+```yaml
+          out="$(kubectl kustomize infra/kubernetes)"
+          out="$(kubectl kustomize infra/kubernetes/overlays/dockerhub)"
+          out="$(kubectl kustomize infra/kubernetes/overlays/ecr)"
+```
+
+- [ ] **Step 6: Commitar move e correção dos overlays**
 
 ```bash
-git add infra/kubernetes/namespace.yaml infra/kubernetes/postgres.yaml \
-  infra/kubernetes/linx-config.yaml infra/kubernetes/agent-bridge.yaml \
-  infra/kubernetes/identity-api.yaml infra/kubernetes/kustomization.yaml \
+git add infra/kubernetes/base/namespace.yaml infra/kubernetes/base/postgres.yaml \
+  infra/kubernetes/base/linx-config.yaml infra/kubernetes/base/agent-bridge.yaml \
+  infra/kubernetes/base/identity-api.yaml infra/kubernetes/base/kustomization.yaml \
+  infra/kubernetes/kustomization.yaml \
   infra/kubernetes/README.md infra/kubernetes/linx-secrets.example.env \
   infra/kubernetes/overlays/dockerhub/kustomization.yaml \
-  infra/kubernetes/overlays/ecr/kustomization.yaml
+  infra/kubernetes/overlays/ecr/kustomization.yaml \
+  .github/workflows/k8s-ci.yml \
+  docs/superpowers/specs/2026-11-07-infra-kubernetes-terraform-reorg-design.md \
+  docs/superpowers/plans/2026-11-07-infra-kubernetes-terraform-reorg.md
 git commit -m "chore(infra): move manifests Kubernetes para infra/kubernetes (#272)"
 ```
 

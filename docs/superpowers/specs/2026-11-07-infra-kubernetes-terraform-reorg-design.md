@@ -56,13 +56,15 @@ nenhum comando ou referência ativa.
 infra/
 ├── kubernetes/
 │   ├── README.md
-│   ├── namespace.yaml
-│   ├── postgres.yaml
-│   ├── linx-config.yaml
-│   ├── agent-bridge.yaml
-│   ├── identity-api.yaml
-│   ├── kustomization.yaml
+│   ├── kustomization.yaml        # raiz: aponta para base/
 │   ├── linx-secrets.example.env
+│   ├── base/
+│   │   ├── namespace.yaml
+│   │   ├── postgres.yaml
+│   │   ├── linx-config.yaml
+│   │   ├── agent-bridge.yaml
+│   │   ├── identity-api.yaml
+│   │   └── kustomization.yaml
 │   └── overlays/
 │       ├── dockerhub/kustomization.yaml
 │       └── ecr/kustomization.yaml
@@ -71,6 +73,10 @@ infra/
     ├── .terraform.lock.hcl
     └── .gitignore
 ```
+
+O layout `base/` + `overlays/` é obrigatório: Kustomize recusa um overlay dentro
+da raiz que ele referencia (erro de ciclo). A `kustomization.yaml` da raiz
+mantém `kubectl apply -k infra/kubernetes` funcionando.
 
 `deploy/k8s/` e `deploy/overlays/` deixam de existir. `deploy/` continua com o
 Compose, nginx e scripts que não pertencem a Kubernetes.
