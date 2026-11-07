@@ -1,4 +1,5 @@
 import { api } from './api';
+import { fetchAllPages } from './pagination';
 
 export interface DeviceOutput {
   id: string;
@@ -21,12 +22,13 @@ export interface CreateDeviceInput {
 }
 
 export const deviceService = {
-  listByApp: async (appId: string): Promise<DeviceOutput[]> => {
-    const response = await api.get<DeviceOutput[]>('/devices', {
-      params: { app_id: appId },
-    });
-    return response.data;
-  },
+  listByApp: (appId: string): Promise<DeviceOutput[]> =>
+    fetchAllPages(async (skip, limit) => {
+      const response = await api.get<DeviceOutput[]>('/devices', {
+        params: { app_id: appId, skip, limit },
+      });
+      return response.data;
+    }),
 
   create: async (payload: CreateDeviceInput): Promise<DeviceOutput> => {
     const response = await api.post<DeviceOutput>('/devices', payload);

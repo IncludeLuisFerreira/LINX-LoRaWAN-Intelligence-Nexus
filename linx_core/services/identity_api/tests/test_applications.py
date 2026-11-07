@@ -169,6 +169,48 @@ def test_list_applications_returns_only_apps_of_tenant():
     assert len(data) == 2
 
 
+def test_list_applications_paginates_with_skip_and_limit():
+    tenant_id = _create_tenant()
+    created = [
+        client.post(
+            _applications_url(tenant_id), json={"name": f"App {index}"}
+        ).json()
+        for index in range(3)
+    ]
+
+    first_page = client.get(
+        _applications_url(tenant_id), params={"skip": 0, "limit": 2}
+    )
+    second_page = client.get(
+        _applications_url(tenant_id), params={"skip": 2, "limit": 2}
+    )
+
+    assert first_page.status_code == 200
+    assert second_page.status_code == 200
+    first_ids = {app["id"] for app in first_page.json()}
+    second_ids = {app["id"] for app in second_page.json()}
+    assert len(first_ids) == 2
+    assert len(second_ids) == 1
+    assert first_ids.isdisjoint(second_ids)
+    assert first_ids | second_ids == {app["id"] for app in created}
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"skip": -1},
+        {"limit": 0},
+        {"limit": 101},
+    ],
+)
+def test_list_applications_rejects_invalid_pagination(params):
+    tenant_id = _create_tenant()
+
+    response = client.get(_applications_url(tenant_id), params=params)
+
+    assert response.status_code == 422
+
+
 def test_list_applications_in_non_existent_tenant_returns_404():
     fake_id = uuid4()
 

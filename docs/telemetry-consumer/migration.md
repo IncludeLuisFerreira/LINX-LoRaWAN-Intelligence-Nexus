@@ -47,11 +47,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS telemetry_dedup_idx
     ON telemetry (app_id, dev_eui, time, event_type);
 ```
 
-Índice de leitura (idempotente, seguro repetir):
+Índices de leitura (idempotentes, seguros repetir):
 
 ```sql
 CREATE INDEX IF NOT EXISTS telemetry_dev_eui_time_idx
     ON telemetry (dev_eui, time DESC);
+
+-- Filtro dominante da leitura REST/WS: WHERE app_id = $2 ORDER BY time DESC.
+CREATE INDEX IF NOT EXISTS telemetry_app_id_time_idx
+    ON telemetry (app_id, time DESC);
 ```
 
 ## Verificação

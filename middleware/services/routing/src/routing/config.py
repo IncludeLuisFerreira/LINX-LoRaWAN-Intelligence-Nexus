@@ -12,12 +12,14 @@ class RoutingSettings(Settings):
     mqtt_password: str = ""
     mqtt_connect_max_attempts: int = 5
     mqtt_connect_backoff_seconds: float = 1.0
+    mqtt_connect_backoff_max_seconds: float = 30.0
     rabbit_url: str = ""
     rabbit_exchange_prefix: str = "linx.telemetry"
     rabbit_audit_queue: str = "linx.telemetry.audit"
     max_payload_bytes: int = 65536
     rabbit_connect_max_attempts: int = 5
     rabbit_connect_backoff_seconds: float = 1.0
+    rabbit_connect_backoff_max_seconds: float = 30.0
 
     @field_validator("rabbit_url")
     @classmethod
