@@ -82,10 +82,16 @@ O que esperar de cada ação:
 O `concurrency: terraform` serializa plan e apply/destroy: uma execução por vez,
 sem cancelar a anterior, para proteger o state remoto.
 
-Secrets necessários em **Settings → Secrets and variables → Actions**:
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
-`EC2_SSH_KEY` (conteúdo da chave privada `.pem`) e `LINX_SECRETS_ENV` (conteúdo
-do `linx-secrets.env` real, nunca versionado).
+Configuração em **Settings → Secrets and variables → Actions**:
+
+- **Secrets** (aba *Secrets*): `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+  `AWS_SESSION_TOKEN`, `EC2_SSH_KEY` (conteúdo da chave privada `.pem`) e
+  `LINX_SECRETS_ENV` (conteúdo do `linx-secrets.env` real, nunca versionado).
+- **Variável de repositório** (aba *Variables*, **não** é secret):
+  `TF_VAR_KEY_NAME` com o nome da EC2 Key Pair (ex.: `vockey`). O job
+  `terraform-plan` a injeta como `TF_VAR_key_name`; como `variable "key_name"`
+  não tem `default` no `main.tf`, sem essa variável o plan fica vermelho em
+  push/PR (key pair com nome vazio).
 
 ## Deploy dos manifests
 
