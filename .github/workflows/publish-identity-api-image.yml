@@ -25,7 +25,7 @@ jobs:
     uses: ./.github/workflows/publish-linx-core-image.yml
     with:
       service: identity_api
-      dockerfile: services/identity_api/Dockerfile
+      dockerfile: linx_core/services/identity_api/Dockerfile
       repository: includeluisferreira/identity-api
       context: linx_core
       push: ${{ github.event_name != 'pull_request' }}

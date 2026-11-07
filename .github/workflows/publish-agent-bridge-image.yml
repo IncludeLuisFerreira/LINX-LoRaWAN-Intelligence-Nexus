@@ -23,7 +23,7 @@ jobs:
     uses: ./.github/workflows/publish-linx-core-image.yml
     with:
       service: agent_bridge
-      dockerfile: services/agent_bridge/Dockerfile
+      dockerfile: linx_core/services/agent_bridge/Dockerfile
       repository: includeluisferreira/agent-bridge
       context: linx_core
       push: ${{ github.event_name != 'pull_request' }}
