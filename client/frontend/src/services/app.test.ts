@@ -43,7 +43,24 @@ describe('applicationService', () => {
 
     await applicationService.listByTenant('t1');
 
-    expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications');
+    expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications', {
+      params: { skip: 0, limit: 100 },
+    });
+  });
+
+  it('fetches every page when an application list exceeds one page', async () => {
+    const page = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: `a${i}` }));
+    mocked.get
+      .mockResolvedValueOnce({ data: page(100) })
+      .mockResolvedValueOnce({ data: page(1) });
+
+    const apps = await applicationService.listByTenant('t1');
+
+    expect(apps).toHaveLength(101);
+    expect(mocked.get).toHaveBeenLastCalledWith('/tenant/t1/applications', {
+      params: { skip: 100, limit: 100 },
+    });
   });
 
   it('gets a single application', async () => {
