@@ -86,6 +86,37 @@ kubectl -n linx logs deploy/identity-api -c migrate --tail=5
 # migrations aplicadas uma única vez por pod (initContainer)
 ```
 
+## Limpeza / reset do ambiente local
+
+Remove apenas o que esta issue cria. O Secret local e o cluster são descartáveis;
+não execute isto contra um cluster compartilhado ou com dados reais.
+
+```bash
+# 1. Remove os recursos do namespace e o namespace em si
+kubectl delete -k deploy/k8s
+kubectl delete namespace linx
+
+# 2. Remove o Secret local (nunca foi versionado; está no .gitignore)
+rm -f deploy/k8s/linx-secrets.env
+
+# 3. Opcional: apaga o cluster local e as imagens de desenvolvimento
+k3d cluster delete linx
+docker rmi linx/identity-api:dev linx/agent-bridge:dev
+```
+
+Se o namespace ficar preso em `Terminating` (finalizer não concluído porque o
+cluster foi parado antes da limpeza), confirme que ele está vazio e force a
+finalização **apenas em cluster local descartável**:
+
+```bash
+kubectl get ns linx -o json \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); d["spec"]["finalizers"]=[]; print(json.dumps(d))' \
+  | kubectl replace --raw /api/v1/namespaces/linx/finalize -f -
+```
+
+Depois é só repetir o fluxo desde o início: criar cluster, buildar imagens,
+importar no containerd, recriar o Secret e aplicar o kustomize.
+
 ## Limitações conhecidas
 
 - O load balancing de Service ClusterIP é L4 (por conexão); uma conexão gRPC
