@@ -48,3 +48,21 @@ def test_wait_for_db_returns_on_first_success(monkeypatch):
     )
 
     assert calls == [("postgresql+psycopg://u:p@db:5432/db", 2)]
+
+
+def test_timeout_from_env_default(monkeypatch):
+    monkeypatch.delenv("WAIT_DB_TIMEOUT_SECONDS", raising=False)
+    assert wait._timeout_from_env() == 300.0
+
+
+def test_timeout_from_env_override(monkeypatch):
+    monkeypatch.setenv("WAIT_DB_TIMEOUT_SECONDS", "180")
+    assert wait._timeout_from_env() == 180.0
+
+
+def test_timeout_from_env_invalid(monkeypatch):
+    monkeypatch.setenv("WAIT_DB_TIMEOUT_SECONDS", "abc")
+    with pytest.raises(
+        wait.DatabaseNotReadyError, match="WAIT_DB_TIMEOUT_SECONDS"
+    ):
+        wait._timeout_from_env()

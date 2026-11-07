@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 from sqlalchemy import create_engine, text
@@ -92,5 +93,25 @@ def wait_for_db(
             time.sleep(min(interval_seconds, remaining))
 
 
+def _timeout_from_env(default: float = 300.0) -> float:
+    """Lê ``WAIT_DB_TIMEOUT_SECONDS`` para o entrypoint ``python -m``.
+
+    Mantém o default programático de ``wait_for_db`` em 60s; apenas o módulo
+    executado via ``python -m linx_shared.db.wait`` assume 300s por padrão,
+    tempo razoável para um cluster frio que faz ``pull``/``initdb`` do
+    ``postgres:15-alpine``.
+    """
+    raw = os.environ.get("WAIT_DB_TIMEOUT_SECONDS")
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise DatabaseNotReadyError(
+            "WAIT_DB_TIMEOUT_SECONDS must be a number of seconds, got "
+            f"{raw!r}"
+        ) from exc
+
+
 if __name__ == "__main__":
-    wait_for_db()
+    wait_for_db(timeout_seconds=_timeout_from_env())

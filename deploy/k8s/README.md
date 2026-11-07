@@ -160,8 +160,13 @@ manifest, mas os serviços usam o host definido no Secret.
 O `identity-api` aplica migrations antes de subir a aplicação:
 
 1. InitContainer `wait-for-db` executa `python -m linx_shared.db.wait`, que tenta
-   um `SELECT 1` a cada 2s por até 60s. URL inválida falha rápido com mensagem
-   clara; se o timeout expirar, o initContainer falha e o pod reinicia.
+   um `SELECT 1` a cada 2s por até 300s por padrão. URL inválida falha rápido
+   com mensagem clara; se o timeout expirar, o initContainer falha e o pod
+   reinicia. O default de 300s cobre o primeiro `pull`/`initdb` frio do
+   `postgres:15-alpine`; para reduzir ou aumentar esse teto, defina a variável
+   `WAIT_DB_TIMEOUT_SECONDS` (em segundos) no env do initContainer. O default
+   programático de `wait_for_db()` (quando chamado em código, não via
+   `python -m`) continua sendo 60s.
 2. InitContainer `migrate` executa `alembic upgrade head` uma única vez.
 3. O container principal `identity-api` só inicia o `uvicorn` depois que os dois
    initContainers terminam. O `docker-entrypoint.sh` continua sendo o caminho do
