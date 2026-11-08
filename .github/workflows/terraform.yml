@@ -9,18 +9,38 @@ on:
     branches:
       - develop
       - main
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Ação do Terraform'
+        required: true
+        default: 'apply'
+        type: choice
+        options: [apply, destroy]
+      key_name:
+        description: 'EC2 Key Pair na AWS'
+        required: true
+        default: 'vockey'
 
 permissions:
   contents: read
-  pull-requests: write
+
+# Serializa plan (PR/push) e apply/destroy (manual): uma execução por vez,
+# sem cancelar a anterior, para proteger o state remoto do Terraform.
+concurrency:
+  group: terraform
+  cancel-in-progress: false
 
 jobs:
-  # Valida e planeja em PRs e commits para develop/main.
-  # Apply não roda no CI: sem state remoto, os recursos criados no
-  # runner ficariam órfãos. Execute o apply localmente.
+  # Valida e planeja em PRs e commits para develop/main (state no backend
+  # S3 do main.tf). Apply/destroy não roda aqui: ver job `orchestration`.
   terraform-plan:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
 
     defaults:
       run:
@@ -37,7 +57,7 @@ jobs:
       - name: Configurar Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.0"
+          terraform_version: "1.17.1"
 
       - name: Configurar Credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -46,6 +66,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Diagnóstico — identidade AWS
+        run: aws sts get-caller-identity --query Account --output text
 
       - name: Terraform Init
         id: init
@@ -90,3 +113,94 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
+  # Apply/destroy sob demanda (workflow_dispatch). O runner não alcança a
+  # API do K3s (porta 6443 restrita à VPC), então o kubectl roda no master
+  # via SSH. No apply, após o Terraform, faz o deploy dos manifests.
+  orchestration:
+    name: "Terraform Apply/Destroy + Deploy"
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: infra/terraform
+
+    env:
+      AWS_REGION: "us-east-1"
+      # Mapa CHAVE=VALOR (formato --env-file) entregue ao master por stdin
+      # na sessão SSH única do deploy; nunca impresso no log.
+      LINX_SECRETS_ENV: ${{ secrets.LINX_SECRETS_ENV }}
+
+    steps:
+      - name: Checkout Código
+        uses: actions/checkout@v4
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+
+      - name: Configurar Credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply ou Destroy
+        env:
+          TF_VAR_key_name: ${{ github.event.inputs.key_name }}
+        run: |
+          terraform ${{ github.event.inputs.action }} \
+            -input=false -no-color -auto-approve
+
+      # A partir daqui, apenas no apply: no destroy a instância master é
+      # removida pelo próprio Terraform, não há destino para SSH/deploy.
+      - name: Configurar chave SSH
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+
+      - name: Obter IP público do master
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          MASTER_IP=$(terraform output -raw master_public_ip)
+          echo "MASTER_IP=${MASTER_IP}" >> $GITHUB_ENV
+
+      # Na primeira inicialização o sshd pode demorar a subir logo após o
+      # apply; retry limitado para popular o known_hosts antes do primeiro ssh.
+      - name: Registrar host key do master
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          for i in $(seq 1 30); do
+            ssh-keyscan -H "$MASTER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 5
+          done
+          ssh-keyscan -H "$MASTER_IP" >> ~/.ssh/known_hosts 2>/dev/null || { echo "::error::keyscan falhou após 30 tentativas — sshd não respondeu"; exit 1; }
+
+      # Readiness sem retry cego: falha se o cloud-init não concluir ou os
+      # nós não ficarem Ready dentro do timeout.
+      - name: Aguardar readiness do cluster
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          ssh ubuntu@${{ env.MASTER_IP }} \
+            "cloud-init status --wait && kubectl wait --for=condition=Ready nodes --all --timeout=120s"
+
+      # Deploy: namespace + secret numa única sessão SSH (secret via stdin,
+      # sem arquivo temporário no runner), depois os manifests renderizados
+      # com kustomize no runner e aplicados no master.
+      - name: Deploy dos manifests (kubectl no master via SSH)
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: |
+          echo "$LINX_SECRETS_ENV" | ssh ubuntu@${{ env.MASTER_IP }} "
+            kubectl create namespace linx --dry-run=client -o yaml | kubectl apply -f - &&
+            kubectl create secret generic linx-secrets -n linx \
+              --from-env-file=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -
+          "
+          kubectl kustomize ${{ github.workspace }}/infra/kubernetes | ssh ubuntu@${{ env.MASTER_IP }} "kubectl apply -f -"
+          ssh ubuntu@${{ env.MASTER_IP }} "kubectl get all -A"
