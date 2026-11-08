@@ -3,6 +3,8 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from linx_shared.coordination.leader import (
     K8sLeaderElector,
     LeaderElectionError,
@@ -174,6 +176,26 @@ def test_acquires_leadership_when_lease_absent():
         thread.join(timeout=2.0)
 
 
+def test_stop_releases_lease_for_fast_failover():
+    clock = ManualClock()
+    store = FakeLeaseClient(clock)
+    log = EventLog()
+    elector = K8sLeaderElector(
+        client=store,
+        identity="pod-0",
+        clock=clock,
+        retry_period_seconds=0.01,
+        on_started_leading=lambda: log.record("started"),
+    )
+
+    thread, stop = _start(elector)
+    assert log.wait_for("started", count=1)
+    stop.set()
+    thread.join(timeout=2.0)
+
+    assert store.holder("jobs-worker") == ""
+
+
 def test_renews_lease_periodically():
     clock = ManualClock()
     store = FakeLeaseClient(clock)
@@ -249,6 +271,31 @@ def test_loses_leadership_when_renew_fails_past_deadline():
         thread.join(timeout=2.0)
 
 
+def test_loses_leadership_when_api_down_past_deadline():
+    clock = ManualClock()
+    store = FakeLeaseClient(clock)
+    log = EventLog()
+    elector = K8sLeaderElector(
+        client=store,
+        identity="pod-0",
+        clock=clock,
+        retry_period_seconds=0.01,
+        on_started_leading=lambda: log.record("started"),
+        on_stopped_leading=lambda: log.record("stopped"),
+    )
+
+    thread, stop = _start(elector)
+    try:
+        assert log.wait_for("started", count=1)
+        store.transient_error = True
+        clock.advance(11.0)
+        assert log.wait_for("stopped", count=1)
+        assert store.holder("jobs-worker") == "pod-0"
+    finally:
+        stop.set()
+        thread.join(timeout=2.0)
+
+
 def test_stale_renew_does_not_clobber_holder():
     clock = ManualClock()
     store = FakeLeaseClient(clock)
@@ -268,7 +315,7 @@ def test_stale_renew_does_not_clobber_holder():
     try:
         assert log.wait_for("started", count=1)
         store.force_holder("jobs-worker", "pod-1", now)
-        time.sleep(0.2)
+        assert log.wait_for("stopped", count=1)
         assert store.holder("jobs-worker") == "pod-1"
     finally:
         stop.set()
@@ -347,6 +394,76 @@ def test_network_error_during_acquire_does_not_crash():
     finally:
         stop.set()
         thread.join(timeout=2.0)
+
+
+def test_renew_returns_timestamp_written_to_lease():
+    clock = ManualClock()
+    store = FakeLeaseClient(clock)
+    now = clock().isoformat(timespec="microseconds")
+    store.seed("jobs-worker", "pod-0", now, duration=15)
+    elector = K8sLeaderElector(client=store, identity="pod-0", clock=clock)
+
+    sent_at = elector._try_renew()
+
+    assert sent_at == clock()
+    assert store.renew_time("jobs-worker") == clock()
+
+
+def test_expiry_uses_lease_duration_from_spec():
+    clock = ManualClock()
+    store = FakeLeaseClient(clock)
+    stale = (clock() - timedelta(seconds=12)).isoformat(
+        timespec="microseconds"
+    )
+    store.seed("jobs-worker", "other", stale, duration=10)
+    elector = K8sLeaderElector(
+        client=store,
+        identity="pod-0",
+        clock=clock,
+        lease_duration_seconds=30,
+    )
+
+    assert elector._is_expired(store.get("linx", "jobs-worker"))
+
+
+def test_malformed_or_released_lease_is_expired():
+    clock = ManualClock()
+    store = FakeLeaseClient(clock)
+    elector = K8sLeaderElector(client=store, identity="pod-0", clock=clock)
+
+    assert elector._is_expired(
+        {"spec": {"holderIdentity": "pod-x", "renewTime": "not-a-date"}}
+    )
+    assert elector._is_expired(
+        {
+            "spec": {
+                "holderIdentity": "",
+                "renewTime": clock().isoformat(timespec="microseconds"),
+                "leaseDurationSeconds": 15,
+            }
+        }
+    )
+
+
+def test_default_renew_deadline_is_two_thirds():
+    clock = ManualClock()
+    store = FakeLeaseClient(clock)
+    elector = K8sLeaderElector(
+        client=store,
+        identity="pod-0",
+        clock=clock,
+        lease_duration_seconds=6,
+    )
+    assert elector._renew_deadline_seconds == 4
+
+    with pytest.raises(ValueError):
+        K8sLeaderElector(
+            client=store,
+            identity="pod-0",
+            clock=clock,
+            lease_duration_seconds=5,
+            renew_deadline_seconds=5,
+        )
 
 
 def test_only_one_leader_at_a_time():

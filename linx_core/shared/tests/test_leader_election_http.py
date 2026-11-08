@@ -86,6 +86,10 @@ def test_create_posts_body(monkeypatch):
     assert result == {"spec": {"holderIdentity": "pod-0"}}
     request = calls[0]
     assert request.get_method() == "POST"
+    # Create é POST na coleção: o nome do Lease vai no body, não na URL.
+    assert request.full_url == (
+        "https://k8s/apis/coordination.k8s.io/v1/namespaces/linx/leases"
+    )
     assert json.loads(request.data) == body
 
 
@@ -112,6 +116,38 @@ def test_other_http_errors_raise_leader_election_error(monkeypatch):
 
     with pytest.raises(LeaderElectionError):
         client.get("linx", "jobs-worker")
+
+
+def test_401_mentions_credential_problem(monkeypatch):
+    client, _ = _install(monkeypatch, error=_http_error(401))
+
+    with pytest.raises(LeaderElectionError, match="credencial"):
+        client.get("linx", "jobs-worker")
+
+
+def test_serviceaccount_token_is_reread_per_request(monkeypatch):
+    calls = []
+    tokens = iter(["token-a", "token-b"])
+
+    def fake_urlopen(request, context=None, timeout=None):
+        calls.append(request)
+        return FakeResponse({})
+
+    monkeypatch.setattr(leader.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(
+        leader.ssl, "create_default_context", lambda cafile=None: object()
+    )
+    client = InClusterLeaseClient(
+        base_url="https://k8s",
+        ca_cert="/tmp/unused.crt",
+    )
+    monkeypatch.setattr(client, "_default_token", lambda: next(tokens))
+
+    client.get("linx", "jobs-worker")
+    client.get("linx", "jobs-worker")
+
+    assert calls[0].get_header("Authorization") == "Bearer token-a"
+    assert calls[1].get_header("Authorization") == "Bearer token-b"
 
 
 def test_resolve_identity_prefers_env_then_hostname_then_uuid(monkeypatch):
