@@ -16,3 +16,10 @@ data:
   # ChirpStack não está no cluster; "localhost:8080" aponta para o próprio pod.
   # Ajuste para um host real antes de usar tenant/application/device no cluster.
   CHIRPSTACK_HOST: "localhost:8080"
+  # jobs_worker (issue #273): eleição de líder e endereço gRPC do provisioner.
+  # PROVISIONER_GRPC_HOST é informativo (docker_provisioner não está no cluster);
+  # o worker só o usa ao processar jobs de provisionamento.
+  PROVISIONER_GRPC_HOST: "docker-provisioner.linx.svc.cluster.local:50052"
+  LEADER_ELECTION_ENABLED: "true"
+  LEADER_ELECTION_LEASE_NAME: "jobs-worker"
+  LEADER_ELECTION_NAMESPACE: "linx"

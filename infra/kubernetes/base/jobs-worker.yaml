@@ -1,0 +1,72 @@
+# Eleição de líder via Lease: 3 réplicas do jobs_worker disputam um Lease
+# (coordination.k8s.io/v1); apenas a líder executa outbox-relay e job-reaper.
+# O ServiceAccount jobs-worker recebe permissão mínima (get/create/update/patch)
+# sobre leases no namespace linx.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jobs-worker
+  namespace: linx
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jobs-worker-leader-election
+  namespace: linx
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jobs-worker-leader-election
+  namespace: linx
+subjects:
+  - kind: ServiceAccount
+    name: jobs-worker
+    namespace: linx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jobs-worker-leader-election
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobs-worker
+  namespace: linx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: jobs-worker
+  template:
+    metadata:
+      labels:
+        app: jobs-worker
+    spec:
+      serviceAccountName: jobs-worker
+      initContainers:
+        - name: wait-for-db
+          image: includeluisferreira/jobs-worker:dev
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - linx_shared.db.wait
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
+      containers:
+        - name: jobs-worker
+          image: includeluisferreira/jobs-worker:dev
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets

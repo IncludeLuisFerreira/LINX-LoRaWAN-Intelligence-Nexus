@@ -6,3 +6,4 @@ resources:
   - linx-config.yaml
   - agent-bridge.yaml
   - identity-api.yaml
+  - jobs-worker.yaml
