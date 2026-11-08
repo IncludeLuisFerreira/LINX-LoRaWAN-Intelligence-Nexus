@@ -60,6 +60,10 @@ class JobReaper:
         leader_event: threading.Event | None = None,
         ready_event: threading.Event | None = None,
     ) -> None:
+        # Segurança sob perda de liderança: ``run_once`` usa
+        # ``SELECT ... FOR UPDATE SKIP LOCKED``, portanto duas réplicas que
+        # executem simultaneamente (ex.: failover rápido) nunca processam o
+        # mesmo job — a segunda simplesmente não encontra linhas bloqueadas.
         while not stop_event.is_set():
             if (leader_event is not None and not leader_event.is_set()) or (
                 ready_event is not None and not ready_event.is_set()

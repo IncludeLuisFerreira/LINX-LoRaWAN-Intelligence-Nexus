@@ -109,6 +109,8 @@ class InClusterLeaseClient:
         self._explicit_token = token
         self._ca_cert = ca_cert or self._default_ca_cert()
         self._timeout = timeout
+        # SSLContext é cacheado intencionalmente: o CA do cluster não muda
+        # durante a vida do pod, ao contrário do token (que é rotacionado).
         self._ssl_context: ssl.SSLContext | None = None
 
     @staticmethod

@@ -79,6 +79,7 @@ def _wait_for_dependencies_background(
     sem RabbitMQ, e os loops singleton/consumidores só processam após
     ``ready_event``.
     """
+    attempt = 0
     while not stop_event.is_set():
         try:
             check()
@@ -90,7 +91,11 @@ def _wait_for_dependencies_background(
             ready_event.set()
             return
         except Exception as exc:  # noqa: BLE001
-            logger.warning("dependencies not ready: %s", exc)
+            attempt += 1
+            if attempt % 10 == 1:
+                logger.warning(
+                    "dependencies not ready (attempt %s): %s", attempt, exc
+                )
             stop_event.wait(READY_DELAY_SECONDS)
 
 
