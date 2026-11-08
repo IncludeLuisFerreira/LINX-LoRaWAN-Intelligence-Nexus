@@ -77,9 +77,12 @@ def resolve_identity(env_identity: str | None = None) -> str:
     return str(uuid4())
 
 
+def _serviceaccount_path(name: str) -> str:
+    return os.path.join(_SERVICE_ACCOUNT_DIR, name)
+
+
 def _read_serviceaccount_file(name: str) -> str:
-    path = os.path.join(_SERVICE_ACCOUNT_DIR, name)
-    with open(path, encoding="utf-8") as handle:
+    with open(_serviceaccount_path(name), encoding="utf-8") as handle:
         return handle.read().strip()
 
 
@@ -122,7 +125,8 @@ class InClusterLeaseClient:
 
     @staticmethod
     def _default_ca_cert() -> str:
-        return _read_serviceaccount_file("ca.crt")
+        # ``cafile`` espera um caminho, não o conteúdo PEM.
+        return _serviceaccount_path("ca.crt")
 
     def _lease_url(self, namespace: str, name: str | None = None) -> str:
         base = (

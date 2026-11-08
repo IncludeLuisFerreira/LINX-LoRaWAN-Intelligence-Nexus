@@ -125,6 +125,10 @@ def test_401_mentions_credential_problem(monkeypatch):
         client.get("linx", "jobs-worker")
 
 
+def test_default_ca_cert_is_a_file_path():
+    assert InClusterLeaseClient._default_ca_cert().endswith("/ca.crt")
+
+
 def test_serviceaccount_token_is_reread_per_request(monkeypatch):
     calls = []
     tokens = iter(["token-a", "token-b"])
