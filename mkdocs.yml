@@ -30,6 +30,7 @@ nav:
       - Isolamento RabbitMQ por Tenant: telemetry-consumer/rabbitmq-isolation.md
   - DevOps:
       - Imagem do Tenant App: devops/tenant-app-image.md
+      - CI/CD do cluster K3s na AWS: devops/k3s-aws-ci-cd.md
   - Manuais e Documentação:
       - Análise de Segurança ChirpStack: analise_seguranca_chirpstack/chirpstack_security_analysis.md
       - Estrutura de Pastas: estrutura_de_pastas/estrutura.md
