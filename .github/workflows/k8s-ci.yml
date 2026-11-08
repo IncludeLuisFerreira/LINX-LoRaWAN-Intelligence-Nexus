@@ -28,7 +28,12 @@ jobs:
         run: |
           out="$(kubectl kustomize infra/kubernetes)"
           test -n "$out"
-          echo "$out" | grep -Eq 'kind: (Namespace|ConfigMap|PersistentVolumeClaim|Deployment|Service|ServiceAccount|Role|RoleBinding)'
+          for kind in Namespace ConfigMap PersistentVolumeClaim Deployment Service ServiceAccount Role RoleBinding; do
+            echo "$out" | grep -q "kind: $kind"
+          done
+          # jobs-worker entra com 3 réplicas e RBAC de leader election.
+          echo "$out" | grep -q "replicas: 3"
+          echo "$out" | grep -q "name: jobs-worker-leader-election"
 
       - name: Render dockerhub overlay
         run: |

@@ -9,6 +9,9 @@ images:
   - name: includeluisferreira/agent-bridge
     newName: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/agent-bridge
     newTag: sha-<SHORT_SHA>
+  - name: includeluisferreira/jobs-worker
+    newName: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/jobs-worker
+    newTag: sha-<SHORT_SHA>
 # Para registry privado, descomente e crie o secret `regcred` no namespace:
 # patches:
 #   - target:

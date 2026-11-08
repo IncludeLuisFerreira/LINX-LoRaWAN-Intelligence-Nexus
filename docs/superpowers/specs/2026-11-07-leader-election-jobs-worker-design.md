@@ -2,7 +2,7 @@
 
 **Data:** 2026-11-07
 **Issue:** #273 — feat(coordenação): eleição de líder via Lease do Kubernetes no jobs_worker (Entrega 3)
-**Status:** aguardando aprovação
+**Status:** aprovado e implementado
 
 ## 1. Intenção e porquê
 

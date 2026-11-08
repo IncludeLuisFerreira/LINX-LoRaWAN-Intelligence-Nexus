@@ -1,6 +1,6 @@
 # Eleição de líder via Lease: 3 réplicas do jobs_worker disputam um Lease
 # (coordination.k8s.io/v1); apenas a líder executa outbox-relay e job-reaper.
-# O ServiceAccount jobs-worker recebe permissão mínima (get/create/update/patch)
+# O ServiceAccount jobs-worker recebe permissão mínima (get/create/update)
 # sobre leases no namespace linx.
 apiVersion: v1
 kind: ServiceAccount
@@ -16,7 +16,7 @@ metadata:
 rules:
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
-    verbs: ["get", "create", "update", "patch"]
+    verbs: ["get", "create", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
