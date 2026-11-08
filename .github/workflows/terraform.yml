@@ -181,6 +181,7 @@ jobs:
             ssh-keyscan -H "$MASTER_IP" >> ~/.ssh/known_hosts 2>/dev/null && break
             sleep 5
           done
+          ssh-keyscan -H "$MASTER_IP" >> ~/.ssh/known_hosts 2>/dev/null || { echo "::error::keyscan falhou após 30 tentativas — sshd não respondeu"; exit 1; }
 
       # Readiness sem retry cego: falha se o cloud-init não concluir ou os
       # nós não ficarem Ready dentro do timeout.
