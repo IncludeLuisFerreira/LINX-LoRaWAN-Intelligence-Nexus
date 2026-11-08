@@ -74,6 +74,7 @@ spec:
                   name: linx-secrets
                   key: POSTGRES_REPLICATION_PASSWORD
             - name: POSTGRESQL_MASTER_HOST
+              # Assume postgres-0 como primary fixo — sem failover automático.
               value: "postgres-0.postgres.linx.svc.cluster.local"
             - name: POSTGRESQL_MASTER_PORT_NUMBER
               value: "5432"
@@ -82,6 +83,12 @@ spec:
               command: [sh, -c, "pg_isready -U $POSTGRESQL_USERNAME"]
             initialDelaySeconds: 10
             periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: [sh, -c, "pg_isready -U $POSTGRESQL_USERNAME"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
           volumeMounts:
             - name: data
               mountPath: /bitnami/postgresql

@@ -18,8 +18,10 @@ A sessão expira (~4h) e as credenciais mudam. Faça isso sempre ao abrir o lab:
 3. Clique em **"Download PEM"**
 4. Execute:
 ```bash
-cp ~/Downloads/labsuser.pem ~/Documentos/projetos/reais/Lynx/labsuser.pem
-chmod 400 ~/Documentos/projetos/reais/Lynx/labsuser.pem
+# Salve o PEM em um diretório de sua escolha e ajuste PEM_PATH abaixo
+PEM_PATH=~/labsuser.pem
+cp ~/Downloads/labsuser.pem "$PEM_PATH"
+chmod 400 "$PEM_PATH"
 ```
 
 **b) Exportar as credenciais AWS:**
@@ -36,7 +38,7 @@ export AWS_SESSION_TOKEN=...
 ## 2. Subir o cluster
 
 ```bash
-cd ~/Documentos/projetos/reais/Lynx-eks/infra/terraform
+cd infra/terraform
 terraform init
 terraform apply -var="key_name=vockey" -auto-approve
 ```
@@ -57,7 +59,7 @@ SVC_TOKEN=$(openssl rand -hex 32)
 AGENT_TOKEN=$(openssl rand -hex 32)
 RABBIT_SECRET=$(openssl rand -hex 16)
 
-ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+ssh -i "$PEM_PATH" -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
   "KUBECONFIG=/home/ubuntu/.kube/config kubectl create namespace linx --dry-run=client -o yaml | kubectl apply -f - && \
    kubectl create secret generic linx-secrets -n linx \
      --from-literal=POSTGRES_USER=linxadm \
@@ -67,17 +69,17 @@ ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubunt
      --from-literal=POSTGRES_REPLICATION_PASSWORD=$RABBIT_SECRET \
      --from-literal=SERVICE_TOKEN=$SVC_TOKEN \
      --from-literal=AGENT_SERVICE_TOKEN=$AGENT_TOKEN \
-     --from-literal=CHIRPSTACK_API_TOKEN=dev-token \
+     --from-literal=CHIRPSTACK_API_TOKEN=<seu-chirpstack-api-token> \
      --from-literal=RABBITMQ_ADMIN_USER=admin \
      --from-literal=RABBITMQ_ADMIN_PASSWORD=$RABBIT_SECRET \
      --from-literal=RABBITMQ_TENANT_SECRET=$RABBIT_SECRET"
 ```
 
-Depois aplica os manifests:
+Depois aplica os manifests (a partir da raiz do repositório):
 
 ```bash
-kubectl kustomize ~/Documentos/projetos/reais/Lynx-eks/infra/kubernetes | \
-  ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+kubectl kustomize infra/kubernetes/overlays/nodeport | \
+  ssh -i "$PEM_PATH" -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
   "KUBECONFIG=/home/ubuntu/.kube/config kubectl apply -f -"
 ```
 
@@ -86,7 +88,7 @@ kubectl kustomize ~/Documentos/projetos/reais/Lynx-eks/infra/kubernetes | \
 ## 4. Verificar o estado do cluster
 
 ```bash
-ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+ssh -i "$PEM_PATH" -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
   "KUBECONFIG=/home/ubuntu/.kube/config kubectl get pods -n linx"
 ```
 
@@ -106,12 +108,12 @@ Docs da API: `http://$MASTER_IP:30080/docs`
 
 ---
 
-## 5.1 Evidência de replicação de dados (Entrega 3)
+## 6. Evidência de replicação de dados (Entrega 3)
 
 Confirma que os dois pods do StatefulSet estão no ar:
 
 ```bash
-ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+ssh -i "$PEM_PATH" -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
   "KUBECONFIG=/home/ubuntu/.kube/config kubectl get pods -n linx -l app=postgres"
 ```
 
@@ -120,7 +122,7 @@ Esperado: `postgres-0` (primary) e `postgres-1` (replica) ambos `Running`.
 Lê a tabela de migrations no **primary**:
 
 ```bash
-ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+ssh -i "$PEM_PATH" -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
   "KUBECONFIG=/home/ubuntu/.kube/config kubectl exec -n linx postgres-0 -- \
    psql -U linxadm -d linxdb -c 'SELECT * FROM alembic_version;'"
 ```
@@ -128,7 +130,7 @@ ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubunt
 Lê a mesma tabela na **replica** (dado replicado via WAL):
 
 ```bash
-ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+ssh -i "$PEM_PATH" -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
   "KUBECONFIG=/home/ubuntu/.kube/config kubectl exec -n linx postgres-1 -- \
    psql -U linxadm -d linxdb -c 'SELECT * FROM alembic_version;'"
 ```
@@ -137,10 +139,10 @@ Ambos devem retornar a mesma versão do Alembic — prova de replicação em tem
 
 ---
 
-## 6. Destruir ao terminar (evita gastar créditos)
+## 7. Destruir ao terminar (evita gastar créditos)
 
 ```bash
-cd ~/Documentos/projetos/reais/Lynx-eks/infra/terraform
+cd infra/terraform
 terraform destroy -var="key_name=vockey" -auto-approve
 ```
 
