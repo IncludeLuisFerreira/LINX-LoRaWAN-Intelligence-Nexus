@@ -47,6 +47,34 @@ terraform -chdir=infra/terraform apply -var="key_name=vockey"
 O caminho recomendado é o `workflow_dispatch` abaixo; o uso local serve para
 inspeção e depuração.
 
+## Migração do state local → S3 (uma única vez)
+
+Se o cluster foi criado **antes** do backend S3, o state está apenas em
+`infra/terraform/terraform.tfstate` (local). Migre-o antes do primeiro `apply`
+no CI — com o S3 vazio, o CI não enxergaria os recursos e tentaria criar um
+segundo cluster:
+
+```bash
+cd infra/terraform
+cp /caminho/do/state/antigo/terraform.tfstate .
+terraform init -migrate-state   # confirme "yes" para copiar o state ao S3
+terraform plan                  # esperado: "No changes"
+```
+
+Se o `init -migrate-state` não oferecer a cópia (diretório sem backend anterior
+registrado), envie o state manualmente:
+
+```bash
+cd infra/terraform
+terraform init
+terraform state push terraform.tfstate
+terraform plan
+```
+
+Depois da migração, a fonte de verdade é o S3. O arquivo local pode ser
+removido. O `plan` deve sair sem mudanças; uma eventual diferença de IP público
+é normal se as instâncias estiverem paradas.
+
 ## Apply/destroy via GitHub Actions
 
 O workflow `.github/workflows/terraform.yml` tem dois jobs:
