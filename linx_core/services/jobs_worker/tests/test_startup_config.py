@@ -46,3 +46,32 @@ def test_startup_rejects_empty_provisioner_host(monkeypatch):
 
     with pytest.raises(ValidationError, match="PROVISIONER_GRPC_HOST"):
         WorkerSettings(_env_file=None)
+
+
+def test_leader_election_defaults_disabled(monkeypatch):
+    _valid_env(monkeypatch)
+
+    settings = WorkerSettings(_env_file=None)
+
+    assert settings.leader_election_enabled is False
+    assert settings.leader_election_lease_name == "jobs-worker"
+    assert settings.leader_election_namespace == "linx"
+    assert settings.leader_election_identity == ""
+    assert settings.leader_election_lease_duration_seconds == 15
+
+
+def test_leader_election_env(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("LEADER_ELECTION_ENABLED", "true")
+    monkeypatch.setenv("LEADER_ELECTION_LEASE_NAME", "my-lease")
+    monkeypatch.setenv("LEADER_ELECTION_NAMESPACE", "prod")
+    monkeypatch.setenv("LEADER_ELECTION_IDENTITY", "pod-7")
+    monkeypatch.setenv("LEADER_ELECTION_LEASE_DURATION_SECONDS", "30")
+
+    settings = WorkerSettings(_env_file=None)
+
+    assert settings.leader_election_enabled is True
+    assert settings.leader_election_lease_name == "my-lease"
+    assert settings.leader_election_namespace == "prod"
+    assert settings.leader_election_identity == "pod-7"
+    assert settings.leader_election_lease_duration_seconds == 30
