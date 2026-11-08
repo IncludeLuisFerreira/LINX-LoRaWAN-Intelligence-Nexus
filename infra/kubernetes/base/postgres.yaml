@@ -1,27 +1,23 @@
-# Postgres efêmero para sustentar as dependências de banco dos serviços dentro
-# do cluster, de modo que as evidências de service discovery (DNS, grpcurl,
-# /health) sejam reais. Dados de produção NÃO pertencem a este manifest.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: postgres-data
-  namespace: linx
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
----
+# PostgreSQL com streaming replication via bitnami/postgresql.
+# postgres-0 = primary (leitura + escrita)
+# postgres-1 = replica (somente leitura, sincronizada via WAL)
+#
+# DATABASE_URL nos serviços aponta para o primary:
+#   postgresql+psycopg://<user>:<pass>@postgres-0.postgres.linx.svc.cluster.local:5432/<db>
+#
+# Evidência de replicação na apresentação:
+#   kubectl exec -n linx postgres-0 -- psql -U $POSTGRESQL_USERNAME -d $POSTGRESQL_DATABASE \
+#     -c "SELECT * FROM alembic_version;"
+#   kubectl exec -n linx postgres-1 -- psql -U $POSTGRESQL_USERNAME -d $POSTGRESQL_DATABASE \
+#     -c "SELECT * FROM alembic_version;"
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: postgres
   namespace: linx
 spec:
-  replicas: 1
-  strategy:
-    type: Recreate
+  serviceName: postgres
+  replicas: 2
   selector:
     matchLabels:
       app: postgres
@@ -32,58 +28,82 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15-alpine
+          image: bitnami/postgresql:15
           imagePullPolicy: IfNotPresent
+          # O script detecta o ordinal do pod pelo hostname e seta
+          # POSTGRESQL_REPLICATION_MODE antes de chamar o entrypoint original.
+          command:
+            - bash
+            - -c
+            - |
+              ORDINAL="${HOSTNAME##*-}"
+              if [ "$ORDINAL" = "0" ]; then
+                export POSTGRESQL_REPLICATION_MODE=master
+              else
+                export POSTGRESQL_REPLICATION_MODE=slave
+              fi
+              exec /opt/bitnami/scripts/postgresql/entrypoint.sh /opt/bitnami/scripts/postgresql/run.sh
           ports:
             - name: postgres
               containerPort: 5432
           env:
-            - name: POSTGRES_USER
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POSTGRESQL_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: linx-secrets
                   key: POSTGRES_USER
-            - name: POSTGRES_PASSWORD
+            - name: POSTGRESQL_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: linx-secrets
                   key: POSTGRES_PASSWORD
-            - name: POSTGRES_DB
+            - name: POSTGRESQL_DATABASE
               valueFrom:
                 secretKeyRef:
                   name: linx-secrets
                   key: POSTGRES_DB
-          volumeMounts:
-            - name: postgres-data
-              mountPath: /var/lib/postgresql/data
+            - name: POSTGRESQL_REPLICATION_USER
+              value: replicator
+            - name: POSTGRESQL_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: linx-secrets
+                  key: POSTGRES_REPLICATION_PASSWORD
+            - name: POSTGRESQL_MASTER_HOST
+              value: "postgres-0.postgres.linx.svc.cluster.local"
+            - name: POSTGRESQL_MASTER_PORT_NUMBER
+              value: "5432"
           readinessProbe:
             exec:
-              command:
-                - sh
-                - -c
-                - pg_isready -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)"
-            initialDelaySeconds: 5
+              command: [sh, -c, "pg_isready -U $POSTGRESQL_USERNAME"]
+            initialDelaySeconds: 10
             periodSeconds: 5
-          livenessProbe:
-            exec:
-              command:
-                - sh
-                - -c
-                - pg_isready -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)"
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            failureThreshold: 6
-      volumes:
-        - name: postgres-data
-          persistentVolumeClaim:
-            claimName: postgres-data
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/postgresql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi
 ---
+# Headless service — endereça pods individualmente:
+# postgres-0.postgres.linx.svc.cluster.local (primary)
+# postgres-1.postgres.linx.svc.cluster.local (replica)
 apiVersion: v1
 kind: Service
 metadata:
   name: postgres
   namespace: linx
 spec:
+  clusterIP: None
   selector:
     app: postgres
   ports:

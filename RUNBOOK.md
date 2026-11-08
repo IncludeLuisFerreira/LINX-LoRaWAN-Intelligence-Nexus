@@ -63,7 +63,8 @@ ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubunt
      --from-literal=POSTGRES_USER=linxadm \
      --from-literal=POSTGRES_PASSWORD=$SVC_TOKEN \
      --from-literal=POSTGRES_DB=linxdb \
-     --from-literal=DATABASE_URL=postgresql+psycopg://linxadm:$SVC_TOKEN@postgres.linx.svc.cluster.local:5432/linxdb \
+     --from-literal=DATABASE_URL=postgresql+psycopg://linxadm:$SVC_TOKEN@postgres-0.postgres.linx.svc.cluster.local:5432/linxdb \
+     --from-literal=POSTGRES_REPLICATION_PASSWORD=$RABBIT_SECRET \
      --from-literal=SERVICE_TOKEN=$SVC_TOKEN \
      --from-literal=AGENT_SERVICE_TOKEN=$AGENT_TOKEN \
      --from-literal=CHIRPSTACK_API_TOKEN=dev-token \
@@ -102,6 +103,37 @@ curl http://$MASTER_IP:30080/health
 Resposta esperada: `{"status":"ok","db":true}`
 
 Docs da API: `http://$MASTER_IP:30080/docs`
+
+---
+
+## 5.1 Evidência de replicação de dados (Entrega 3)
+
+Confirma que os dois pods do StatefulSet estão no ar:
+
+```bash
+ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+  "KUBECONFIG=/home/ubuntu/.kube/config kubectl get pods -n linx -l app=postgres"
+```
+
+Esperado: `postgres-0` (primary) e `postgres-1` (replica) ambos `Running`.
+
+Lê a tabela de migrations no **primary**:
+
+```bash
+ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+  "KUBECONFIG=/home/ubuntu/.kube/config kubectl exec -n linx postgres-0 -- \
+   psql -U linxadm -d linxdb -c 'SELECT * FROM alembic_version;'"
+```
+
+Lê a mesma tabela na **replica** (dado replicado via WAL):
+
+```bash
+ssh -i ~/Documentos/projetos/reais/Lynx/labsuser.pem -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
+  "KUBECONFIG=/home/ubuntu/.kube/config kubectl exec -n linx postgres-1 -- \
+   psql -U linxadm -d linxdb -c 'SELECT * FROM alembic_version;'"
+```
+
+Ambos devem retornar a mesma versão do Alembic — prova de replicação em tempo real.
 
 ---
 
