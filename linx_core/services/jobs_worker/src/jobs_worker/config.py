@@ -16,6 +16,11 @@ class WorkerSettings(Settings):
     outbox_max_attempts: int = 10
     provisioner_grpc_host: str = "docker_provisioner:50052"
     provisioner_grpc_timeout_seconds: float = 10.0
+    leader_election_enabled: bool = False
+    leader_election_lease_name: str = "jobs-worker"
+    leader_election_namespace: str = "linx"
+    leader_election_identity: str = ""
+    leader_election_lease_duration_seconds: int = 15
 
     @field_validator("rabbitmq_amqp_url")
     @classmethod
@@ -48,6 +53,7 @@ class WorkerSettings(Settings):
         "job_lock_seconds",
         "job_reaper_interval_seconds",
         "outbox_max_attempts",
+        "leader_election_lease_duration_seconds",
     )
     @classmethod
     def _validate_positive_int(cls, value: int) -> int:

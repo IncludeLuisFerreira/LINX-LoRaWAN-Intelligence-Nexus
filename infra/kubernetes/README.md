@@ -34,6 +34,7 @@ kubectl config current-context   # deve mostrar k3d-linx
 | --- | --- |
 | `identity-api` | `includeluisferreira/identity-api:dev` |
 | `agent-bridge` | `includeluisferreira/agent-bridge:dev` |
+| `jobs-worker` | `includeluisferreira/jobs-worker:dev` |
 
 Os repositórios são públicos e a base usa `imagePullPolicy: Always`, porque a tag
 `dev` é mutável. O cluster puxa as imagens no primeiro agendamento; **não há
@@ -143,7 +144,8 @@ O `--dry-run=client -o yaml` gera o Secret e o `kubectl apply` o cria ou
 atualiza, sem falhar em execuções repetidas. As chaves mínimas são as do
 template: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
 `SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
-`RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD` e `RABBITMQ_TENANT_SECRET`.
+`RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD`, `RABBITMQ_TENANT_SECRET` e
+`RABBITMQ_AMQP_URL` (usada pelo `jobs_worker`; aponte para um broker real).
 
 `infra/kubernetes/linx-secrets.env` está no `.gitignore` — nunca versionar.
 
@@ -246,29 +248,32 @@ descomente o patch de `imagePullSecrets` no `kustomization.yaml` e crie o Secret
 
 ## Publicação das imagens (GitHub Actions)
 
-Dois workflows publicam as imagens a partir de `develop` e `main`, além de
+Três workflows publicam as imagens a partir de `develop` e `main`, além de
 `workflow_dispatch` manual:
 
 | Workflow | Publica |
 | --- | --- |
 | `.github/workflows/publish-identity-api-image.yml` | `includeluisferreira/identity-api` |
 | `.github/workflows/publish-agent-bridge-image.yml` | `includeluisferreira/agent-bridge` |
+| `.github/workflows/publish-jobs-worker-image.yml` | `includeluisferreira/jobs-worker` |
 
-Ambos chamam o workflow reutilizável
+Todos chamam o workflow reutilizável
 `.github/workflows/publish-linx-core-image.yml`.
 
 ### Matriz de paths
 
-| Caminho alterado | `identity-api` | `agent-bridge` |
-| --- | --- | --- |
-| `linx_core/services/identity_api/**` | sim | não |
-| `linx_core/services/agent_bridge/**` | não | sim |
-| `linx_core/shared/**` | sim | sim |
-| `linx_core/alembic.ini` | sim | não |
-| `.github/workflows/publish-identity-api-image.yml` | sim | não |
-| `.github/workflows/publish-agent-bridge-image.yml` | não | sim |
-| `.github/workflows/publish-linx-core-image.yml` | sim | sim |
-| Demais paths (frontend, docs, routing, middleware etc.) | não | não |
+| Caminho alterado | `identity-api` | `agent-bridge` | `jobs-worker` |
+| --- | --- | --- | --- |
+| `linx_core/services/identity_api/**` | sim | não | não |
+| `linx_core/services/agent_bridge/**` | não | sim | não |
+| `linx_core/services/jobs_worker/**` | não | não | sim |
+| `linx_core/shared/**` | sim | sim | sim |
+| `linx_core/alembic.ini` | sim | não | não |
+| `.github/workflows/publish-identity-api-image.yml` | sim | não | não |
+| `.github/workflows/publish-agent-bridge-image.yml` | não | sim | não |
+| `.github/workflows/publish-jobs-worker-image.yml` | não | não | sim |
+| `.github/workflows/publish-linx-core-image.yml` | sim | sim | sim |
+| Demais paths (frontend, docs, routing, middleware etc.) | não | não | não |
 
 Os filtros `paths` só valem para `push` em branches; pushes de tag não os
 avaliam. Por isso os workflows ficam restritos a `develop`/`main` e execução
@@ -335,12 +340,39 @@ images:
     digest: sha256:<DIGEST>
 ```
 
+## Eleição de líder (issue #273)
+
+Com `replicas: 3`, o `jobs_worker` disputa um `Lease`
+(`coordination.k8s.io/v1`) no namespace `linx`. Apenas a réplica que detém o
+`Lease` executa os loops singleton `outbox-relay` e `job-reaper`; as demais
+ficam em standby e assumem quando o Lease expira (failover em ~10–15s). O
+consumo das filas (`run_consumer`) continua em **todas** as réplicas.
+
+- O ServiceAccount `jobs-worker` recebe permissão mínima sobre `leases`
+  (`get`, `create`, `update`) via Role/RoleBinding.
+- A eleição é configurada pelas variáveis `LEADER_ELECTION_*` no ConfigMap
+  `linx-config`. `LEADER_ELECTION_ENABLED=false` preserva o comportamento
+  anterior (uma execução por réplica, sem Lease).
+- A identidade de cada candidato é o nome do pod (`HOSTNAME`), com fallback
+  para UUID.
+
+```bash
+kubectl -n linx get lease -w                    # acompanha a troca de titular
+kubectl -n linx get lease jobs-worker -o yaml   # holderIdentity atual
+kubectl -n linx logs deploy/jobs-worker -c jobs-worker | grep "leader election"
+# leader election: acquired / renewed / lost
+```
+
+> O `jobs_worker` sobe mesmo sem RabbitMQ no cluster: a eleição é observável
+> independentemente do broker (o `wait-for-db` garante o Postgres; a espera por
+> RabbitMQ é não-fatal quando a eleição está ativa).
+
 ## Evidências (Entrega 3 — relatório técnico)
 
 ```bash
 kubectl -n linx get pods -o wide
-# 2x agent-bridge, 2x identity-api, 1x postgres, todos Running (initContainers
-# concluídos)
+# 2x agent-bridge, 2x identity-api, 3x jobs-worker, 1x postgres, todos Running
+# (initContainers concluídos)
 
 kubectl -n linx get endpoints agent-bridge identity-api
 # endpoints não vazios (selector OK)
@@ -365,6 +397,39 @@ kubectl -n linx logs deploy/identity-api -c migrate --tail=5
 # as duas réplicas, então apenas uma execução efetiva aparece
 ```
 
+### Eleição de líder
+
+```bash
+kubectl -n linx get lease -w
+# observa o holderIdentity mudar de pod ao derrubar o líder
+
+kubectl -n linx get lease jobs-worker -o yaml
+# spec.holderIdentity aponta para o pod líder atual
+
+kubectl -n linx logs deploy/jobs-worker -c jobs-worker | grep "leader election"
+# réplica líder: "acquired" + "renewed"; réplicas standby não registram "acquired"
+
+# Sucessão: derruba apenas o pod que detém o Lease e observa outro assumir
+kubectl -n linx delete pod \
+  "$(kubectl -n linx get lease jobs-worker \
+      -o jsonpath='{.spec.holderIdentity}')"
+kubectl -n linx logs deploy/jobs-worker -c jobs-worker --tail=50 | grep "leader election"
+```
+
+Prova de exclusividade: `spec.holderIdentity` aponta para um único pod; as
+réplicas standby não registram `leader election: acquired` e só a líder executa
+`outbox-relay`/`job-reaper`.
+
+### Tabela requisito → mecanismo → arquivo → evidência
+
+| Requisito (PRD §5.5) | Mecanismo | Arquivo | Evidência |
+| --- | --- | --- | --- |
+| RF-040 (Nomeação) | `envelope_id` UUIDv4 | `middleware/services/routing/src/routing/envelope.py` | `test_envelope.py`, `linx_core/shared/tests/test_uuid4.py` |
+| RF-041 (Consistência) | `ON CONFLICT (app_id, dev_eui, time, event_type)`; outbox ordenado por `next_attempt_at, created_at` | `client/services/telemetry_consumer/src/telemetry_consumer/db.py`, `linx_core/shared/src/linx_shared/jobs/outbox.py` | `client/services/telemetry_consumer/tests/test_db.py`, `linx_core/services/jobs_worker/tests/test_outbox_relay.py` |
+| RF-042 (Resiliência) | retry/backoff (`RETRY_DELAYS_SECONDS`) | `linx_core/shared/src/linx_shared/jobs/constants.py`, `linx_core/services/jobs_worker/src/jobs_worker/processor.py` | `linx_core/services/jobs_worker/tests/test_job_processor.py` |
+| Eleição de líder | `Lease` (`coordination.k8s.io/v1`) + `K8sLeaderElector` | `linx_core/shared/src/linx_shared/coordination/leader.py` | `linx_core/shared/tests/test_leader_election.py`; `kubectl get lease -w` |
+| Exclusão mútua (documentada) | `pg_try_advisory_lock` / `FOR UPDATE` + lease | `linx_core/shared/src/linx_shared/db/migration_lock.py`, `linx_core/shared/src/linx_shared/jobs/repository.py` | `linx_core/shared/tests/test_migration_lock_integration.py` |
+
 ## Limpeza / reset do ambiente local
 
 Remove apenas o que esta issue cria. O Secret local e o cluster são descartáveis;
@@ -381,7 +446,9 @@ rm -f infra/kubernetes/linx-secrets.env
 # 3. Opcional: apaga o cluster local e as imagens de desenvolvimento
 #    (isto remove o contexto kubectl; para voltar, rode "Criar o cluster local")
 k3d cluster delete linx
-docker rmi includeluisferreira/identity-api:dev includeluisferreira/agent-bridge:dev
+docker rmi includeluisferreira/identity-api:dev \
+  includeluisferreira/agent-bridge:dev \
+  includeluisferreira/jobs-worker:dev
 ```
 
 Se o namespace ficar preso em `Terminating` (finalizer não concluído porque o

@@ -1,0 +1,32 @@
+name: Publish Jobs Worker Image
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - "linx_core/services/jobs_worker/**"
+      - "linx_core/shared/**"
+      - ".github/workflows/publish-jobs-worker-image.yml"
+      - ".github/workflows/publish-linx-core-image.yml"
+  pull_request:
+    paths:
+      - "linx_core/services/jobs_worker/**"
+      - "linx_core/shared/**"
+      - ".github/workflows/publish-jobs-worker-image.yml"
+      - ".github/workflows/publish-linx-core-image.yml"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    uses: ./.github/workflows/publish-linx-core-image.yml
+    with:
+      service: jobs_worker
+      dockerfile: linx_core/services/jobs_worker/Dockerfile
+      repository: includeluisferreira/jobs-worker
+      context: linx_core
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

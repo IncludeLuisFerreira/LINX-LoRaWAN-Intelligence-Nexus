@@ -6,6 +6,11 @@ from types import FrameType
 from typing import Any
 
 import pika
+from linx_shared.coordination.leader import (
+    InClusterLeaseClient,
+    K8sLeaderElector,
+    resolve_identity,
+)
 from linx_shared.db.base import SessionLocal, engine
 from linx_shared.jobs.broker import (
     RabbitMQPublisher,
@@ -62,6 +67,38 @@ def _wait_for_dependencies() -> None:
     raise RuntimeError("dependencies did not become ready") from last_error
 
 
+def _wait_for_dependencies_background(
+    stop_event: threading.Event,
+    ready_event: threading.Event,
+    rabbitmq_amqp_url: str,
+    queue: str,
+) -> None:
+    """Aguarda dependências sem abortar o processo.
+
+    Usada quando a eleição de líder está ativa: a eleição é observável mesmo
+    sem RabbitMQ, e os loops singleton/consumidores só processam após
+    ``ready_event``.
+    """
+    attempt = 0
+    while not stop_event.is_set():
+        try:
+            check()
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1 FROM jobs LIMIT 1"))
+            # Declara a topologia antes de liberar os consumidores para evitar
+            # que o outbox-relay esgote tentativas publicando em fila ausente.
+            _declare_topology(rabbitmq_amqp_url, queue)
+            ready_event.set()
+            return
+        except Exception as exc:  # noqa: BLE001
+            attempt += 1
+            if attempt % 10 == 1:
+                logger.warning(
+                    "dependencies not ready (attempt %s): %s", attempt, exc
+                )
+            stop_event.wait(READY_DELAY_SECONDS)
+
+
 def _declare_topology(url: str, queue: str) -> None:
     connection = pika.BlockingConnection(pika.URLParameters(url))
     try:
@@ -90,9 +127,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     settings = WorkerSettings()
-    _wait_for_dependencies()
     queue = settings.worker_queue or PROVISIONING_QUEUE
-    _declare_topology(settings.rabbitmq_amqp_url, queue)
 
     publisher = RabbitMQPublisher(settings.rabbitmq_amqp_url)
     registry = build_registry()
@@ -108,17 +143,67 @@ def main() -> None:
         interval_seconds=settings.job_reaper_interval_seconds,
     )
     stop_event = threading.Event()
+    leader_event = threading.Event()
+    ready_event = threading.Event()
 
     def job_callback(body: bytes) -> None:
+        # Não consome/ack mensagem antes de banco, schema e broker prontos.
+        ready_event.wait()
         processor.process(_parse_envelope(body))
 
     def status_callback(body: bytes) -> None:
+        ready_event.wait()
         status_processor.process(_parse_status_event(body))
 
     def declare(channel: Any) -> None:
         declare_topology(channel, queue)
 
-    threads = [
+    threads: list[threading.Thread] = []
+    singleton_kwargs: dict[str, threading.Event]
+    if settings.leader_election_enabled:
+        elector = K8sLeaderElector(
+            client=InClusterLeaseClient(),
+            identity=resolve_identity(settings.leader_election_identity),
+            namespace=settings.leader_election_namespace,
+            lease_name=settings.leader_election_lease_name,
+            lease_duration_seconds=(
+                settings.leader_election_lease_duration_seconds
+            ),
+            on_started_leading=leader_event.set,
+            on_stopped_leading=leader_event.clear,
+        )
+        threads.append(
+            threading.Thread(
+                target=elector.run,
+                args=(stop_event,),
+                name="leader-elector",
+                daemon=True,
+            )
+        )
+        threads.append(
+            threading.Thread(
+                target=_wait_for_dependencies_background,
+                args=(
+                    stop_event,
+                    ready_event,
+                    settings.rabbitmq_amqp_url,
+                    queue,
+                ),
+                name="deps-wait",
+                daemon=True,
+            )
+        )
+        singleton_kwargs = {
+            "leader_event": leader_event,
+            "ready_event": ready_event,
+        }
+    else:
+        _wait_for_dependencies()
+        _declare_topology(settings.rabbitmq_amqp_url, queue)
+        ready_event.set()
+        singleton_kwargs = {}
+
+    threads.append(
         threading.Thread(
             target=run_outbox_relay,
             args=(
@@ -128,15 +213,21 @@ def main() -> None:
                 OUTBOX_POLL_SECONDS,
                 settings.outbox_max_attempts,
             ),
+            kwargs=singleton_kwargs,
             name="outbox-relay",
             daemon=True,
-        ),
+        )
+    )
+    threads.append(
         threading.Thread(
             target=reaper.run_forever,
             args=(stop_event,),
+            kwargs=singleton_kwargs,
             name="job-reaper",
             daemon=True,
-        ),
+        )
+    )
+    threads.append(
         threading.Thread(
             target=run_consumer,
             args=(
@@ -149,8 +240,8 @@ def main() -> None:
             kwargs={"declare": declare},
             name="status-consumer",
             daemon=True,
-        ),
-    ]
+        )
+    )
     for index in range(settings.worker_concurrency):
         threads.append(
             threading.Thread(
