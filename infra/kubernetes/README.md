@@ -34,6 +34,7 @@ kubectl config current-context   # deve mostrar k3d-linx
 | --- | --- |
 | `identity-api` | `includeluisferreira/identity-api:dev` |
 | `agent-bridge` | `includeluisferreira/agent-bridge:dev` |
+| `jobs-worker` | `includeluisferreira/jobs-worker:dev` |
 
 Os repositórios são públicos e a base usa `imagePullPolicy: Always`, porque a tag
 `dev` é mutável. O cluster puxa as imagens no primeiro agendamento; **não há
@@ -335,12 +336,39 @@ images:
     digest: sha256:<DIGEST>
 ```
 
+## Eleição de líder (issue #273)
+
+Com `replicas: 3`, o `jobs_worker` disputa um `Lease`
+(`coordination.k8s.io/v1`) no namespace `linx`. Apenas a réplica que detém o
+`Lease` executa os loops singleton `outbox-relay` e `job-reaper`; as demais
+ficam em standby e assumem quando o Lease expira (failover em ~10–15s). O
+consumo das filas (`run_consumer`) continua em **todas** as réplicas.
+
+- O ServiceAccount `jobs-worker` recebe permissão mínima sobre `leases`
+  (`get`, `create`, `update`, `patch`) via Role/RoleBinding.
+- A eleição é configurada pelas variáveis `LEADER_ELECTION_*` no ConfigMap
+  `linx-config`. `LEADER_ELECTION_ENABLED=false` preserva o comportamento
+  anterior (uma execução por réplica, sem Lease).
+- A identidade de cada candidato é o nome do pod (`HOSTNAME`), com fallback
+  para UUID.
+
+```bash
+kubectl -n linx get lease -w                    # acompanha a troca de titular
+kubectl -n linx get lease jobs-worker -o yaml   # holderIdentity atual
+kubectl -n linx logs deploy/jobs-worker -c jobs-worker | grep "leader election"
+# leader election: acquired / renewed / lost
+```
+
+> O `jobs_worker` sobe mesmo sem RabbitMQ no cluster: a eleição é observável
+> independentemente do broker (o `wait-for-db` garante o Postgres; a espera por
+> RabbitMQ é não-fatal quando a eleição está ativa).
+
 ## Evidências (Entrega 3 — relatório técnico)
 
 ```bash
 kubectl -n linx get pods -o wide
-# 2x agent-bridge, 2x identity-api, 1x postgres, todos Running (initContainers
-# concluídos)
+# 2x agent-bridge, 2x identity-api, 3x jobs-worker, 1x postgres, todos Running
+# (initContainers concluídos)
 
 kubectl -n linx get endpoints agent-bridge identity-api
 # endpoints não vazios (selector OK)
@@ -364,6 +392,36 @@ kubectl -n linx logs deploy/identity-api -c migrate --tail=5
 # initContainer migrate aplica "alembic upgrade head"; o advisory lock serializa
 # as duas réplicas, então apenas uma execução efetiva aparece
 ```
+
+### Eleição de líder
+
+```bash
+kubectl -n linx get lease -w
+# observa o holderIdentity mudar de pod ao derrubar o líder
+
+kubectl -n linx get lease jobs-worker -o yaml
+# spec.holderIdentity aponta para o pod líder atual
+
+kubectl -n linx logs deploy/jobs-worker -c jobs-worker | grep "leader election"
+# réplica líder: "acquired" + "renewed"; réplicas standby não registram "acquired"
+
+# Sucessão: derruba o pod líder e observa outro assumir em <= 30s
+kubectl -n linx delete pod -l app=jobs-worker --field-selector=status.phase=Running
+kubectl -n linx logs deploy/jobs-worker -c jobs-worker --tail=50 | grep "leader election"
+```
+
+Prova de exclusividade: apenas a líder executa `outbox-relay`; as réplicas
+standby não registram iterações de relay nos logs.
+
+### Tabela requisito → mecanismo → arquivo → evidência
+
+| Requisito (PRD §5.5) | Mecanismo | Arquivo | Evidência |
+| --- | --- | --- | --- |
+| RF-040 (Nomeação) | `envelope_id` UUIDv4 | `middleware/services/routing/src/routing/envelope.py` | `test_envelope.py`, `linx_core/shared/tests/test_uuid4.py` |
+| RF-041 (Consistência) | `ON CONFLICT (app_id, dev_eui, time, event_type)`; outbox ordenado por `next_attempt_at, created_at` | `client/services/telemetry_consumer/src/telemetry_consumer/db.py`, `linx_core/shared/src/linx_shared/jobs/outbox.py` | `client/services/telemetry_consumer/tests/test_db.py`, `linx_core/services/jobs_worker/tests/test_outbox_relay.py` |
+| RF-042 (Resiliência) | retry/backoff (`RETRY_DELAYS_SECONDS`) | `linx_core/shared/src/linx_shared/jobs/constants.py`, `linx_core/services/jobs_worker/src/jobs_worker/processor.py` | `linx_core/services/jobs_worker/tests/test_job_processor.py` |
+| Eleição de líder | `Lease` (`coordination.k8s.io/v1`) + `K8sLeaderElector` | `linx_core/shared/src/linx_shared/coordination/leader.py` | `linx_core/shared/tests/test_leader_election.py`; `kubectl get lease -w` |
+| Exclusão mútua (documentada) | `pg_try_advisory_lock` / `FOR UPDATE` + lease | `linx_core/shared/src/linx_shared/db/migration_lock.py`, `linx_core/shared/src/linx_shared/jobs/repository.py` | `linx_core/shared/tests/test_migration_lock_integration.py` |
 
 ## Limpeza / reset do ambiente local
 
