@@ -28,7 +28,7 @@ jobs:
         run: |
           out="$(kubectl kustomize infra/kubernetes)"
           test -n "$out"
-          echo "$out" | grep -Eq 'kind: (Namespace|ConfigMap|PersistentVolumeClaim|Deployment|Service)'
+          echo "$out" | grep -Eq 'kind: (Namespace|ConfigMap|PersistentVolumeClaim|Deployment|Service|ServiceAccount|Role|RoleBinding)'
 
       - name: Render dockerhub overlay
         run: |
