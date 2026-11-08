@@ -64,7 +64,9 @@ class JobReaper:
             if (leader_event is not None and not leader_event.is_set()) or (
                 ready_event is not None and not ready_event.is_set()
             ):
-                stop_event.wait(self._interval_seconds)
+                # Tick curto: ao assumir a liderança o novo líder não deve
+                # esperar o intervalo completo (default 60s) para o 1º reap.
+                stop_event.wait(min(self._interval_seconds, 1.0))
                 continue
             try:
                 recovered = self.run_once()

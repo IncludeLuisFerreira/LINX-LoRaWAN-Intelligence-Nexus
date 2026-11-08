@@ -70,17 +70,23 @@ def _wait_for_dependencies() -> None:
 def _wait_for_dependencies_background(
     stop_event: threading.Event,
     ready_event: threading.Event,
+    rabbitmq_amqp_url: str,
+    queue: str,
 ) -> None:
     """Aguarda dependências sem abortar o processo.
 
     Usada quando a eleição de líder está ativa: a eleição é observável mesmo
-    sem RabbitMQ, e os loops singleton só iniciam após ``ready_event``.
+    sem RabbitMQ, e os loops singleton/consumidores só processam após
+    ``ready_event``.
     """
     while not stop_event.is_set():
         try:
             check()
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1 FROM jobs LIMIT 1"))
+            # Declara a topologia antes de liberar os consumidores para evitar
+            # que o outbox-relay esgote tentativas publicando em fila ausente.
+            _declare_topology(rabbitmq_amqp_url, queue)
             ready_event.set()
             return
         except Exception as exc:  # noqa: BLE001
@@ -136,9 +142,12 @@ def main() -> None:
     ready_event = threading.Event()
 
     def job_callback(body: bytes) -> None:
+        # Não consome/ack mensagem antes de banco, schema e broker prontos.
+        ready_event.wait()
         processor.process(_parse_envelope(body))
 
     def status_callback(body: bytes) -> None:
+        ready_event.wait()
         status_processor.process(_parse_status_event(body))
 
     def declare(channel: Any) -> None:
@@ -169,7 +178,12 @@ def main() -> None:
         threads.append(
             threading.Thread(
                 target=_wait_for_dependencies_background,
-                args=(stop_event, ready_event),
+                args=(
+                    stop_event,
+                    ready_event,
+                    settings.rabbitmq_amqp_url,
+                    queue,
+                ),
                 name="deps-wait",
                 daemon=True,
             )
@@ -181,6 +195,7 @@ def main() -> None:
     else:
         _wait_for_dependencies()
         _declare_topology(settings.rabbitmq_amqp_url, queue)
+        ready_event.set()
         singleton_kwargs = {}
 
     threads.append(

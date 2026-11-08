@@ -53,6 +53,7 @@ class WorkerSettings(Settings):
         "job_lock_seconds",
         "job_reaper_interval_seconds",
         "outbox_max_attempts",
+        "leader_election_lease_duration_seconds",
     )
     @classmethod
     def _validate_positive_int(cls, value: int) -> int:

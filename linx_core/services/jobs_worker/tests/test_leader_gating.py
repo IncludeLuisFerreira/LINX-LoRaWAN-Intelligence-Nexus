@@ -71,6 +71,24 @@ def test_outbox_relay_runs_when_leader(monkeypatch):
         thread.join(timeout=1.0)
 
 
+def test_outbox_relay_stops_when_leadership_lost(monkeypatch):
+    leader = threading.Event()
+    leader.set()
+    ready = threading.Event()
+    ready.set()
+    calls, stop, thread = _start_outbox(monkeypatch, leader, ready)
+    try:
+        assert _settle(lambda: len(calls) > 0)
+        leader.clear()
+        time.sleep(0.1)
+        snapshot = len(calls)
+        time.sleep(0.1)
+        assert len(calls) == snapshot
+    finally:
+        stop.set()
+        thread.join(timeout=1.0)
+
+
 def test_outbox_relay_waits_for_ready(monkeypatch):
     leader = threading.Event()
     leader.set()
@@ -111,6 +129,19 @@ def test_reaper_idles_when_not_leader(monkeypatch):
     leader = threading.Event()
     ready = threading.Event()
     ready.set()
+    calls, stop, thread = _start_reaper(monkeypatch, leader, ready)
+    try:
+        time.sleep(0.05)
+        assert calls == []
+    finally:
+        stop.set()
+        thread.join(timeout=1.0)
+
+
+def test_reaper_waits_for_ready(monkeypatch):
+    leader = threading.Event()
+    leader.set()
+    ready = threading.Event()
     calls, stop, thread = _start_reaper(monkeypatch, leader, ready)
     try:
         time.sleep(0.05)
