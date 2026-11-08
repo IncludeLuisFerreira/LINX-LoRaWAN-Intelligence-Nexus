@@ -269,7 +269,10 @@ class K8sLeaderElector:
         }
 
     def _try_acquire(self) -> bool:
-        lease = self._client.get(self._namespace, self._lease_name)
+        try:
+            lease = self._client.get(self._namespace, self._lease_name)
+        except LeaderElectionError:
+            return False
         now_iso = self._now_iso()
         if lease is None:
             try:
@@ -279,7 +282,7 @@ class K8sLeaderElector:
                     self._lease_body(renew_time=now_iso, acquire_time=now_iso),
                 )
                 return True
-            except LeaseConflictError:
+            except LeaderElectionError:
                 return False
         holder = lease.get("spec", {}).get("holderIdentity")
         if holder == self._identity or self._is_expired(lease):
@@ -298,7 +301,7 @@ class K8sLeaderElector:
                     ),
                 )
                 return True
-            except (LeaseConflictError, LeaseNotFoundError):
+            except LeaderElectionError:
                 return False
         return False
 

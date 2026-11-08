@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from linx_shared.coordination.leader import (
     K8sLeaderElector,
+    LeaderElectionError,
     LeaseConflictError,
     LeaseNotFoundError,
 )
@@ -32,17 +33,24 @@ class FakeLeaseClient:
         self._resource_version = 0
         self._lock = threading.Lock()
         self.fail_replaces = False
+        self.transient_error = False
+
+    def _maybe_raise(self) -> None:
+        if self.transient_error:
+            raise LeaderElectionError("API indisponível")
 
     def _next_rv(self) -> str:
         self._resource_version += 1
         return str(self._resource_version)
 
     def get(self, namespace: str, name: str) -> dict | None:
+        self._maybe_raise()
         with self._lock:
             lease = self._leases.get(name)
             return copy.deepcopy(lease) if lease is not None else None
 
     def create(self, namespace: str, name: str, body: dict) -> dict:
+        self._maybe_raise()
         with self._lock:
             if name in self._leases:
                 raise LeaseConflictError("lease já existe")
@@ -52,6 +60,7 @@ class FakeLeaseClient:
             return copy.deepcopy(stored)
 
     def replace(self, namespace: str, name: str, body: dict) -> dict:
+        self._maybe_raise()
         with self._lock:
             if self.fail_replaces:
                 raise LeaseConflictError("falha injetada")
@@ -310,6 +319,31 @@ def test_lease_deleted_externally_triggers_reacquire():
         store.delete("jobs-worker")
         assert log.wait_for("stopped", count=1)
         assert log.wait_for("started", count=2)
+    finally:
+        stop.set()
+        thread.join(timeout=2.0)
+
+
+def test_network_error_during_acquire_does_not_crash():
+    clock = ManualClock()
+    store = FakeLeaseClient(clock)
+    store.transient_error = True
+    log = EventLog()
+    elector = K8sLeaderElector(
+        client=store,
+        identity="pod-0",
+        clock=clock,
+        retry_period_seconds=0.01,
+        on_started_leading=lambda: log.record("started"),
+    )
+
+    thread, stop = _start(elector)
+    try:
+        time.sleep(0.05)
+        assert not log.wait_for("started", count=1, timeout=0.2)
+        store.transient_error = False
+        assert log.wait_for("started", count=1)
+        assert store.holder("jobs-worker") == "pod-0"
     finally:
         stop.set()
         thread.join(timeout=2.0)
