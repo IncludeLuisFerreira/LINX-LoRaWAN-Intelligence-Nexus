@@ -67,6 +67,9 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Diagnóstico — identidade AWS
+        run: aws sts get-caller-identity
+
       - name: Terraform Init
         id: init
         run: terraform init
