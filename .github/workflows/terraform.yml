@@ -68,7 +68,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Diagnóstico — identidade AWS
-        run: aws sts get-caller-identity
+        run: aws sts get-caller-identity --query Account --output text
 
       - name: Terraform Init
         id: init

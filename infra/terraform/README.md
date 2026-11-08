@@ -123,6 +123,15 @@ novamente — o passo do Secret é idempotente.
 
 ## Diagnóstico
 
+Se `terraform init` (local ou no CI) falhar com `403 Forbidden`/`AccessDenied`
+citando a policy `voc-cancel-cred`, a **sessão do Learner Lab foi encerrada**:
+a conta e os recursos continuam existindo, mas as credenciais daquela sessão
+são negadas. Inicie uma nova sessão no AWS Academy e atualize
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` no ambiente
+local e nos secrets do GitHub. O passo "Diagnóstico — identidade AWS" do job de
+plan imprime apenas o número da conta, útil para confirmar que o CI está na
+mesma conta do bucket.
+
 Obtenha o IP público do master (com o state remoto configurado):
 
 ```bash
