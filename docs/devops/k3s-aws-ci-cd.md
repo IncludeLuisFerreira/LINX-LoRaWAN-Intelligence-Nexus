@@ -1,8 +1,8 @@
 # CI/CD do cluster K3s na AWS (issue #278)
 
 O provisionamento do cluster K3s da sandbox é feito pelo Terraform em
-`infra/terraform`, com state remoto no backend S3 (`linx-k3s-tfstate`) e lock no
-DynamoDB (`linx-k3s-tfstate-lock`); o bucket e a tabela são criados uma única vez
+`infra/terraform`, com state remoto no backend S3 (`linx-k3s-tfstate`) e lock
+nativo do bucket (`use_lockfile`, sem DynamoDB); o bucket é criado uma única vez
 pelo bootstrap manual. O `apply` e o `destroy` rodam sob demanda pelo
 `workflow_dispatch` de `.github/workflows/terraform.yml` (inputs `action` e
 `key_name`), e o deploy dos manifests acontece no mesmo job: como o runner não

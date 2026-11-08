@@ -2,19 +2,19 @@
 
 ## Backend S3 — bootstrap (uma única vez)
 
-O estado do Terraform fica em S3 com lock via DynamoDB. Antes do primeiro
-`terraform init`, crie o bucket e a tabela de lock:
+O estado do Terraform fica em S3 com **lock nativo do próprio bucket**
+(`use_lockfile = true`, Terraform >= 1.10). Antes do primeiro `terraform init`,
+crie o bucket versionado:
 
 ```bash
 aws s3api create-bucket --bucket linx-k3s-tfstate --region us-east-1
 aws s3api put-bucket-versioning --bucket linx-k3s-tfstate \
   --versioning-configuration Status=Enabled
-aws dynamodb create-table \
-  --table-name linx-k3s-tfstate-lock \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
 ```
+
+> O lock via DynamoDB **não é usado**: o Learner Lab nega `dynamodb:CreateTable`
+> para o papel `voclabs`. O `use_lockfile` grava o lock num objeto
+> `terraform.tfstate.tflock` no S3 e não exige DynamoDB.
 
 > Se `create-bucket` falhar com `BucketAlreadyExists`, troque
 > `linx-k3s-tfstate` por um nome globalmente único no comando acima e no bloco
@@ -32,7 +32,7 @@ terraform -chdir=infra/terraform plan
 O `init` local usa o mesmo backend S3 do CI, então exige credenciais AWS
 válidas (as mesmas variáveis `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e
 `AWS_SESSION_TOKEN`) e não cria state no diretório. O `plan` é seguro; o
-`apply` local disputa o lock do DynamoDB com o CI — nunca rode os dois ao mesmo
+`apply` local disputa o lock nativo do S3 com o CI — nunca rode os dois ao mesmo
 tempo:
 
 ```bash

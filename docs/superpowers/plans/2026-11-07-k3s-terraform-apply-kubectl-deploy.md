@@ -12,6 +12,11 @@
 
 **Issue:** #278
 
+> **Emenda (2026-11-07, execução):** o Learner Lab nega `dynamodb:CreateTable`
+> ao papel `voclabs`. O backend usa **lock nativo do S3** (`use_lockfile = true`,
+> Terraform >= 1.10, pinado em 1.17.1 no CI), sem tabela DynamoDB. Tarefas que
+> citam DynamoDB devem ser lidas com essa substituição.
+
 ## Global Constraints
 
 - Backend S3 hardcodado no `main.tf` (bucket `linx-k3s-tfstate`, key `terraform.tfstate`, região `us-east-1`, tabela `linx-k3s-tfstate-lock`) — bucket precisa ser globalmente único; ajustar no bootstrap.

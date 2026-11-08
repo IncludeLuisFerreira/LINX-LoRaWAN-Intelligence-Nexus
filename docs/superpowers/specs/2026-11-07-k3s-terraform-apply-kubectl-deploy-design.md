@@ -4,6 +4,12 @@
 **Status:** aprovado
 **Issue:** #278
 
+> **Emenda (2026-11-07, execução):** o Learner Lab **nega**
+> `dynamodb:CreateTable` ao papel `voclabs` (verificado via AWS CLI). O lock
+> passou a ser o **nativo do S3** — `use_lockfile = true` no backend, exige
+> Terraform >= 1.10 — e **não há tabela DynamoDB**. O restante do design
+> permanece válido.
+
 ## 1. Intenção e porquê
 
 A spec #272 terminou a reorganização de `infra/` e registrou explicitamente o
@@ -95,6 +101,9 @@ pelo backend remoto, não contornada.
 
 ### 7.1 Backend S3 + DynamoDB
 
+> **Emenda:** esta seção foi substituída pelo lock nativo do S3
+> (`use_lockfile = true`, Terraform >= 1.10); a tabela DynamoDB não é criada.
+
 No `main.tf`, substituir o backend local por:
 
 ```hcl
@@ -119,6 +128,9 @@ local e CI idênticos (só `terraform init`) e evita variável a mais. O nome do
 bucket precisa ser trocado por um globalmente único na implementação.
 
 ### 7.2 Bootstrap (uma única vez, manual)
+
+> **Emenda:** sem DynamoDB — apenas o bucket versionado (o lock fica em
+> `terraform.tfstate.tflock` dentro do próprio bucket).
 
 Bucket e tabela são pré-requisitos do `terraform init` (Terraform não cria o
 próprio backend). Documentar no runbook:
