@@ -53,8 +53,19 @@ class JobReaper:
         finally:
             session.close()
 
-    def run_forever(self, stop_event: threading.Event) -> None:
+    def run_forever(
+        self,
+        stop_event: threading.Event,
+        *,
+        leader_event: threading.Event | None = None,
+        ready_event: threading.Event | None = None,
+    ) -> None:
         while not stop_event.is_set():
+            if (leader_event is not None and not leader_event.is_set()) or (
+                ready_event is not None and not ready_event.is_set()
+            ):
+                stop_event.wait(self._interval_seconds)
+                continue
             try:
                 recovered = self.run_once()
                 if recovered:
