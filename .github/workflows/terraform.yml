@@ -21,6 +21,9 @@ on:
         description: 'EC2 Key Pair na AWS'
         required: true
         default: 'vockey'
+      ssh_cidr:
+        description: 'CIDR liberado para SSH (22) e NodePort (30000-32767); use seu IP público /32'
+        required: true
 
 permissions:
   contents: read
@@ -47,8 +50,11 @@ jobs:
         working-directory: infra/terraform
 
     env:
-      AWS_REGION: "us-east-1"
+      AWS_REGION: "us-east-2"
       TF_VAR_key_name: ${{ vars.TF_VAR_KEY_NAME }}
+      # Plan não aplica rede; valor de teste caso a variável do repositório
+      # não exista. O apply usa o input `ssh_cidr` do workflow_dispatch.
+      TF_VAR_ssh_cidr: ${{ vars.TF_VAR_SSH_CIDR || '203.0.113.1/32' }}
 
     steps:
       - name: Checkout Código
@@ -126,7 +132,8 @@ jobs:
         working-directory: infra/terraform
 
     env:
-      AWS_REGION: "us-east-1"
+      AWS_REGION: "us-east-2"
+      TF_VAR_ssh_cidr: ${{ github.event.inputs.ssh_cidr }}
       # Mapa CHAVE=VALOR (formato --env-file) entregue ao master por stdin
       # na sessão SSH única do deploy; nunca impresso no log.
       LINX_SECRETS_ENV: ${{ secrets.LINX_SECRETS_ENV }}

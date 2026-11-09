@@ -132,7 +132,7 @@ kubectl apply -f infra/kubernetes/base/namespace.yaml
 
 cp infra/kubernetes/linx-secrets.example.env infra/kubernetes/linx-secrets.env
 # editar linx-secrets.env; no laboratório DATABASE_URL aponta para
-# postgres.linx.svc.cluster.local:5432
+# postgres-0.postgres.linx.svc.cluster.local:5432 (primary)
 
 # idempotente: pode rodar de novo sem "AlreadyExists"
 kubectl create secret generic linx-secrets -n linx \
@@ -143,7 +143,7 @@ kubectl create secret generic linx-secrets -n linx \
 O `--dry-run=client -o yaml` gera o Secret e o `kubectl apply` o cria ou
 atualiza, sem falhar em execuções repetidas. As chaves mínimas são as do
 template: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
-`SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
+`POSTGRES_REPLICATION_PASSWORD`, `SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
 `RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD`, `RABBITMQ_TENANT_SECRET` e
 `RABBITMQ_AMQP_URL` (usada pelo `jobs_worker`; aponte para um broker real).
 
@@ -159,7 +159,7 @@ Secret com o comando acima. Nenhum manifest precisa mudar. Exemplo de formato:
 DATABASE_URL=postgresql+psycopg://<user>:<pass>@<host>:5432/<database>
 ```
 
-O `postgres` do laboratório (`postgres.linx.svc.cluster.local`) continua no
+O `postgres` do laboratório (`postgres-0.postgres.linx.svc.cluster.local`) continua no
 manifest, mas os serviços usam o host definido no Secret.
 
 ## Migrations e probes
@@ -365,14 +365,16 @@ kubectl -n linx logs deploy/jobs-worker -c jobs-worker | grep "leader election"
 
 > O `jobs_worker` sobe mesmo sem RabbitMQ no cluster: a eleição é observável
 > independentemente do broker (o `wait-for-db` garante o Postgres; a espera por
-> RabbitMQ é não-fatal quando a eleição está ativa).
+> RabbitMQ é não-fatal quando a eleição está ativa). O `rabbitmq.yaml` do
+> laboratório fornece um broker efêmero para os loops singleton executarem de
+> fato.
 
 ## Evidências (Entrega 3 — relatório técnico)
 
 ```bash
 kubectl -n linx get pods -o wide
-# 2x agent-bridge, 2x identity-api, 3x jobs-worker, 1x postgres, todos Running
-# (initContainers concluídos)
+# 2x agent-bridge, 2x identity-api, 3x jobs-worker, 1x rabbitmq,
+# postgres-0 + postgres-1, todos Running (initContainers concluídos)
 
 kubectl -n linx get endpoints agent-bridge identity-api
 # endpoints não vazios (selector OK)
@@ -483,8 +485,9 @@ offline.
   StorageClass padrão do cluster — `local-path` no k3s, `standard` no kind, o
   default em outros ambientes) e existe apenas para sustentar as evidências.
   Dados de produção não pertencem aqui.
-- RabbitMQ no cluster é pendência; `RABBITMQ_AMQP_HOST`/`RABBITMQ_MANAGEMENT_URL`
-  no ConfigMap são informativos e não bloqueiam os pods desta issue.
+- O RabbitMQ do laboratório sobe pelo `rabbitmq.yaml` (Deployment efêmero, sem
+  PVC) e usa `RABBITMQ_ADMIN_USER`/`RABBITMQ_ADMIN_PASSWORD` do Secret. Em
+  produção, troque por um broker gerenciado.
 - ChirpStack não existe neste cluster; `CHIRPSTACK_HOST: localhost:8080` aponta
   para o próprio pod. Operações de tenant/application/device que chamam o
   ChirpStack vão falhar até que `CHIRPSTACK_HOST` aponte para um host real.
