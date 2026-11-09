@@ -1,6 +1,6 @@
 # Evidências na AWS — Entrega 3
 
-Coleta feita em **2026-11-09** na conta AWS `980146461849` (plano FREE),
+Coleta feita em **2026-11-09** na conta AWS do projeto (plano FREE),
 região **`us-east-2`**.
 
 ## Cluster
