@@ -28,9 +28,11 @@ jobs:
         run: |
           out="$(kubectl kustomize infra/kubernetes)"
           test -n "$out"
-          for kind in Namespace ConfigMap PersistentVolumeClaim Deployment Service ServiceAccount Role RoleBinding; do
+          for kind in Namespace ConfigMap Deployment Service ServiceAccount Role RoleBinding; do
             echo "$out" | grep -q "kind: $kind"
           done
+          # Postgres usa StatefulSet com volumeClaimTemplates (PVC por pod).
+          echo "$out" | grep -q "volumeClaimTemplates:"
           # jobs-worker entra com 3 réplicas e RBAC de leader election.
           echo "$out" | grep -q "replicas: 3"
           echo "$out" | grep -q "name: jobs-worker-leader-election"
