@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - postgres.yaml
+  - rabbitmq.yaml
   - linx-config.yaml
   - agent-bridge.yaml
   - identity-api.yaml
