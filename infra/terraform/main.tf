@@ -1,6 +1,6 @@
 ###############################################################################
-# Terraform — Cluster K3s leve na AWS Sandbox (Learner Lab)
-# Região: us-east-1 | Backend remoto S3 com lock nativo (use_lockfile)
+# Terraform — Cluster K3s leve na AWS (conta real ou laboratório)
+# Região: us-east-2 | Backend remoto S3 com lock nativo (use_lockfile)
 ###############################################################################
 
 terraform {
@@ -21,15 +21,14 @@ terraform {
   backend "s3" {
     bucket       = "linx-k3s-tfstate" # ajustar para nome globalmente único
     key          = "terraform.tfstate"
-    region       = "us-east-1"
+    region       = "us-east-2"
     use_lockfile = true # lock nativo no S3 (Learner Lab não permite criar DynamoDB)
   }
 }
 
 provider "aws" {
-  region = "us-east-1"
-  # Credenciais locais a partir das credenciais temporárias do Learner Lab
-  # (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN no ambiente).
+  region = "us-east-2"
+  # Credenciais locais via perfil `linx-dev` (aws login) ou variáveis de ambiente.
 }
 
 ###############################################################################
@@ -45,6 +44,12 @@ variable "node_count" {
   description = "Número de workers."
   type        = number
   default     = 2
+}
+
+variable "ssh_cidr" {
+  description = "CIDR liberado para SSH (22) e NodePort (30000-32767). Use seu IP público /32."
+  type        = string
+  default     = "0.0.0.0/0"
 }
 
 ###############################################################################
@@ -97,7 +102,7 @@ resource "aws_vpc" "k3s" {
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.k3s.id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
+  availability_zone       = "us-east-2a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -155,7 +160,7 @@ resource "aws_security_group" "k3s" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.ssh_cidr]
   }
 
   # API do K3s (agent -> server) dentro da VPC.
@@ -174,7 +179,7 @@ resource "aws_security_group" "k3s" {
     from_port   = 30000
     to_port     = 32767
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.ssh_cidr]
   }
 
   # Egress total.
@@ -196,7 +201,7 @@ resource "aws_security_group" "k3s" {
 
 resource "aws_instance" "master" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.medium"
+  instance_type               = "t3.small"
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.k3s.id]
   key_name                    = var.key_name
@@ -257,14 +262,16 @@ export K3S_URL="$MASTER_URL"
 export K3S_TOKEN="${random_password.k3s_token.result}"
 
 # Espera a API do K3s server ficar saudável antes de registrar o agent.
+# /healthz exige autenticação e responde 401; sem -f, o curl retorna sucesso
+# quando a API já aceita conexões (401/200), e falha só se a porta não responde.
 for i in $(seq 1 90); do
-  if curl -ksf "$MASTER_URL/healthz" >/dev/null; then
+  if curl -kso /dev/null "$MASTER_URL/healthz"; then
     break
   fi
   sleep 2
 done
 
-if ! curl -ksf "$MASTER_URL/healthz" >/dev/null; then
+if ! curl -kso /dev/null "$MASTER_URL/healthz"; then
   echo "K3s master não respondeu em $MASTER_URL após 180s" >&2
   exit 1
 fi

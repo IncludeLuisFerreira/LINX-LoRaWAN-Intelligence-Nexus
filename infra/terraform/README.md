@@ -1,4 +1,4 @@
-# Terraform — Cluster K3s (AWS Sandbox)
+# Terraform — Cluster K3s (AWS)
 
 ## Backend S3 — bootstrap (uma única vez)
 
@@ -7,7 +7,8 @@ O estado do Terraform fica em S3 com **lock nativo do próprio bucket**
 crie o bucket versionado:
 
 ```bash
-aws s3api create-bucket --bucket linx-k3s-tfstate --region us-east-1
+aws s3api create-bucket --bucket linx-k3s-tfstate --region us-east-2 \
+  --create-bucket-configuration LocationConstraint=us-east-2
 aws s3api put-bucket-versioning --bucket linx-k3s-tfstate \
   --versioning-configuration Status=Enabled
 ```
@@ -26,6 +27,38 @@ Depois:
 terraform -chdir=infra/terraform init
 terraform -chdir=infra/terraform plan
 ```
+
+## Conta real — teste rápido com state local
+
+Para uma demonstração pontual sem criar o bucket S3, use o backend local
+(`-backend=false`) e restrinja SSH/NodePort ao seu IP:
+
+```bash
+aws login --profile linx-dev
+export AWS_PROFILE=linx-dev
+
+MY_IP=$(curl -s https://checkip.amazonaws.com)
+
+ssh-keygen -t ed25519 -f ~/.ssh/linx-k3s-real.pem -N ""
+aws ec2 import-key-pair --key-name linx-k3s-real \
+  --public-key-material fileb://$HOME/.ssh/linx-k3s-real.pem.pub
+
+terraform -chdir=infra/terraform init -backend=false
+terraform -chdir=infra/terraform apply \
+  -var="key_name=linx-k3s-real" \
+  -var="ssh_cidr=${MY_IP}/32"
+```
+
+O state fica em `infra/terraform/terraform.tfstate` (gitignored). Para destruir:
+
+```bash
+terraform -chdir=infra/terraform destroy \
+  -var="key_name=linx-k3s-real" \
+  -var="ssh_cidr=${MY_IP}/32"
+```
+
+> O `ssh_command` de output aponta para `~/.ssh/<key_name>.pem`.
+> A chave pública é importada; a privada fica só na sua máquina.
 
 ## Uso local (opcional)
 

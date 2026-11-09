@@ -47,7 +47,7 @@ jobs:
         working-directory: infra/terraform
 
     env:
-      AWS_REGION: "us-east-1"
+      AWS_REGION: "us-east-2"
       TF_VAR_key_name: ${{ vars.TF_VAR_KEY_NAME }}
 
     steps:
@@ -126,7 +126,7 @@ jobs:
         working-directory: infra/terraform
 
     env:
-      AWS_REGION: "us-east-1"
+      AWS_REGION: "us-east-2"
       # Mapa CHAVE=VALOR (formato --env-file) entregue ao master por stdin
       # na sessão SSH única do deploy; nunca impresso no log.
       LINX_SECRETS_ENV: ${{ secrets.LINX_SECRETS_ENV }}
