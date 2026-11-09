@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   api,
   clearAccessToken,
@@ -6,6 +6,11 @@ import {
   getErrorMessage,
   setAccessToken,
 } from './api';
+
+// O token vive no módulo api.ts; sem este reset ele vazaria entre os casos.
+afterEach(() => {
+  clearAccessToken();
+});
 
 function axiosErrorWithData(
   data: unknown,
