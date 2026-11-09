@@ -49,7 +49,11 @@ variable "node_count" {
 variable "ssh_cidr" {
   description = "CIDR liberado para SSH (22) e NodePort (30000-32767). Use seu IP público /32."
   type        = string
-  default     = "0.0.0.0/0"
+
+  validation {
+    condition     = var.ssh_cidr != "0.0.0.0/0"
+    error_message = "ssh_cidr não pode ser 0.0.0.0/0; use o IP público /32 de quem vai acessar o cluster."
+  }
 }
 
 ###############################################################################
