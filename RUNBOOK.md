@@ -72,7 +72,8 @@ ssh -i "$PEM_PATH" -o IdentitiesOnly=yes ubuntu@$MASTER_IP \
      --from-literal=CHIRPSTACK_API_TOKEN=<seu-chirpstack-api-token> \
      --from-literal=RABBITMQ_ADMIN_USER=admin \
      --from-literal=RABBITMQ_ADMIN_PASSWORD=$RABBIT_SECRET \
-     --from-literal=RABBITMQ_TENANT_SECRET=$RABBIT_SECRET"
+     --from-literal=RABBITMQ_TENANT_SECRET=$RABBIT_SECRET \
+     --from-literal=RABBITMQ_AMQP_URL=amqp://admin:$RABBIT_SECRET@rabbitmq.linx.svc.cluster.local:5672/ "
 ```
 
 Depois aplica os manifests (a partir da raiz do repositório):
