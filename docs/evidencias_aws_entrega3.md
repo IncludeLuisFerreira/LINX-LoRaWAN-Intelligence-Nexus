@@ -8,18 +8,18 @@ região **`us-east-2`**.
 | Item | Valor |
 | --- | --- |
 | Kubernetes | k3s `v1.37.2+k3s1` |
-| Nós | 1 master + 2 workers `t3.small` (free-tier eligible) |
-| Master | público `3.144.228.116`, privado `10.0.1.139` |
-| Workers | privados `10.0.1.24` e `10.0.1.38` |
-| VPC / SG | `vpc-0b6672a29639c4b73` / `sg-0591e413d8adf6277` |
+| Nós | 1 master + 2 workers `t3.small` (fora do free tier; cluster efêmero) |
+| Master | público `<master_public_ip>`, privado `<master_private_ip>` |
+| Workers | privados `<worker_1_private_ip>` e `<worker_2_private_ip>` |
+| VPC / SG | `<vpc_id>` / `<sg_id>` |
 | Key pair | `linx-k3s-real` |
 | Imagem `jobs-worker` | importada nos 3 nós via `k3s ctr images import` (não publicada no Docker Hub) |
 
 ```text
-NAME            STATUS   ROLES           AGE   VERSION
-ip-10-0-1-139   Ready    control-plane   3m    v1.37.2+k3s1
-ip-10-0-1-24    Ready    <none>          8s    v1.37.2+k3s1
-ip-10-0-1-38    Ready    <none>          9s    v1.37.2+k3s1
+NAME              STATUS   ROLES           AGE   VERSION
+<master_node>     Ready    control-plane   3m    v1.37.2+k3s1
+<worker_node_1>   Ready    <none>          8s    v1.37.2+k3s1
+<worker_node_2>   Ready    <none>          9s    v1.37.2+k3s1
 ```
 
 ## Nomeação / DNS interno
@@ -51,10 +51,10 @@ log do novo líder: leader election: acquired
 ## Réplica de serviço
 
 ```text
-GET http://3.144.228.116:30080/health  -> 200 {"status":"ok","db":true}
+GET http://<master_public_ip>:30080/health  -> 200 {"status":"ok","db":true}
 # pod identity-api-5b6cddc445-mqzzr deletado
 # novo pod identity-api-5b6cddc445-r89pn recriado; o outro continuou Running
-GET http://3.144.228.116:30080/health  -> 200 {"status":"ok","db":true}
+GET http://<master_public_ip>:30080/health  -> 200 {"status":"ok","db":true}
 ```
 
 ## Comandos de reprodução

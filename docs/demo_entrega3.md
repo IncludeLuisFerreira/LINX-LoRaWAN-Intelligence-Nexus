@@ -26,7 +26,10 @@ kubectl config use-context k3d-linx
 
 # cluster descartável: remove o namespace antigo (inclusive PVCs/Deployment
 # postgres de versões anteriores do manifest)
-kubectl delete namespace linx --ignore-not-found
+case "$(kubectl config current-context)" in
+  k3d-*) kubectl delete namespace linx --ignore-not-found ;;
+  *) echo "contexto não é k3d-*; aborte ou adapte o comando"; exit 1 ;;
+esac
 ```
 
 Importe a imagem do `jobs-worker` (o repositório Docker Hub
@@ -217,10 +220,18 @@ kubectl -n linx exec postgres-1 -- sh -c \
   'PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -d "$POSTGRESQL_DATABASE" \
    -c "SELECT count(*) FROM demo_replication;"'
 
-# LSN do primary x LSN recebido/reproduzido na réplica (devem ser iguais)
-kubectl -n linx exec postgres-0 -- sh -c \
+# LSN do primary x reproduzido na réplica: pode divergir por ms, então
+# espere o replay alcançar o LSN capturado antes de comparar
+PRIMARY_LSN=$(kubectl -n linx exec postgres-0 -- sh -c \
   'PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -d "$POSTGRESQL_DATABASE" \
-   -Atc "SELECT pg_current_wal_lsn();"'
+   -Atc "SELECT pg_current_wal_lsn();"')
+echo "LSN primary: $PRIMARY_LSN"
+
+until [ "$(kubectl -n linx exec postgres-1 -- sh -c \
+  "PGPASSWORD=\"\$POSTGRESQL_PASSWORD\" psql -U \"\$POSTGRESQL_USERNAME\" -d \"\$POSTGRESQL_DATABASE\" \
+   -Atc \"SELECT pg_wal_lsn_diff(pg_last_wal_replay_lsn(), '$PRIMARY_LSN') >= 0;\"")" = "t" ]; do
+  sleep 1
+done
 
 kubectl -n linx exec postgres-1 -- sh -c \
   'PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -d "$POSTGRESQL_DATABASE" \

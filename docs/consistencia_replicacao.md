@@ -77,10 +77,17 @@ kubectl -n linx exec postgres-1 -- sh -c \
   'PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -d "$POSTGRESQL_DATABASE" \
    -c "SELECT count(*) FROM demo_replication;"'
 
-# LSN do primary x LSN recebido/reproduzido na réplica (devem ser iguais)
-kubectl -n linx exec postgres-0 -- sh -c \
+# LSN do primary x reproduzido na réplica: podem divergir por ms; repita
+# até o replay alcançar o valor do primary
+PRIMARY_LSN=$(kubectl -n linx exec postgres-0 -- sh -c \
   'PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -d "$POSTGRESQL_DATABASE" \
-   -Atc "SELECT pg_current_wal_lsn();"'
+   -Atc "SELECT pg_current_wal_lsn();"')
+
+until [ "$(kubectl -n linx exec postgres-1 -- sh -c \
+  "PGPASSWORD=\"\$POSTGRESQL_PASSWORD\" psql -U \"\$POSTGRESQL_USERNAME\" -d \"\$POSTGRESQL_DATABASE\" \
+   -Atc \"SELECT pg_wal_lsn_diff(pg_last_wal_replay_lsn(), '$PRIMARY_LSN') >= 0;\"")" = "t" ]; do
+  sleep 1
+done
 
 kubectl -n linx exec postgres-1 -- sh -c \
   'PGPASSWORD="$POSTGRESQL_PASSWORD" psql -U "$POSTGRESQL_USERNAME" -d "$POSTGRESQL_DATABASE" \
