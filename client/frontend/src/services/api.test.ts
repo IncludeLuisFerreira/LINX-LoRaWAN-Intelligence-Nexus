@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { getErrorMessage } from './api';
+import {
+  api,
+  clearAccessToken,
+  getAccessToken,
+  getErrorMessage,
+  setAccessToken,
+} from './api';
 
-function axiosErrorWithData(data: unknown, message = 'Request failed with status code 404') {
+function axiosErrorWithData(
+  data: unknown,
+  message = 'Request failed with status code 404',
+) {
   return Object.assign(new Error(message), {
     isAxiosError: true,
     response: { data },
@@ -57,5 +66,19 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage('nope')).toBe('Ocorreu um erro inesperado.');
 
     expect(getErrorMessage(null, 'custom')).toBe('custom');
+  });
+});
+
+describe('api auth configuration', () => {
+  it('keeps the access token only in memory', () => {
+    setAccessToken('memory-jwt');
+    expect(getAccessToken()).toBe('memory-jwt');
+
+    clearAccessToken();
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it('sends credentials so the httpOnly refresh cookie is stored', () => {
+    expect(api.defaults.withCredentials).toBe(true);
   });
 });

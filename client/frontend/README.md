@@ -3,7 +3,8 @@
 Dashboard web do ambiente isolado do cliente (`client/frontend/`). Console de
 gestão da plataforma LINX. Permite administrar **Tenants**,
 **Applications** e **Devices** consumindo o `identity_api` do `linx_core`.
-Não há autenticação nesta versão — o acesso é direto.
+O login usa JWT: o `access_token` fica apenas em memória e o `refresh_token` é
+recebido em cookie `httpOnly` definido pelo backend.
 
 ## Stack
 
@@ -12,11 +13,14 @@ Não há autenticação nesta versão — o acesso é direto.
 - **[Tailwind CSS](https://tailwindcss.com/)** — design system com tokens de
   tema claro (fundo `slate-50`, superfícies brancas, acento azul).
 - **[React Router](https://reactrouter.com/)** — roteamento SPA com `lazy`.
-- **[Axios](https://axios-http.com/)** — cliente HTTP com `baseURL` `/api/v1`.
+- **[Axios](https://axios-http.com/)** — cliente HTTP com `baseURL` `/api/v1`,
+  interceptors JWT e `withCredentials` para o cookie `httpOnly` de refresh.
 - **[Recharts](https://recharts.org/)** — gráfico de linha do dashboard de
   telemetria.
 - **[React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)** —
   formulários em modais com validação tipada.
+- **[jwt-decode](https://github.com/auth0/jwt-decode)** — decodificação do
+  payload do JWT para validar o `exp` no `AuthGuard`.
 - **[Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/)**
   — testes de unidade e integração (cobertura mínima de 70%).
 - **[MSW (Mock Service Worker)](https://mswjs.io/)** — mocking de API e de
@@ -29,7 +33,9 @@ Drill-down hierárquico com breadcrumbs:
 
 ```
 /                                            → redireciona para /tenants
+/login                                       → tela de login JWT
 /tenants                                     → lista de tenants
+/orgs                                        → alias de /tenants (pós-login)
 /tenants/:tenantId                           → workspace (Applications | Configurações)
 /tenants/:tenantId/applications/:appId       → workspace (Devices | Configurações)
 /devices                                     → lista global de devices
@@ -49,23 +55,27 @@ frontend/
 │   └── mockServiceWorker.js
 ├── src/
 │   ├── components/
+│   │   ├── AuthGuard.tsx    # protege rotas autenticadas (token/exp)
 │   │   ├── QrScanner.tsx    # leitura de QR Code TR005 (câmera + manual)
 │   │   ├── charts/          # TelemetryLineChart (Recharts)
 │   │   ├── layout/          # AppShell, Sidebar, Topbar, PageHeader
 │   │   └── ui/              # design system (Button, Card, Table, Modal, ...)
 │   │       └── icons/       # ícones SVG inline
+│   ├── contexts/
+│   │   └── AuthContext.tsx  # provider/hook de autenticação JWT
 │   ├── hooks/
 │   │   └── useAsyncData.ts  # loading/erro/reload para fetches de página
 │   ├── mocks/               # handlers MSW (tenant, application, device)
 │   ├── pages/
+│   │   ├── Login.tsx        # login JWT (redireciona para /orgs)
 │   │   ├── tenants/         # TenantListPage, TenantDetailPage, TenantFormModal
 │   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal
 │   │   ├── devices/         # DeviceListPage, DeviceNicknameModal
 │   │   ├── dashboard/       # DashboardSelectPage, Dashboard (telemetria)
 │   │   ├── onboarding/      # OnboardingWizard (scan → confirm → select app)
 │   │   └── NotFound.tsx
-│   ├── services/            # api, tenant, app, device
-│   ├── utils/               # cn, format, tr005 (parser do QR Code)
+│   ├── services/            # api, auth, tenant, app, device
+│   ├── utils/               # cn, format, tr005, jwt (exp/claims)
 │   ├── routes.tsx
 │   └── main.tsx
 ├── nginx.conf
@@ -73,12 +83,41 @@ frontend/
 └── vite.config.ts
 ```
 
+## Autenticação JWT
+
+O fluxo de login segue o RNF-005 e usa a API real:
+
+1. `Login.tsx` chama `login(email, password)` exposto pelo `AuthContext`.
+2. `services/auth.ts` envia `POST /auth/login` com `{ email, password }`.
+3. O backend devolve o `access_token` no corpo e define o `refresh_token` em um cookie `httpOnly`.
+4. O `AuthContext` mantém o `access_token` **apenas em memória** (estado do React + módulo `api.ts`). Nada é gravado em `localStorage` ou `sessionStorage`.
+5. O interceptor do Axios injeta `Authorization: Bearer <access_token>`; o `withCredentials: true` garante que o cookie de refresh seja enviado nas requisições.
+6. Após o login, a aplicação redireciona para `/orgs` (alias de `/tenants`).
+
+Em caso de `401`, o token em memória é limpo e o usuário é redirecionado para `/login`.
+Como o `refresh_token` é `httpOnly`, ele não é acessível por JavaScript — não é necessário (nem possível) lê-lo com `js-cookie`.
+
+> O endpoint `POST /auth/login` precisa estar disponível no backend. Mesmo com o MSW ativo, não há handler de autenticação: a chamada segue para a API real.
+
+### AuthGuard
+
+As rotas autenticadas são envolvidas por `AuthGuard`, que:
+
+- redireciona para `/login` quando não existe `access_token`;
+- decodifica o `exp` do JWT com `jwt-decode` e, se expirado, faz logout e redireciona para `/login`;
+- renderiza a rota normalmente quando o token é válido.
+
+Tokens malformados ou sem `exp` são tratados como expirados.
+
+---
+
 ## API consumida
 
 O front consome o `identity_api` via `baseURL` `/api/v1`:
 
 | Recurso     | Endpoints                                                                              |
 | ----------- | -------------------------------------------------------------------------------------- |
+| Auth        | `POST /auth/login`                                                                     |
 | Tenant      | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}`                                    |
 | Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}`       |
 | Device      | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |

@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Routes, Route } from 'react-router-dom';
 import { Spinner } from './components/ui/Spinner';
 import { AppShell } from './components/layout/AppShell';
+import { AuthGuard } from './components/AuthGuard';
 
 const TenantListPage = lazy(() => import('./pages/tenants/TenantListPage'));
 const TenantDetailPage = lazy(() => import('./pages/tenants/TenantDetailPage'));
@@ -16,6 +17,7 @@ const DashboardSelectPage = lazy(
   () => import('./pages/dashboard/DashboardSelectPage'),
 );
 const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
+const Login = lazy(() => import('./pages/Login'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 export function AppRoutes() {
@@ -29,9 +31,18 @@ export function AppRoutes() {
     >
       <Routes>
         <Route path="/" element={<Navigate to="/tenants" replace />} />
+        <Route path="/login" element={<Login />} />
 
-        <Route element={<AppShell />}>
+        <Route
+          element={
+            <AuthGuard>
+              <AppShell />
+            </AuthGuard>
+          }
+        >
           <Route path="/tenants" element={<TenantListPage />} />
+          {/* Alias do critério de aceite do login: /orgs é a rota real de tenants */}
+          <Route path="/orgs" element={<Navigate to="/tenants" replace />} />
           <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
           <Route
             path="/tenants/:tenantId/applications/:appId"

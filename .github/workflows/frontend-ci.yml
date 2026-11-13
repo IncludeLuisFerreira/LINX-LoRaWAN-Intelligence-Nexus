@@ -4,14 +4,13 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
 
 permissions:
   contents: read
 
 jobs:
   lint-and-test:
-    name: Lint, Typecheck & OpenAPI Validation
+    name: Lint, Test, Typecheck & OpenAPI Validation
     runs-on: ubuntu-latest
 
     defaults:
@@ -40,11 +39,11 @@ jobs:
       - name: Run Linter (OxLint / ESLint)
         run: npm run lint
 
-      - name: Check TypeScript Types
-        run: npx tsc --noEmit
-
       - name: Run Unit Tests (Vitest)
         run: npm test
+
+      - name: Check TypeScript Types
+        run: npx tsc --noEmit
 
       - name: Build Application
         run: npm run build

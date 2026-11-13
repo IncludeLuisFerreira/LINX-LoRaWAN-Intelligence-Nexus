@@ -15,6 +15,41 @@ security:
   - BearerAuth: []
 
 paths:
+  /auth/login:
+    post:
+      summary: Autenticar usuário
+      operationId: login
+      description: >
+        Autentica o usuário e devolve o access token JWT no corpo. O refresh
+        token é enviado pelo backend em cookie httpOnly e não aparece no JSON.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Autenticado com sucesso
+          headers:
+            Set-Cookie:
+              description: >
+                Define o refresh_token com HttpOnly (e Secure/SameSite conforme
+                o ambiente).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Credenciais inválidas
+        '422':
+          description: Dados inválidos
+        '429':
+          description: Muitas tentativas de login
+
   /tenant:
     get:
       summary: Listar tenants
@@ -304,6 +339,34 @@ components:
         format: uuid
 
   schemas:
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      required:
+        - access_token
+      properties:
+        access_token:
+          type: string
+          description: JWT de acesso, mantido apenas em memória pelo frontend.
+        token_type:
+          type: string
+          default: bearer
+        expires_in:
+          type: integer
+          description: Tempo de vida do access token em segundos.
+
     TenantCreate:
       type: object
       required:
