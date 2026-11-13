@@ -2,6 +2,7 @@ import { jwtDecode } from 'jwt-decode';
 
 export interface JwtPayload {
   exp?: number;
+  permissions?: unknown;
   [key: string]: unknown;
 }
 
@@ -32,4 +33,20 @@ export function isTokenExpired(
   }
 
   return payload.exp * 1000 <= now;
+}
+
+/**
+ * Extrai as permissões da claim `permissions` do JWT.
+ * Valores inválidos ou ausentes resultam em uma lista vazia.
+ */
+export function getPermissions(token: string): string[] {
+  const payload = decodeToken(token);
+
+  if (!payload || !Array.isArray(payload.permissions)) {
+    return [];
+  }
+
+  return payload.permissions.filter(
+    (permission): permission is string => typeof permission === 'string',
+  );
 }

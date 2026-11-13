@@ -56,6 +56,7 @@ frontend/
 ├── src/
 │   ├── components/
 │   │   ├── AuthGuard.tsx    # protege rotas autenticadas (token/exp)
+│   │   ├── Can.tsx          # renderiza conteúdo conforme permissão (RBAC)
 │   │   ├── QrScanner.tsx    # leitura de QR Code TR005 (câmera + manual)
 │   │   ├── charts/          # TelemetryLineChart (Recharts)
 │   │   ├── layout/          # AppShell, Sidebar, Topbar, PageHeader
@@ -108,6 +109,18 @@ As rotas autenticadas são envolvidas por `AuthGuard`, que:
 - renderiza a rota normalmente quando o token é válido.
 
 Tokens malformados ou sem `exp` são tratados como expirados.
+
+### Controle de acesso na UI (`Can`)
+
+As permissões são extraídas da claim `permissions` do JWT no login e expostas por `useAuth().permissions`. O componente `Can` renderiza os filhos apenas quando o usuário possui a permissão exigida:
+
+```tsx
+<Can permission="device:create">
+  <button type="button">Novo dispositivo</button>
+</Can>
+```
+
+Sem a permissão, o conteúdo não é renderizado. O RBAC no frontend é apenas uma camada de UX: a autorização efetiva continua sendo validada pelo backend.
 
 ---
 
