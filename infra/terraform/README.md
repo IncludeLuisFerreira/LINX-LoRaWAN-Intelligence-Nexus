@@ -13,8 +13,7 @@ aws s3api put-bucket-versioning --bucket linx-k3s-tfstate \
   --versioning-configuration Status=Enabled
 ```
 
-> O lock via DynamoDB **não é usado**: o Learner Lab nega `dynamodb:CreateTable`
-> para o papel `voclabs`. O `use_lockfile` grava o lock num objeto
+> O lock via DynamoDB **não é usado**: o `use_lockfile` grava o lock num objeto
 > `terraform.tfstate.tflock` no S3 e não exige DynamoDB.
 
 > Se `create-bucket` falhar com `BucketAlreadyExists`, troque
@@ -63,22 +62,23 @@ terraform -chdir=infra/terraform destroy \
 ## Uso local (opcional)
 
 O `init` local usa o mesmo backend S3 do CI, então exige credenciais AWS
-válidas (as mesmas variáveis `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e
-`AWS_SESSION_TOKEN`) e não cria state no diretório. O `plan` é seguro; o
-`apply` local disputa o lock nativo do S3 com o CI — nunca rode os dois ao mesmo
-tempo:
+válidas. A autenticação é feita pelo profile `linx-dev` (declarado no
+`provider "aws"` de `main.tf`), obtido com o login no navegador:
 
 ```bash
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_SESSION_TOKEN=...
+aws login --region us-east-2 --profile linx-dev   # credenciais válidas por 12h
 terraform -chdir=infra/terraform init
 terraform -chdir=infra/terraform plan
-terraform -chdir=infra/terraform apply -var="key_name=vockey"
+terraform -chdir=infra/terraform apply -var="key_name=<key-pair>"
 ```
 
-O caminho recomendado é o `workflow_dispatch` abaixo; o uso local serve para
-inspeção e depuração.
+O `plan` é seguro; o `apply` local disputa o lock nativo do S3 com o CI — nunca
+rode os dois ao mesmo tempo.
+
+> **Requisito:** provider `hashicorp/aws` `>= 6.0`. A autenticação via
+> `aws login` grava `login_session` no `~/.aws/config`; o provider v5 não
+> resolve esse tipo de credential e falha com `No valid credential sources
+> found`.
 
 ## Migração do state local → S3 (uma única vez)
 
@@ -185,13 +185,12 @@ novamente — o passo do Secret é idempotente.
 ## Diagnóstico
 
 Se `terraform init` (local ou no CI) falhar com `403 Forbidden`/`AccessDenied`
-citando a policy `voc-cancel-cred`, a **sessão do Learner Lab foi encerrada**:
-a conta e os recursos continuam existindo, mas as credenciais daquela sessão
-são negadas. Inicie uma nova sessão no AWS Academy e atualize
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` no ambiente
-local e nos secrets do GitHub. O passo "Diagnóstico — identidade AWS" do job de
-plan imprime apenas o número da conta, útil para confirmar que o CI está na
-mesma conta do bucket.
+ou `ExpiredToken`, as credenciais do profile `linx-dev` expiraram (a sessão do
+`aws login` dura 12 horas): rode `aws login --region us-east-2 --profile
+linx-dev` novamente. Se o erro citar `AccessDenied` em operações que antes
+funcionavam, verifique o **spend limit** do projeto em AWS Settings > Billing.
+O passo "Diagnóstico — identidade AWS" do job de plan imprime apenas o número da
+conta, útil para confirmar que o CI está na mesma conta do bucket.
 
 Obtenha o IP público do master (com o state remoto configurado):
 

@@ -22,9 +22,6 @@ nav:
   - Início: index.md
   - Arquitetura (PRD): PRD_PLATAFORMA_IOT.md
   - Comunicação entre Serviços: comunicacao_entre_servicos.md
-  - Consistência e Replicação: consistencia_replicacao.md
-  - Demo da Entrega 3: demo_entrega3.md
-  - Evidências AWS da Entrega 3: evidencias_aws_entrega3.md
   - Módulos do Sistema:
       - Linx Core: linx_core/README.md
       - Middleware: middleware/README.md
