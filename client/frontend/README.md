@@ -19,6 +19,8 @@ recebido em cookie `httpOnly` definido pelo backend.
   telemetria.
 - **[React Hook Form](https://react-hook-form.com/) & [Zod](https://zod.dev/)** —
   formulários em modais com validação tipada.
+- **[jwt-decode](https://github.com/auth0/jwt-decode)** — decodificação do
+  payload do JWT para validar o `exp` no `AuthGuard`.
 - **[Vitest](https://vitest.dev/) + [Testing Library](https://testing-library.com/)**
   — testes de unidade e integração (cobertura mínima de 70%).
 - **[MSW (Mock Service Worker)](https://mswjs.io/)** — mocking de API e de
@@ -53,6 +55,7 @@ frontend/
 │   └── mockServiceWorker.js
 ├── src/
 │   ├── components/
+│   │   ├── AuthGuard.tsx    # protege rotas autenticadas (token/exp)
 │   │   ├── QrScanner.tsx    # leitura de QR Code TR005 (câmera + manual)
 │   │   ├── charts/          # TelemetryLineChart (Recharts)
 │   │   ├── layout/          # AppShell, Sidebar, Topbar, PageHeader
@@ -72,7 +75,7 @@ frontend/
 │   │   ├── onboarding/      # OnboardingWizard (scan → confirm → select app)
 │   │   └── NotFound.tsx
 │   ├── services/            # api, auth, tenant, app, device
-│   ├── utils/               # cn, format, tr005 (parser do QR Code)
+│   ├── utils/               # cn, format, tr005, jwt (exp/claims)
 │   ├── routes.tsx
 │   └── main.tsx
 ├── nginx.conf
@@ -95,6 +98,16 @@ Em caso de `401`, o token em memória é limpo e o usuário é redirecionado par
 Como o `refresh_token` é `httpOnly`, ele não é acessível por JavaScript — não é necessário (nem possível) lê-lo com `js-cookie`.
 
 > O endpoint `POST /auth/login` precisa estar disponível no backend. Mesmo com o MSW ativo, não há handler de autenticação: a chamada segue para a API real.
+
+### AuthGuard
+
+As rotas autenticadas são envolvidas por `AuthGuard`, que:
+
+- redireciona para `/login` quando não existe `access_token`;
+- decodifica o `exp` do JWT com `jwt-decode` e, se expirado, faz logout e redireciona para `/login`;
+- renderiza a rota normalmente quando o token é válido.
+
+Tokens malformados ou sem `exp` são tratados como expirados.
 
 ---
 
