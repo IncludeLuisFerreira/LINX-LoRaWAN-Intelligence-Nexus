@@ -14,10 +14,12 @@ import {
   setAccessToken,
   setUnauthorizedHandler,
 } from '../services/api';
+import { getPermissions } from '../utils/jwt';
 
 interface AuthContextValue {
   accessToken: string | null;
   isAuthenticated: boolean;
+  permissions: string[];
   login: (email: string, password: string) => Promise<LoginResponse>;
   logout: () => void;
 }
@@ -55,14 +57,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [logout, navigate]);
 
+  // As permissões vêm da claim `permissions` do access token (RBAC).
+  const permissions = useMemo(
+    () => (accessToken ? getPermissions(accessToken) : []),
+    [accessToken],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       accessToken,
       isAuthenticated: Boolean(accessToken),
+      permissions,
       login,
       logout,
     }),
-    [accessToken, login, logout],
+    [accessToken, permissions, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

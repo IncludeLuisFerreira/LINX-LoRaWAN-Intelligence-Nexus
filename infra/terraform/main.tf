@@ -1,5 +1,5 @@
 ###############################################################################
-# Terraform — Cluster K3s leve na AWS (conta real ou laboratório)
+# Terraform — Cluster K3s leve na AWS (project: Lynx)
 # Região: us-east-2 | Backend remoto S3 com lock nativo (use_lockfile)
 ###############################################################################
 
@@ -10,7 +10,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -19,16 +19,16 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "linx-k3s-tfstate" # ajustar para nome globalmente único
+    bucket       = "linx-k3s-tfstate" # nome globalmente único (ver README)
     key          = "terraform.tfstate"
     region       = "us-east-2"
-    use_lockfile = true # lock nativo no S3 (Learner Lab não permite criar DynamoDB)
+    use_lockfile = true # lock nativo no S3 (sem DynamoDB)
   }
 }
 
 provider "aws" {
-  region = "us-east-2"
-  # Credenciais locais via perfil `linx-dev` (aws login) ou variáveis de ambiente.
+  region  = "us-east-2"
+  profile = "linx-dev"
 }
 
 ###############################################################################
@@ -46,14 +46,16 @@ variable "node_count" {
   default     = 2
 }
 
-variable "ssh_cidr" {
-  description = "CIDR liberado para SSH (22) e NodePort (30000-32767). Use seu IP público /32."
+variable "master_instance_type" {
+  description = "Tipo da instância master. t3.small é free-tier eligible no plano FREE."
   type        = string
+  default     = "t3.small"
+}
 
-  validation {
-    condition     = var.ssh_cidr != "0.0.0.0/0"
-    error_message = "ssh_cidr não pode ser 0.0.0.0/0; use o IP público /32 de quem vai acessar o cluster."
-  }
+variable "ssh_cidr" {
+  description = "CIDR liberado para SSH (porta 22). Restrinja ao seu IP."
+  type        = string
+  default     = "0.0.0.0/0"
 }
 
 ###############################################################################
@@ -205,7 +207,7 @@ resource "aws_security_group" "k3s" {
 
 resource "aws_instance" "master" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.small"
+  instance_type               = var.master_instance_type
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.k3s.id]
   key_name                    = var.key_name
@@ -266,17 +268,17 @@ export K3S_URL="$MASTER_URL"
 export K3S_TOKEN="${random_password.k3s_token.result}"
 
 # Espera a API do K3s server ficar saudável antes de registrar o agent.
-# /healthz exige autenticação e responde 401; sem -f, o curl retorna sucesso
-# quando a API já aceita conexões (401/200), e falha só se a porta não responde.
-for i in $(seq 1 90); do
-  if curl -kso /dev/null "$MASTER_URL/healthz"; then
+# O master baixa o binário do K3s no first boot; 180s não basta (testado em
+# 2026-11: o master levou >3min). 300 × 2s = 10min de tolerância.
+for i in $(seq 1 300); do
+  if curl -ksf "$MASTER_URL/healthz" >/dev/null; then
     break
   fi
   sleep 2
 done
 
-if ! curl -kso /dev/null "$MASTER_URL/healthz"; then
-  echo "K3s master não respondeu em $MASTER_URL após 180s" >&2
+if ! curl -ksf "$MASTER_URL/healthz" >/dev/null; then
+  echo "K3s master não respondeu em $MASTER_URL após 600s" >&2
   exit 1
 fi
 
