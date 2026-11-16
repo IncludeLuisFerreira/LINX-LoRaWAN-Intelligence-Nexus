@@ -2,12 +2,18 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { login as loginRequest, type LoginResponse } from '../services/auth';
-import { clearAccessToken, setAccessToken } from '../services/api';
+import {
+  clearAccessToken,
+  setAccessToken,
+  setUnauthorizedHandler,
+} from '../services/api';
 
 interface AuthContextValue {
   accessToken: string | null;
@@ -19,6 +25,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   // O access token é mantido somente em memória (estado do React + módulo api).
   // Recarregar a página encerra a sessão até um refresh futuro via cookie.
   const [accessToken, setToken] = useState<string | null>(null);
@@ -36,6 +43,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAccessToken();
     setToken(null);
   }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+      navigate('/login', { replace: true });
+    });
+
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, [logout, navigate]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
