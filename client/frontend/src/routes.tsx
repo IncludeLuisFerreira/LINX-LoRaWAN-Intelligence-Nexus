@@ -16,6 +16,7 @@ const DashboardSelectPage = lazy(
   () => import('./pages/dashboard/DashboardSelectPage'),
 );
 const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
+const Login = lazy(() => import('./pages/Login'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 export function AppRoutes() {
@@ -29,9 +30,12 @@ export function AppRoutes() {
     >
       <Routes>
         <Route path="/" element={<Navigate to="/tenants" replace />} />
+        <Route path="/login" element={<Login />} />
 
         <Route element={<AppShell />}>
           <Route path="/tenants" element={<TenantListPage />} />
+          {/* Alias do critério de aceite do login: /orgs é a rota real de tenants */}
+          <Route path="/orgs" element={<Navigate to="/tenants" replace />} />
           <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
           <Route
             path="/tenants/:tenantId/applications/:appId"
