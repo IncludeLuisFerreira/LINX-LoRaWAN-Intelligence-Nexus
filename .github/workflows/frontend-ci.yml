@@ -64,6 +64,10 @@ jobs:
         run: ./scripts/check-nginx-template.sh
         working-directory: ./client/frontend
 
+      - name: Borda TLS (config + nginx -t)
+        run: ./scripts/check-nginx-tls.sh
+        working-directory: ./client/frontend
+
       - name: Security headers guard
         run: |
           ./scripts/check-security-headers.sh

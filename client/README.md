@@ -11,6 +11,8 @@ O `client/` contém:
 | Caminho                        | Responsabilidade                                        |
 | ------------------------------ | ------------------------------------------------------- |
 | `frontend/`                    | Dashboard web React (REST + WebSocket).                 |
+| `frontend/nginx-tls.conf`      | Borda HTTPS do dashboard (redirect + TLS + WSS).        |
+| `scripts/frontend-cert.sh`     | Emissão/renovação do certificado Let's Encrypt.         |
 | `services/telemetry_consumer/` | Serviço FastAPI (ingestão AMQP + leitura REST/WS).     |
 | `tenant_app/`                  | Imagem mínima provisionada por aplicação (issue #58).   |
 | `db/schema.sql`                | Schema TimescaleDB (hypertable `telemetry`).            |
@@ -188,10 +190,13 @@ task lint   # black + isort + mypy + flake8
 
 ### Ambiente local (`client/docker-compose.yml`)
 
-Sobe `timescaledb` + `telemetry_consumer` + `frontend`. O schema é montado no
-container do banco, o serviço só inicia após o healthcheck do TimescaleDB e o
-dashboard é servido por nginx na porta `8080`, com proxy `/api` para
-`BACKEND_URL` e `/ws` para `WS_BACKEND_URL`.
+Sobe `timescaledb` + `telemetry_consumer` + `frontend` + `frontend-tls`. O
+schema é montado no container do banco, o serviço só inicia após o healthcheck
+do TimescaleDB e o dashboard é servido por nginx. O container `frontend` fica
+apenas na rede interna (porta `80` exposta); a borda `frontend-tls` publica
+`80` (redirect para HTTPS + webroot do ACME) e `443` (TLS), e encaminha para o
+nginx interno, que mantém os proxies `/api` para `BACKEND_URL` e `/ws` para
+`WS_BACKEND_URL`.
 
 ```bash
 # a partir de client/
@@ -200,7 +205,11 @@ docker compose up --build
 ```
 
 Variáveis usadas no `.env`: `APP_ID`, `RABBIT_URL`, `DB_USER`,
-`DB_PASSWORD`, `DB_NAME`, `SERVICE_TOKEN`, `BACKEND_URL` e `WS_BACKEND_URL`.
+`DB_PASSWORD`, `DB_NAME`, `SERVICE_TOKEN`, `BACKEND_URL`, `WS_BACKEND_URL` e,
+para HTTPS, `FRONTEND_DOMAIN`, `LE_EMAIL` e `LE_STAGING`.
+
+Para emitir/renovar o certificado Let's Encrypt do dashboard e configurar a
+borda HTTPS, veja [`frontend/README.md — HTTPS no deploy`](frontend/README.md#https-no-deploy-issue-73).
 
 ### Stack completa (`deploy/docker-compose.yml`)
 
