@@ -18,7 +18,7 @@ import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { UuidDisplay } from '../../components/ui/UuidDisplay';
-import { Plus, Trash, Edit } from '../../components/ui/icons';
+import { Plus, Trash, Edit, Users } from '../../components/ui/icons';
 import { TenantFormModal, type TenantFormData } from './TenantFormModal';
 import {
   ApplicationFormModal,
@@ -158,10 +158,19 @@ export default function TenantDetailPage() {
           />
         }
         actions={
-          <Button variant="secondary" onClick={() => setEditingTenant(true)}>
-            <Edit className="h-4 w-4" />
-            Editar
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => navigate(`/tenants/${tenantId}/users`)}
+            >
+              <Users className="h-4 w-4" />
+              Usuários
+            </Button>
+            <Button variant="secondary" onClick={() => setEditingTenant(true)}>
+              <Edit className="h-4 w-4" />
+              Editar
+            </Button>
+          </>
         }
       />
 

@@ -122,6 +122,12 @@ As permissões são extraídas da claim `permissions` do JWT no login e expostas
 
 Sem a permissão, o conteúdo não é renderizado. O RBAC no frontend é apenas uma camada de UX: a autorização efetiva continua sendo validada pelo backend.
 
+### Gestão de usuários (UC02)
+
+A tela `/tenants/:tenantId/users` lista os usuários, gera links de convite, altera papéis (`admin`/`member`) e desativa usuários. Ela é acessível pelo botão **Usuários** no detalhe do tenant.
+
+Com `VITE_ENABLE_MOCKS=true`, o MSW responde `GET/PATCH /user` e `POST /orgs/:org_id/invite`, permitindo testar o fluxo sem backend. O endpoint de convite e o campo `role` no PATCH ainda dependem da implementação no backend (issues #80 e acompanhamento do RBAC); o frontend já segue o contrato previsto.
+
 ---
 
 ## API consumida
@@ -134,6 +140,8 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 | Tenant      | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}`                                    |
 | Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}`       |
 | Device      | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
+| User        | `GET /user`, `PATCH /user/{id}` (`role` / `is_active`)                                  |
+| Invite      | `POST /orgs/{org_id}/invite`                                                            |
 | Telemetry   | `GET /telemetry?dev_eui=&limit=&before=`                                               |
 
 > O `PATCH /devices/{id}` aceita apenas `nickname`.

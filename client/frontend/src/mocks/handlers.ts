@@ -50,6 +50,40 @@ const mockAppsByTenant: Record<string, MockApplication[]> = {
   ],
 };
 
+interface MockUser {
+  id: string;
+  email: string;
+  is_admin: boolean;
+  is_active: boolean;
+  email_verified: boolean;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+const mockUsers: MockUser[] = [
+  {
+    id: crypto.randomUUID(),
+    email: 'admin@linx.local',
+    is_admin: true,
+    is_active: true,
+    email_verified: true,
+    note: '',
+    created_at: now(),
+    updated_at: now(),
+  },
+  {
+    id: crypto.randomUUID(),
+    email: 'membro@linx.local',
+    is_admin: false,
+    is_active: true,
+    email_verified: true,
+    note: '',
+    created_at: now(),
+    updated_at: now(),
+  },
+];
+
 /**
  * Simula a evolução do provisionamento no MSW. Sem override, cada consulta
  * avança PENDING -> PROVISIONING -> RUNNING. Use a chave abaixo no
@@ -417,5 +451,42 @@ export const handlers = [
       items,
       next_cursor: last ? `${last.time}|${devEui}|up` : null,
     });
+  }),
+
+  // --- USERS ---
+  http.get('*/api/v1/user', () => HttpResponse.json(mockUsers)),
+
+  http.patch('*/api/v1/user/:user_id', async ({ params, request }) => {
+    const user = mockUsers.find((item) => item.id === String(params.user_id));
+    if (!user) {
+      return HttpResponse.json({ detail: 'User not found!' }, { status: 404 });
+    }
+    const body = (await request.json()) as {
+      role?: 'admin' | 'member';
+      is_active?: boolean;
+    };
+    if (body.role !== undefined) {
+      user.is_admin = body.role === 'admin';
+    }
+    if (typeof body.is_active === 'boolean') {
+      user.is_active = body.is_active;
+    }
+    user.updated_at = now();
+    return HttpResponse.json(user);
+  }),
+
+  // Contrato previsto na issue #80 (backend de convites ainda em andamento).
+  http.post('*/api/v1/orgs/:org_id/invite', async ({ request }) => {
+    const body = (await request.json()) as { email?: string; role?: string };
+    if (!body.email || !body.role) {
+      return validationError('email and role are required');
+    }
+    return HttpResponse.json(
+      {
+        invite_token: 'mock-invite-token',
+        invite_link: `https://linx.local/invite/mock-invite-token`,
+      },
+      { status: 201 },
+    );
   }),
 ];

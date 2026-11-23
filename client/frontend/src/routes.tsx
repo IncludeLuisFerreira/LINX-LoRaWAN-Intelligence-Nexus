@@ -10,6 +10,7 @@ const ApplicationDetailPage = lazy(
   () => import('./pages/applications/ApplicationDetailPage'),
 );
 const DeviceListPage = lazy(() => import('./pages/devices/DeviceListPage'));
+const Users = lazy(() => import('./pages/users/Users'));
 const OnboardingWizard = lazy(
   () => import('./pages/onboarding/OnboardingWizard'),
 );
@@ -44,6 +45,7 @@ export function AppRoutes() {
           {/* Alias do critério de aceite do login: /orgs é a rota real de tenants */}
           <Route path="/orgs" element={<Navigate to="/tenants" replace />} />
           <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
+          <Route path="/tenants/:tenantId/users" element={<Users />} />
           <Route
             path="/tenants/:tenantId/applications/:appId"
             element={<ApplicationDetailPage />}
