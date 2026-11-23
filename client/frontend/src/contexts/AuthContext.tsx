@@ -8,10 +8,12 @@ import {
 } from 'react';
 import { login as loginRequest, type LoginResponse } from '../services/auth';
 import { clearAccessToken, setAccessToken } from '../services/api';
+import { getPermissions } from '../utils/jwt';
 
 interface AuthContextValue {
   accessToken: string | null;
   isAuthenticated: boolean;
+  permissions: string[];
   login: (email: string, password: string) => Promise<LoginResponse>;
   logout: () => void;
 }
@@ -37,14 +39,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
   }, []);
 
+  // As permissões vêm da claim `permissions` do access token (RBAC).
+  const permissions = useMemo(
+    () => (accessToken ? getPermissions(accessToken) : []),
+    [accessToken],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       accessToken,
       isAuthenticated: Boolean(accessToken),
+      permissions,
       login,
       logout,
     }),
-    [accessToken, login, logout],
+    [accessToken, permissions, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
