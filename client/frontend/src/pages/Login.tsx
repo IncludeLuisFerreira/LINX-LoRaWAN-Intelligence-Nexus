@@ -60,12 +60,20 @@ export default function Login() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          noValidate
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-4"
+        >
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-slate-300 mb-1"
+            >
               E-mail
             </label>
             <input
+              id="email"
               type="email"
               {...register('email')}
               placeholder="seu@email.com"
@@ -79,10 +87,14 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-slate-300 mb-1"
+            >
               Senha
             </label>
             <input
+              id="password"
               type="password"
               {...register('password')}
               placeholder="••••••••"
