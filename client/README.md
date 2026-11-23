@@ -209,7 +209,8 @@ Variáveis usadas no `.env`: `APP_ID`, `RABBIT_URL`, `DB_USER`,
 para HTTPS, `FRONTEND_DOMAIN`, `LE_EMAIL` e `LE_STAGING`.
 
 Para emitir/renovar o certificado Let's Encrypt do dashboard e configurar a
-borda HTTPS, veja [`frontend/README.md — HTTPS no deploy`](frontend/README.md#https-no-deploy-issue-73).
+borda HTTPS, veja a seção "HTTPS no deploy (issue #73)" em
+`client/frontend/README.md`.
 
 ### Stack completa (`deploy/docker-compose.yml`)
 
