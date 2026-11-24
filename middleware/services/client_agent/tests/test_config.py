@@ -22,6 +22,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     assert settings.grpc_ca_cert_path == ""
     assert settings.grpc_client_cert_path == ""
     assert settings.grpc_client_key_path == ""
+    assert settings.jwt_public_key == ""
 
 
 def test_settings_read_mtls_paths_from_env(
