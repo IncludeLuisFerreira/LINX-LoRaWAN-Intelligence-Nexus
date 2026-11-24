@@ -77,3 +77,11 @@ export const Device = (p: IconProps) => (
     <path d="M12 9v6M9 12h6" />
   </Base>
 );
+
+export const Rules = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+    <circle cx="15" cy="7" r="2" />
+    <circle cx="9" cy="17" r="2" />
+  </Base>
+);

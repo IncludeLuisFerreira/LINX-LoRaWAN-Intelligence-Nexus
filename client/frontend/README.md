@@ -39,6 +39,7 @@ Drill-down hierárquico com breadcrumbs:
 /tenants/:tenantId                           → workspace (Applications | Configurações)
 /tenants/:tenantId/applications/:appId       → workspace (Devices | Configurações)
 /devices                                     → lista global de devices
+/rules                                       → regras de negócio (formulário + listagem)
 /dashboard                                   → menu de aplicações para escolher o dashboard
 /dashboard/:appId                            → dashboard de telemetria (gráfico de linha)
 /onboarding                                  → wizard de cadastro de device (3 passos; aceita `?app=<id>` para pré-selecionar a aplicação)
@@ -66,16 +67,17 @@ frontend/
 │   │   └── AuthContext.tsx  # provider/hook de autenticação JWT
 │   ├── hooks/
 │   │   └── useAsyncData.ts  # loading/erro/reload para fetches de página
-│   ├── mocks/               # handlers MSW (tenant, application, device)
+│   ├── mocks/               # handlers MSW (tenant, application, device, rule)
 │   ├── pages/
 │   │   ├── Login.tsx        # login JWT (redireciona para /orgs)
 │   │   ├── tenants/         # TenantListPage, TenantDetailPage, TenantFormModal
 │   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal
 │   │   ├── devices/         # DeviceListPage, DeviceNicknameModal
+│   │   ├── rules/           # Rules (formulário e listagem de regras)
 │   │   ├── dashboard/       # DashboardSelectPage, Dashboard (telemetria)
 │   │   ├── onboarding/      # OnboardingWizard (scan → confirm → select app)
 │   │   └── NotFound.tsx
-│   ├── services/            # api, auth, tenant, app, device
+│   ├── services/            # api, auth, tenant, app, device, rule
 │   ├── utils/               # cn, format, tr005, jwt (exp/claims)
 │   ├── routes.tsx
 │   └── main.tsx
@@ -134,9 +136,14 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 | Tenant      | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}`                                    |
 | Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}`       |
 | Device      | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
+| Rule        | `GET /rules`, `POST /rules` (`sensor_field`, `operator`, `threshold`, `action_type`)   |
 | Telemetry   | `GET /telemetry?dev_eui=&limit=&before=`                                               |
 
 > O `PATCH /devices/{id}` aceita apenas `nickname`.
+
+> **`GET/POST /rules`:** o endpoint REST ainda não existe no `identity_api`
+> (issue #90). Os handlers MSW (`VITE_ENABLE_MOCKS=true`) simulam a persistência
+> em memória para permitir o uso e os testes da tela até o backend ser entregue.
 
 > **Contratos OpenAPI (#217):** há dois artefatos com papéis distintos:
 > `client/frontend/openapi-stub.yaml` é o subconjunto REST que o front consome,
