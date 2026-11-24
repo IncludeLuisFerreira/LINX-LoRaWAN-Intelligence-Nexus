@@ -40,13 +40,54 @@ def _extract_bearer_token(
     return None
 
 
+def _auth_value(auth_context: dict, key: str) -> str:
+    """Retorna o primeiro valor de uma chave do ``auth_context`` do gRPC."""
+    values = auth_context.get(key) or ()
+    if not values:
+        return ""
+    value = values[0]
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return str(value)
+
+
+def _log_mtls_peer(context) -> None:
+    """Registra o certificado do cliente validado no handshake mTLS.
+
+    O contexto de uma chamada sem certificado não expõe chaves ``x509_*``;
+    nesse caso nada é logado. A chamada é defensiva porque testes usam
+    contextos fakes que não implementam ``auth_context()``.
+    """
+    auth_context_fn = getattr(context, "auth_context", None)
+    if not callable(auth_context_fn):
+        return
+    try:
+        auth_context = auth_context_fn() or {}
+    except Exception:  # pragma: no cover - contexto pode ser encerrado
+        logger.debug("auth_context do gRPC indisponível", exc_info=True)
+        return
+    if not any(key.startswith("x509_") for key in auth_context):
+        return
+    peer = (
+        _auth_value(auth_context, "x509_common_name")
+        or _auth_value(auth_context, "x509_subject_alternative_name")
+        or "desconhecido"
+    )
+    transport = _auth_value(auth_context, "transport_security_type") or "ssl"
+    logger.info(
+        "Handshake mTLS confirmado: peer=%s transport=%s", peer, transport
+    )
+
+
 def authorize(context) -> None:
     """Valida o token de serviço do agente nos metadados da chamada.
 
     Falha fechada e em tempo constante: qualquer chamada sem o metadado
     ``authorization`` correto é recusada com UNAUTHENTICATED, sem vazar o
-    motivo nem o segredo esperado.
+    motivo nem o segredo esperado. Quando mTLS está ativo, o certificado do
+    cliente já foi validado no handshake e a identidade é logada.
     """
+    _log_mtls_peer(context)
     expected = settings.agent_service_token
     if not expected:
         logger.error(
@@ -140,28 +181,56 @@ def _build_bind_address(host: str, port: int) -> str:
     return f"{host}:{port}"
 
 
-def _build_server_credentials() -> grpc.ServerCredentials | None:
-    """Monta as credenciais TLS do servidor, ou None para modo inseguro.
+def _read_tls_file(path: str, label: str) -> bytes:
+    """Lê um arquivo de credencial em bytes, falhando com erro explícito."""
+    try:
+        with open(path, "rb") as handle:
+            content = handle.read()
+    except OSError as err:
+        raise RuntimeError(
+            f"Não foi possível ler {label} em {path}: {err}"
+        ) from err
+    if not content:
+        raise RuntimeError(f"Arquivo de {label} vazio: {path}")
+    return content
 
-    Quando há cert + chave, serve sobre TLS. Se a CA também estiver presente,
-    exige certificado do cliente (mTLS). Sem cert configurado o servidor
-    permanece inseguro e a autorização por metadados é a única barreira.
+
+def _build_server_credentials() -> grpc.ServerCredentials | None:
+    """Monta as credenciais mTLS do servidor, ou None em modo dev.
+
+    São obrigatórios os três arquivos — certificado e chave do servidor e CA
+    que assina os certificados dos clientes. Configuração parcial aborta o
+    startup: TLS sem verificação do cliente não atende ao RNF-004. Sem nenhum
+    caminho configurado o servidor permanece inseguro apenas para dev local.
     """
     cert_chain = settings.grpc_cert_chain_path
     private_key = settings.grpc_private_key_path
-    if not cert_chain or not private_key:
-        return None
-
     ca_cert = settings.grpc_ca_cert_path
-    if ca_cert:
-        with open(ca_cert, "rb") as handle:
-            root_ca = handle.read()
-        return grpc.ssl_server_credentials(
-            [(private_key, cert_chain)],
-            root_certificates=root_ca,
-            require_client_auth=True,
+    if not any((cert_chain, private_key, ca_cert)):
+        return None
+    if not all((cert_chain, private_key, ca_cert)):
+        raise RuntimeError(
+            "mTLS do gRPC exige GRPC_CERT_CHAIN_PATH, "
+            "GRPC_PRIVATE_KEY_PATH e GRPC_CA_CERT_PATH juntos "
+            "(ou nenhum, apenas em dev)."
         )
-    return grpc.ssl_server_credentials([(private_key, cert_chain)])
+
+    logger.info(
+        "Carregando credenciais mTLS do gRPC: cert=%s key=%s ca=%s",
+        cert_chain,
+        private_key,
+        ca_cert,
+    )
+    return grpc.ssl_server_credentials(
+        [
+            (
+                _read_tls_file(private_key, "chave privada do servidor gRPC"),
+                _read_tls_file(cert_chain, "certificado do servidor gRPC"),
+            )
+        ],
+        root_certificates=_read_tls_file(ca_cert, "CA do gRPC"),
+        require_client_auth=True,
+    )
 
 
 def create_server(
@@ -175,11 +244,16 @@ def create_server(
     credentials = _build_server_credentials()
     if credentials is not None:
         port = server.add_secure_port(bind_address, credentials)
+        logger.info(
+            "gRPC com mTLS em %s: certificado do cliente obrigatório.",
+            bind_address,
+        )
     else:
         logger.warning(
-            "Servindo gRPC em modo inseguro em %s sem TLS. A autorização por "
+            "Servindo gRPC em modo inseguro em %s sem mTLS. A autorização por "
             "metadado (AGENT_SERVICE_TOKEN) é a única barreira; configure "
-            "GRPC_CERT_CHAIN_PATH/GRPC_PRIVATE_KEY_PATH para habilitar TLS.",
+            "GRPC_CERT_CHAIN_PATH, GRPC_PRIVATE_KEY_PATH e "
+            "GRPC_CA_CERT_PATH para exigir mTLS.",
             bind_address,
         )
         port = server.add_insecure_port(bind_address)
