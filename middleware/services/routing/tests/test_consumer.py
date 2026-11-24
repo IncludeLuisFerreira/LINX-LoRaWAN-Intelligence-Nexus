@@ -163,6 +163,34 @@ def test_start_sets_credentials_when_username_present(monkeypatch):
     fake_client.username_pw_set.assert_called_once_with("routing", "pw")
 
 
+def test_start_configures_tls_with_broker_ca(monkeypatch):
+    consumer, _ = _consumer(
+        tls_enabled=True, ca_cert="/mosquitto/certs/ca.crt"
+    )
+    fake_client = MagicMock()
+    monkeypatch.setattr(
+        consumer_module.mqtt, "Client", MagicMock(return_value=fake_client)
+    )
+
+    assert consumer.start() is True
+
+    fake_client.tls_set.assert_called_once_with(
+        ca_certs="/mosquitto/certs/ca.crt"
+    )
+
+
+def test_start_skips_tls_when_disabled(monkeypatch):
+    consumer, _ = _consumer()
+    fake_client = MagicMock()
+    monkeypatch.setattr(
+        consumer_module.mqtt, "Client", MagicMock(return_value=fake_client)
+    )
+
+    assert consumer.start() is True
+
+    fake_client.tls_set.assert_not_called()
+
+
 def test_start_skips_credentials_when_no_username(monkeypatch):
     consumer, _ = _consumer()
     fake_client = MagicMock()

@@ -69,7 +69,7 @@ O ChirpStack é a base de toda a infraestrutura LoRaWAN. Siga estes passos para 
 ### Pré-requisitos
 
 - Docker e Docker Compose instalados
-- Portas `8080` (ChirpStack UI), `1700/udp` (Gateway Bridge) e `1883` (MQTT) livres
+- Portas `8080` (ChirpStack UI), `1700/udp` (Gateway Bridge) e `8883` (MQTT over TLS) livres; a `1883` plaintext foi removida (#81)
 
 ### 1. Subir os serviços
 
@@ -159,9 +159,11 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      - "8883:8883"
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+      # gere antes: infra/scripts/gen-mosquitto-certs.sh (#81)
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
 
 volumes:
   postgresqldata:
@@ -204,14 +206,16 @@ volumes:
 [integration]
   enabled=["mqtt"]
   [integration.mqtt]
-    server="tcp://$MQTT_BROKER_HOST:1883/"
+    server="ssl://$MQTT_BROKER_HOST:8883/"
+    ca_cert="/mosquitto/certs/ca.crt"
     json=true
     event_topic="application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
 
 [gateway.backend]
   type="mqtt"
   [gateway.backend.mqtt]
-    server="tcp://$MQTT_BROKER_HOST:1883/"
+    server="ssl://$MQTT_BROKER_HOST:8883/"
+    ca_cert="/mosquitto/certs/ca.crt"
     event_topic_prefix="au915_1"
     command_topic_prefix="au915_1"
 ```
@@ -255,7 +259,7 @@ Copiado de `region_au915_0.toml.example` (parte do repositório oficial ChirpSta
 |------|---------------------|
 | ChirpStack → Gateways | Gateway listado como "online" |
 | ChirpStack → Devices → Events | Payload dos uplinks recebidos |
-| MQTT (`localhost:1883`) | Tópico `application/+/device/+/event/up` com telemetria |
+| MQTT over TLS (`localhost:8883`) | Tópico `application/+/device/+/event/up` com telemetria; use `--cafile infra/configuration/mosquitto/certs/ca.crt` |
 
 ---
 

@@ -48,6 +48,8 @@ class MqttConsumer:
         client_id: str = "linx-routing",
         username: str = "",
         password: str = "",
+        tls_enabled: bool = False,
+        ca_cert: str = "",
         connect_max_attempts: int = 5,
         connect_backoff_seconds: float = 1.0,
         connect_backoff_max_seconds: float = 30.0,
@@ -62,6 +64,8 @@ class MqttConsumer:
         self.client_id = client_id
         self.username = username
         self.password = password
+        self.tls_enabled = tls_enabled
+        self.ca_cert = ca_cert
         self.connect_max_attempts = connect_max_attempts
         self.connect_backoff_seconds = connect_backoff_seconds
         self.connect_backoff_max_seconds = connect_backoff_max_seconds
@@ -178,6 +182,10 @@ class MqttConsumer:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
+        if self.tls_enabled:
+            # TLS de servidor (#81); a CA self-signed do broker é passada pelo
+            # compose. Sem ca_cert, caímos nas CAs do sistema.
+            self.client.tls_set(ca_certs=self.ca_cert or None)
         if self.username:
             self.client.username_pw_set(self.username, self.password)
         if not self._connect():

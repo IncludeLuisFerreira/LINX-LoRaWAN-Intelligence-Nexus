@@ -175,7 +175,11 @@ services:
       # Broker Mosquitto do stack infra, alcançado pela rede linx-network.
       # Não existe broker local no deploy (#188).
       - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mosquitto}
-      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-8883}
+      # TLS no broker (#81): CA self-signed montada abaixo. A 1883 plaintext
+      # foi removida; use MQTT_TLS_ENABLED=false apenas com broker legado.
+      - MQTT_TLS_ENABLED=${MQTT_TLS_ENABLED:-true}
+      - MQTT_CA_CERT=${MQTT_CA_CERT:-/mosquitto/certs/ca.crt}
       - MQTT_TOPIC=${MQTT_TOPIC:-application/+/device/+/event/up}
       # Auth no broker (#208, allow_anonymous false): identidade de leitura
       # `routing` (ACL read-only em application/#).
@@ -184,6 +188,9 @@ services:
       - RABBIT_URL=${RABBIT_URL:-amqp://${RABBITMQ_DEFAULT_USER:-linx}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/%2f}
       - RABBIT_EXCHANGE_PREFIX=${RABBIT_EXCHANGE_PREFIX:-linx.telemetry}
       - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}
+    volumes:
+      # CA gerada por infra/scripts/gen-mosquitto-certs.sh (#81). Read-only.
+      - ../infra/configuration/mosquitto/certs/:/mosquitto/certs/:ro
     depends_on:
       rabbitmq:
         condition: service_healthy

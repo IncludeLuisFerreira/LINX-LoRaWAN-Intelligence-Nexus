@@ -117,9 +117,11 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      - "8883:8883"  # TLS obrigatório (#81); 1883 plaintext removida
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+      #gere antes: infra/scripts/gen-mosquitto-certs.sh (#81)
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
 
 volumes:
   postgresqldata:
@@ -163,21 +165,23 @@ volumes:
 [integration]
   enabled=["mqtt"]
   [integration.mqtt]
-    server="tcp://$MQTT_BROKER_HOST:1883/"
+    server="ssl://$MQTT_BROKER_HOST:8883/"
+    ca_cert="/mosquitto/certs/ca.crt"
     json=true
     event_topic="application/{{application_id}}/device/{{dev_eui}}/event/{{event}}"
 
 [gateway.backend]
   type="mqtt"
   [gateway.backend.mqtt]
-    server="tcp://$MQTT_BROKER_HOST:1883/"
+    server="ssl://$MQTT_BROKER_HOST:8883/"
+    ca_cert="/mosquitto/certs/ca.crt"
     event_topic_prefix="au915_1"
     command_topic_prefix="au915_1"
     clean_session=false
     qos=0
     client_id=""
     keep_alive="30s"
-    tls_enabled=false
+    tls_enabled=true
 ```
 
 > **O que foi modificado:** `enabled_regions` inclui `au915_0`, e os topic prefixes do gateway backend foram alterados para `au915_1`.

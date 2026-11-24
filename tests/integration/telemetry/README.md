@@ -17,9 +17,15 @@ Esta suíte **não define serviços próprios**. Usa o Mosquitto real de
 `infra/docker-compose.yml` e o compose de `deploy/docker-compose.yml` como base,
 aplicando overrides para:
 
-- publicar portas em offsets de teste (loopback);
+- publicar portas em offsets de teste (loopback) — o Mosquitto TLS usa
+  `127.0.0.1:11883 -> 8883` (#81);
 - fixar `APP_ID=integration-app` e apontar o consumer para a credencial
   administrativa do broker (sem provisionamento por-tenant).
+
+O broker não tem mais listener plaintext na 1883: os probes usam `mosquitto_pub`
+com `-p 8883 --cafile /mosquitto/certs/ca.crt` e o routing sobe com
+`MQTT_TLS_ENABLED=true`. Gere os certificados com
+`infra/scripts/gen-mosquitto-certs.sh` antes de rodar a suíte.
 
 Sobe apenas os serviços do caminho: `mosquitto` (infra), `routing`, `rabbitmq`,
 `timescaledb`, `telemetry_consumer` (deploy), conectados pela rede

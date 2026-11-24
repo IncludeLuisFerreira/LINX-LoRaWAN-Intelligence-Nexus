@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./configuration/chirpstack:/etc/chirpstack
+      # CA do broker para as conexões ssl:// do integration e gateway backend
+      # (#81). Somente leitura; a chave da CA nunca é montada.
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
     depends_on:
       - postgres
       - mosquitto
@@ -27,6 +30,8 @@ services:
       - "1700:1700/udp"
     volumes:
       - ./configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
+      # CA do broker para o MQTT over TLS (#81).
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
     environment:
       - INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/event/{{ .EventType }}
       - INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/state/{{ .StateType }}
@@ -46,6 +51,8 @@ services:
       - "3001:3001"
     volumes:
       - ./configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
+      # CA do broker para o MQTT over TLS (#81).
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
     environment:
       - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${MQTT_CHIRPSTACK_USER:?defina em infra/.env (veja .env.example)}
       - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${MQTT_CHIRPSTACK_PASSWORD:?defina em infra/.env (veja .env.example)}
@@ -83,13 +90,17 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      # Bind SOMENTE em loopback (#208): ChirpStack e routing alcançam o
-      # broker pela rede interna, não pela porta publicada no host.
-      - "127.0.0.1:1883:1883"
+      # TLS (#81): 8883 publicada somente em loopback; ChirpStack, bridge e
+      # routing alcançam o broker pela rede interna, não pela porta do host.
+      # A 1883 plaintext não existe mais (listener removido no mosquitto.conf).
+      - "127.0.0.1:8883:8883"
     volumes:
       # config/ traz mosquitto.conf + mosquitto.passwd + mosquitto.acl
       # (gerados por infra/scripts/gen-mosquitto-passwd.sh). Read-only.
       - ./configuration/mosquitto/config/:/mosquitto/config/:ro
+      # CA + certificado de servidor gerados por gen-mosquitto-certs.sh (#81).
+      # A ca.key fica fora do container.
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
     depends_on:
       mosquitto-init:
         condition: service_completed_successfully
@@ -109,6 +120,10 @@ services:
     entrypoint: ["sh", "-c"]
     command:
       - >
+        [ -f /mosquitto/certs/ca.crt ] &&
+        [ -f /mosquitto/certs/server.crt ] &&
+        [ -f /mosquitto/certs/server.key ] ||
+        { echo "ERROR: certificados TLS ausentes; rode infra/scripts/gen-mosquitto-certs.sh" >&2; exit 1; } &&
         { [ -f /mosquitto/config/mosquitto.passwd ] || {
         mosquitto_passwd -c -b /mosquitto/config/mosquitto.passwd
         "$$MQTT_CHIRPSTACK_USER" "$$MQTT_CHIRPSTACK_PASSWORD" &&
@@ -130,6 +145,8 @@ services:
       - MQTT_HEALTHCHECK_PASSWORD=${MQTT_HEALTHCHECK_PASSWORD:?defina em infra/.env (veja .env.example)}
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+      # Necessario para validar os certificados antes de subir o broker (#81).
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
 
 networks:
   # Rede compartilhada com o stack deploy. Criada por

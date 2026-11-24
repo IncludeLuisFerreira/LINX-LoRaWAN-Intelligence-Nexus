@@ -13,6 +13,9 @@ nvs_secrets.h
 # Hash de senha do Mosquitto (issue #208) — gerar via gen-mosquitto-passwd.sh
 # ou pelo serviço mosquitto-init. Nunca versionar; só o .example e o .acl.
 infra/configuration/mosquitto/config/mosquitto.passwd
+# Certificados TLS do Mosquitto (issue #81) — gerar via gen-mosquitto-certs.sh.
+# Nunca versionar CA key, certificado de servidor ou chave privada.
+infra/configuration/mosquitto/certs/
 
 # === Build / Compilação ===
 # Byte-compiled / optimized / DLL files

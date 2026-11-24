@@ -4,7 +4,11 @@ from pydantic import field_validator
 
 class RoutingSettings(Settings):
     mqtt_broker_host: str = "localhost"
-    mqtt_broker_port: int = 1883
+    # TLS obrigatório no broker (#81): a 1883 plaintext foi removida.
+    mqtt_broker_port: int = 8883
+    mqtt_tls_enabled: bool = True
+    # CA do broker; vazio = usar as CAs do sistema (útil em testes locais).
+    mqtt_ca_cert: str = ""
     mqtt_topic: str = "application/+/device/+/event/up"
     mqtt_qos: int = 1
     mqtt_client_id: str = "linx-routing"

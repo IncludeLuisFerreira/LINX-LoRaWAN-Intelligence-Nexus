@@ -44,6 +44,8 @@ class IngestService:
             client_id=settings.mqtt_client_id,
             username=settings.mqtt_username,
             password=settings.mqtt_password,
+            tls_enabled=settings.mqtt_tls_enabled,
+            ca_cert=settings.mqtt_ca_cert,
             connect_max_attempts=settings.mqtt_connect_max_attempts,
             connect_backoff_seconds=settings.mqtt_connect_backoff_seconds,
             connect_backoff_max_seconds=(

@@ -59,7 +59,7 @@ flowchart LR
         DP -- "Docker API" --> DK[["Docker daemon"]]
     end
 
-    MQTT[["Broker MQTT<br/>:1883"]]
+    MQTT[["Broker MQTT<br/>:8883 (TLS)"]]
     RT["routing<br/>(ingest)"]
     RMQ{{"RabbitMQ<br/>exchange linx.telemetry.{app_id}"}}
     CA["client_agent<br/>:8001"]
@@ -86,7 +86,7 @@ Resumo de **quem fala com quem**, por qual protocolo e em que momento:
 | `jobs_worker`                   | `docker_provisioner`             | gRPC                  | `50052` | `ProvisionApplication` (cria/reaproveita container)    | job de provisionamento |
 | `identity_api`                  | `docker_provisioner`             | gRPC                  | `50052` | `DeprovisionApplication` (remove container e rede)     | delete da aplicação |
 | `docker_provisioner`            | Docker daemon                    | Docker API            | socket  | Criar/remover rede e container; publicar porta         | sob demanda   |
-| Broker MQTT                     | `routing`                        | MQTT                  | `1883`  | Receber uplinks LoRaWAN do ChirpStack                  | contínuo      |
+| Broker MQTT                     | `routing`                        | MQTT/TLS              | `8883`  | Receber uplinks LoRaWAN do ChirpStack                  | contínuo      |
 | `routing`                       | `rabbitmq` (exchange `linx.telemetry.{app_id}`) | AMQP            | `5672`  | Publicar envelope normalizado (routing key por tópico) | por uplink    |
 | `rabbitmq` (fila do tenant)     | `telemetry_consumer`             | AMQP                  | `5672`  | Entregar envelope na fila `linx.telemetry.{app_id}` (credencial do tenant) | por evento    |
 | `telemetry_consumer`            | `timescaledb`                    | PostgreSQL (`asyncpg`)| `5432`  | `INSERT` idempotente e `SELECT` na hypertable `telemetry` | por evento / leitura |
@@ -439,7 +439,7 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 | `GRPC_TIMEOUT_SECONDS`   | `client_agent`             | `5`                                        | Timeout das chamadas gRPC.                                       |
 | `CONFIG_CACHE_TTL_SECONDS` | `client_agent`           | `60`                                       | TTL do cache de `GetAppConfig`.                                  |
 | `MQTT_BROKER_HOST`       | `routing`                  | `mosquitto`                                | Host do broker MQTT (ChirpStack).                                |
-| `MQTT_BROKER_PORT`       | `routing`                  | `1883`                                     | Porta do broker MQTT.                                            |
+| `MQTT_BROKER_PORT`       | `routing`                  | `8883`                                     | Porta TLS do broker MQTT (#81).                                  |
 | `MQTT_QOS`               | `routing`                  | `1`                                        | QoS da inscrição no tópico de uplink.                            |
 | `MQTT_TOPIC`             | `routing`                  | `application/+/device/+/event/up`          | Tópico MQTT de uplink.                                           |
 | `RABBIT_URL`             | `routing`, `telemetry_consumer` | `amqp://linx:linx@rabbitmq:5672/%2f`  | Conexão AMQP. O `routing` usa a credencial administrativa; o `telemetry_consumer` usa a credencial do tenant (`tenant.{app_id}`). |
@@ -497,7 +497,9 @@ Verificação do pipeline MQTT → RabbitMQ → TimescaleDB (serviços `routing`
 set -a
 source infra/.env
 set +a
-mosquitto_pub -h localhost -p 1883 \
+infra/scripts/gen-mosquitto-certs.sh  # necessário apenas na primeira vez (#81)
+mosquitto_pub -h localhost -p 8883 \
+  --cafile infra/configuration/mosquitto/certs/ca.crt \
   -u "$MQTT_CHIRPSTACK_USER" -P "$MQTT_CHIRPSTACK_PASSWORD" \
   -t "application/1/device/dev1/event/up" \
   -m '{"object":{"temperature":25.5},"rxInfo":[{"rssi":-70,"snr":7.5}],"time":"2026-10-08T12:00:00Z"}'

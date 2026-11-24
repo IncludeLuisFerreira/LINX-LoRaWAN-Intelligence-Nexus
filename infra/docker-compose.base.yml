@@ -23,9 +23,12 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      # TLS obrigatorio (#81): a 1883 plaintext foi removida do listener.
+      - "8883:8883"
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+      # Gerados por infra/scripts/gen-mosquitto-certs.sh (#81).
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
 
 volumes:
   postgresqldata_base:
