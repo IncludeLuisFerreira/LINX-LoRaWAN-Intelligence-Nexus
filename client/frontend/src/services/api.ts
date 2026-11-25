@@ -5,6 +5,18 @@ import axios from 'axios';
 // httpOnly controlado pelo backend.
 let accessToken: string | null = null;
 
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/**
+ * Registra o handler global de sessão expirada/inválida (401). O AuthProvider
+ * deve registrar um callback que limpe o estado de auth e navegue para /login
+ * via router; `null` remove o registro.
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
+  unauthorizedHandler = handler;
+}
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
 }
@@ -37,12 +49,19 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Limpa o access token expirado da memória
-      accessToken = null;
+      const requestUrl = String(error.config?.url ?? '');
+      const isLoginRequest = requestUrl.includes('/auth/login');
 
-      // Redireciona para o login caso não esteja na tela de login
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      // Credenciais inválidas no próprio login: não tratar como sessão expirada.
+      if (!isLoginRequest) {
+        clearAccessToken();
+
+        if (unauthorizedHandler) {
+          unauthorizedHandler();
+        } else if (window.location.pathname !== '/login') {
+          // Fallback sem provider/router (ex.: fora da árvore React).
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);
@@ -55,8 +74,7 @@ export function getErrorMessage(
 ): string {
   if (axios.isAxiosError(error)) {
     const data = error.response?.data as
-      | { detail?: unknown; message?: unknown }
-      | undefined;
+      { detail?: unknown; message?: unknown } | undefined;
     if (typeof data?.detail === 'string' && data.detail) return data.detail;
     if (Array.isArray(data?.detail)) {
       const messages = data.detail

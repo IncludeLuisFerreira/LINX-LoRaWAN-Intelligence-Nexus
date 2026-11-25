@@ -41,7 +41,10 @@ export function AppRoutes() {
           }
         >
           <Route path="/tenants" element={<TenantListPage />} />
-          {/* Alias do critério de aceite do login: /orgs é a rota real de tenants */}
+          {/*
+            Alias aceito como destino pós-login (/orgs) por compatibilidade com o
+            critério de aceite; a rota canônica de organizações/tenants é /tenants.
+          */}
           <Route path="/orgs" element={<Navigate to="/tenants" replace />} />
           <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
           <Route

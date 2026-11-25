@@ -93,12 +93,12 @@ O fluxo de login segue o RNF-005 e usa a API real:
 3. O backend devolve o `access_token` no corpo e define o `refresh_token` em um cookie `httpOnly`.
 4. O `AuthContext` mantém o `access_token` **apenas em memória** (estado do React + módulo `api.ts`). Nada é gravado em `localStorage` ou `sessionStorage`.
 5. O interceptor do Axios injeta `Authorization: Bearer <access_token>`; o `withCredentials: true` garante que o cookie de refresh seja enviado nas requisições.
-6. Após o login, a aplicação redireciona para `/orgs` (alias de `/tenants`).
+6. Após o login, a aplicação redireciona para `/orgs`. A rota canônica de organizações/tenants é `/tenants`; `/orgs` é mantida como alias aceito (destino pós-login e compatibilidade com o critério de aceite) para não criar dívida silenciosa enquanto a nomenclatura não é consolidada.
 
 Em caso de `401`, o token em memória é limpo e o usuário é redirecionado para `/login`.
 Como o `refresh_token` é `httpOnly`, ele não é acessível por JavaScript — não é necessário (nem possível) lê-lo com `js-cookie`.
 
-> O endpoint `POST /auth/login` precisa estar disponível no backend. Mesmo com o MSW ativo, não há handler de autenticação: a chamada segue para a API real.
+> O endpoint `POST /auth/login` precisa estar disponível no backend para o fluxo real. Com `VITE_ENABLE_MOCKS=true`, o MSW expõe um handler de `POST /auth/login` que aceita qualquer credencial não vazia e devolve um `access_token` sintético (com cookie `httpOnly` simulado no mock) para a demo local. Sem mocks, a chamada segue para a API real.
 
 ### AuthGuard
 

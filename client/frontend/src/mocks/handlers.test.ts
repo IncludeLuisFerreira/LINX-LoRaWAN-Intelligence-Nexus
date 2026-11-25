@@ -259,3 +259,40 @@ describe('telemetry handlers', () => {
     expect(res.status).toBe(422);
   });
 });
+
+function decodeJwtPayload(token: string): {
+  exp: number;
+  permissions: string[];
+} {
+  const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  return JSON.parse(atob(padded)) as { exp: number; permissions: string[] };
+}
+
+describe('auth handlers', () => {
+  it('accepts POST /auth/login and returns a usable access token', async () => {
+    const res = await post(`${base}/auth/login`, {
+      email: 'demo@linx.local',
+      password: 'demo',
+    });
+    const body = (await res.json()) as {
+      access_token: string;
+      token_type: string;
+      expires_in: number;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.token_type).toBe('bearer');
+    expect(body.expires_in).toBe(3600);
+
+    const payload = decodeJwtPayload(body.access_token);
+    expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(payload.permissions.length).toBeGreaterThan(0);
+  });
+
+  it('rejects POST /auth/login without credentials', async () => {
+    const res = await post(`${base}/auth/login`, {});
+
+    expect(res.status).toBe(422);
+  });
+});
