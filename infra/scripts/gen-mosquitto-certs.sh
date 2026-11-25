@@ -31,14 +31,18 @@ if ! command -v openssl >/dev/null 2>&1; then
   exit 1
 fi
 
+mkdir -p "$CERT_DIR"
+# Com umask 077 o diretorio ficaria 0700 e o broker (uid 1883, em bind mount)
+# nao conseguiria ler os certificados gerados pelo host/CI. Apenas a ca.key
+# permanece restrita (0600); os certificados e a chave do servidor sao 0644.
+chmod 0755 "$CERT_DIR"
+
 if [ -f "$CA_KEY" ] && [ -f "$CA_CERT" ] &&
    [ -f "$SERVER_KEY" ] && [ -f "$SERVER_CERT" ] &&
    [ "${FORCE:-0}" != "1" ]; then
   echo "Certificados TLS ja existem em $CERT_DIR (use FORCE=1 para regenerar)."
   exit 0
 fi
-
-mkdir -p "$CERT_DIR"
 
 # O hostname do cliente precisa casar com o SAN. Sempre inclui localhost e
 # 127.0.0.1 para os probes que rodam dentro do container do broker.

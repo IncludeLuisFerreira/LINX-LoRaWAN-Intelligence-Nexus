@@ -41,6 +41,9 @@ TEST_ENV_FILE = os.path.join(HERE, "test.env")
 BOOTSTRAP_NETWORK = os.path.join(
     ROOT, "deploy", "scripts", "bootstrap-network.sh"
 )
+GEN_MOSQUITTO_CERTS = os.path.join(
+    ROOT, "infra", "scripts", "gen-mosquitto-certs.sh"
+)
 
 PROJECT = "lynx-integration"
 INFRA_PROJECT = "lynx-integration-infra"
@@ -120,6 +123,15 @@ def _ensure_deploy_env() -> None:
     if not os.path.exists(deploy_env):
         example = os.path.join(ROOT, "deploy", ".env.example")
         shutil.copyfile(example, deploy_env)
+
+
+def _ensure_mosquitto_certs() -> None:
+    """Garante CA/certificado do broker TLS (#81) antes de subir o compose.
+
+    Os certificados são gitignored, então não existem num checkout limpo (CI).
+    O gerador é idempotente: não regenera certificados já presentes.
+    """
+    subprocess.run(["bash", GEN_MOSQUITTO_CERTS], check=True)
 
 
 def compose(
@@ -260,7 +272,10 @@ def stack() -> Iterator[None]:
     """Sobe Mosquitto do infra + stack de deploy, valida e derruba no fim."""
     _ensure_deploy_env()
     _ensure_network()
+    _ensure_mosquitto_certs()
 
+    # check=False: deixa o bloco abaixo imprimir stdout/stderr do compose e
+    # os logs do broker em vez de estourar CalledProcessError sem diagnóstico.
     infra_up = compose_infra(
         "up",
         "-d",
@@ -268,6 +283,7 @@ def stack() -> Iterator[None]:
         "--wait-timeout",
         UP_TIMEOUT,
         "mosquitto",
+        check=False,
     )
     if infra_up.returncode != 0:
         print(infra_up.stdout)
@@ -285,6 +301,7 @@ def stack() -> Iterator[None]:
         "--wait-timeout",
         UP_TIMEOUT,
         *SERVICES,
+        check=False,
     )
     if up.returncode != 0:
         print(up.stdout)

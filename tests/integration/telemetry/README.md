@@ -24,8 +24,9 @@ aplicando overrides para:
 
 O broker não tem mais listener plaintext na 1883: os probes usam `mosquitto_pub`
 com `-p 8883 --cafile /mosquitto/certs/ca.crt` e o routing sobe com
-`MQTT_TLS_ENABLED=true`. Gere os certificados com
-`infra/scripts/gen-mosquitto-certs.sh` antes de rodar a suíte.
+`MQTT_TLS_ENABLED=true`. A suíte gera CA/certificado automaticamente (se ainda
+não existirem) via `infra/scripts/gen-mosquitto-certs.sh`; em execução manual,
+o script também pode ser chamado diretamente.
 
 Sobe apenas os serviços do caminho: `mosquitto` (infra), `routing`, `rabbitmq`,
 `timescaledb`, `telemetry_consumer` (deploy), conectados pela rede
