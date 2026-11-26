@@ -366,6 +366,12 @@ Para habilitar mocks em um container de demonstração:
 docker build --build-arg VITE_ENABLE_MOCKS=true -t frontend:demo .
 ```
 
+> **Atenção:** o `docker run -p 8080:80` acima serve apenas para
+> desenvolvimento. O nginx interno confia no header `X-Forwarded-Proto` para
+> propagar o esquema ao `/api` e ao `/ws`; em produção exponha o dashboard
+> somente atrás da borda TLS (`frontend-tls`), que sobrescreve esse header.
+> Com a porta acessível diretamente, um cliente poderia forjá-lo.
+
 ## HTTPS no deploy (issue #73)
 
 O compose de `client/` expõe o dashboard somente pela borda `frontend-tls`

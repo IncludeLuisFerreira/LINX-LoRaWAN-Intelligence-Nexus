@@ -63,12 +63,21 @@ bootstrap_cert() {
   log "Gerando certificado bootstrap (autoassinado) para iniciar a borda..."
   mkdir -p "$CERTS_DIR"
   local san="DNS:${DOMAIN:-localhost}"
-  openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
-    -keyout "$CERTS_DIR/privkey.pem" \
-    -out "$CERTS_DIR/fullchain.pem" \
-    -subj "/C=BR/O=LINX/CN=${DOMAIN:-localhost}" \
-    -addext "subjectAltName=$san" >/dev/null 2>&1
+  # A chave nunca deve nascer legível por outros usuários. O umask restrito
+  # vale só na geração (subshell) e é restaurado ao sair dela; o chmod abaixo
+  # reforça a permissão da chave publicada.
+  if ! (
+    umask 077
+    openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+      -keyout "$CERTS_DIR/privkey.pem" \
+      -out "$CERTS_DIR/fullchain.pem" \
+      -subj "/C=BR/O=LINX/CN=${DOMAIN:-localhost}" \
+      -addext "subjectAltName=$san" >/dev/null 2>&1
+  ); then
+    fail "falha ao gerar o certificado bootstrap autoassinado."
+  fi
   chmod 600 "$CERTS_DIR/privkey.pem"
+  chmod 644 "$CERTS_DIR/fullchain.pem"
 }
 
 publish_cert() {
@@ -83,7 +92,14 @@ publish_cert() {
 }
 
 reload_edge() {
-  docker compose -f "$COMPOSE" exec -T frontend-tls nginx -s reload
+  # O reload exige o container de pé (ex.: host reiniciado desde o `issue`).
+  # Sobe/reconcilia o serviço antes de recarregar e falha com mensagem clara.
+  if ! docker compose -f "$COMPOSE" up -d frontend-tls; then
+    fail "não foi possível subir o serviço frontend-tls."
+  fi
+  if ! docker compose -f "$COMPOSE" exec -T frontend-tls nginx -s reload; then
+    fail "falha ao recarregar o nginx: frontend-tls não está rodando?"
+  fi
 }
 
 cmd_issue() {

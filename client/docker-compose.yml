@@ -69,9 +69,12 @@ services:
     depends_on:
       - frontend
     healthcheck:
+      # wget do BusyBox (nginx:1.27-alpine): --spider só testa a resposta e
+      # --no-check-certificate evita depender do cert publicado, que pode ser
+      # bootstrap/autoassinado na primeira subida. -T/-t limitam espera/tentativa.
       test:
         - CMD-SHELL
-        - "wget -q --no-check-certificate -O /dev/null https://127.0.0.1/ || exit 1"
+        - "wget -q --spider --no-check-certificate -T 3 -t 1 https://127.0.0.1/ || exit 1"
       interval: 30s
       timeout: 5s
       retries: 3
@@ -80,7 +83,7 @@ services:
   # One-shot usado por scripts/frontend-cert.sh (issue/renew). Fora do profile
   # padrão para não subir junto com a stack.
   certbot:
-    image: certbot/certbot:latest
+    image: certbot/certbot:v3.1.0
     profiles: ["tools"]
     volumes:
       - ./certbot/conf:/etc/letsencrypt

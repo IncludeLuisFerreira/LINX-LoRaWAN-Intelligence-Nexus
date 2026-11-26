@@ -101,7 +101,7 @@ def main() -> int:
         original_tls = tls.read_text()
         hsts = (
             '    add_header Strict-Transport-Security '
-            '"max-age=31536000; includeSubDomains" always;\n'
+            '"max-age=31536000; includeSubDomains; preload" always;\n'
         )
         assert hsts in original_tls
         tls.write_text(original_tls.replace(hsts, "", 1))
