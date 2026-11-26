@@ -365,3 +365,79 @@ Para habilitar mocks em um container de demonstração:
 ```bash
 docker build --build-arg VITE_ENABLE_MOCKS=true -t frontend:demo .
 ```
+
+> **Atenção:** o `docker run -p 8080:80` acima serve apenas para
+> desenvolvimento. O nginx interno confia no header `X-Forwarded-Proto` para
+> propagar o esquema ao `/api` e ao `/ws`; em produção exponha o dashboard
+> somente atrás da borda TLS (`frontend-tls`), que sobrescreve esse header.
+> Com a porta acessível diretamente, um cliente poderia forjá-lo.
+
+## HTTPS no deploy (issue #73)
+
+O compose de `client/` expõe o dashboard somente pela borda `frontend-tls`
+(`nginx:1.27-alpine`): a porta `80` serve somente o desafio HTTP-01 do Certbot
+e redireciona todo o resto para `https://$host$request_uri`; a porta `443`
+termina o TLS e faz proxy para o nginx interno do serviço `frontend` (que
+continua cuidando de `/api`, `/ws` e do fallback da SPA). O certificado é
+emitido pelo Let's Encrypt via **webroot** e renovado por
+`scripts/frontend-cert.sh`.
+
+### Pré-requisitos
+
+- domínio público com registro **A** apontando para o host (não é possível
+  obter certificado válido sem um domínio);
+- portas `80` e `443` liberadas no Security Group/firewall;
+- Docker + Compose V2 e `openssl` no host.
+
+### Emissão
+
+```bash
+cd client
+cp .env.example .env   # preencha FRONTEND_DOMAIN e LE_EMAIL
+export FRONTEND_DOMAIN=dashboard.seudominio.com
+export LE_EMAIL=admin@seudominio.com
+
+# cria um certificado autoassinado de 1 dia só para o nginx subir e responder
+# ao desafio, emite o certificado real e recarrega a borda:
+./scripts/frontend-cert.sh issue
+```
+
+Use `LE_STAGING=1` enquanto testar (evita o limite de requisições do Let's
+Encrypt). Os PEMs publicados ficam em `client/certs/` (gitignored) e o estado
+do Certbot em `client/certbot/` (gitignored).
+
+### Verificação
+
+```bash
+curl -I http://$FRONTEND_DOMAIN    # 301 -> https://$FRONTEND_DOMAIN
+curl -I https://$FRONTEND_DOMAIN   # 200
+curl -vkI https://$FRONTEND_DOMAIN # handshake TLSv1.2/1.3, emissor Let's Encrypt
+FRONTEND_DOMAIN=$FRONTEND_DOMAIN ./scripts/frontend-cert.sh status
+```
+
+### Renovação
+
+O certificado vale 90 dias. Agende no host (cron), no mesmo diretório:
+
+```bash
+0 3 * * * cd /caminho/LINX/client && FRONTEND_DOMAIN=dashboard.seudominio.com ./scripts/frontend-cert.sh renew
+```
+
+O comando renova via certbot, republica os PEMs e recarrega o nginx da borda.
+
+### Sem domínio (apenas desenvolvimento local)
+
+É possível subir a borda com certificado **autoassinado** para validar o
+config localmente; o navegador exibirá aviso e o critério "certificado válido"
+da issue **não** é atendido nesse modo:
+
+```bash
+# na raiz do repositório
+TLS_CERT_DIR="$PWD/client/certs" TLS_CERT_HOST=localhost \
+  ./deploy/scripts/gen-self-signed-cert.sh
+docker compose -f client/docker-compose.yml up -d --build frontend-tls
+curl -kI https://localhost   # 200 com certificado autoassinado
+```
+
+A validação de CI da borda roda `scripts/check-nginx-tls.sh` (diretivas +
+`nginx -t`) e a guarda de headers de segurança cobre o HSTS do bloco TLS.

@@ -262,6 +262,10 @@ infra/chirpstack-device-profiles/
 # Certificados TLS gerados localmente (self-signed)
 deploy/certs/
 
+# Borda HTTPS do frontend (issue #73): certificados e estado do Certbot
+client/certs/
+client/certbot/
+
 # === Logs ===
 *.log
 

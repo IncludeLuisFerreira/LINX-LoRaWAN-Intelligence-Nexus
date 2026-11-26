@@ -23,6 +23,9 @@ PERMISSIONS = "Permissions-Policy"
 REQUIRED = {
     "deploy/nginx/nginx.conf": (CSP, PERMISSIONS),
     "client/frontend/nginx.conf": (CSP, PERMISSIONS),
+    # Borda TLS do dashboard (#73): o HSTS é exigido automaticamente no
+    # server block que escuta 443/ssl_certificate.
+    "client/frontend/nginx-tls.conf": (CSP, PERMISSIONS),
 }
 FORBIDDEN = {
     "client/frontend/nginx.conf": (HSTS,),
