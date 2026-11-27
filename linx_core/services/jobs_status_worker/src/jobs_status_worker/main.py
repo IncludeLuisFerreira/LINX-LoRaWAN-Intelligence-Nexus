@@ -6,12 +6,12 @@ from collections.abc import Callable
 from types import FrameType
 from typing import Any
 
-import pika
 from linx_shared.db.base import SessionLocal, engine
 from linx_shared.jobs.broker import declare_status_topology
 from linx_shared.jobs.constants import PROVISIONING_STATUS_DEAD
 from linx_shared.jobs.consumer import InvalidMessageError, run_consumer
 from linx_shared.jobs.envelope import JobStatusEvent
+from linx_shared.messaging.pika_adapter import open_channel
 from pydantic import ValidationError
 from sqlalchemy import text
 
@@ -48,11 +48,8 @@ def _wait_for_dependencies() -> None:
 
 
 def _declare_topology(url: str, queue: str) -> None:
-    connection = pika.BlockingConnection(pika.URLParameters(url))
-    try:
-        declare_status_topology(connection.channel(), queue)
-    finally:
-        connection.close()
+    with open_channel(url) as channel:
+        declare_status_topology(channel, queue)
 
 
 def _parse_status_event(body: bytes) -> JobStatusEvent:

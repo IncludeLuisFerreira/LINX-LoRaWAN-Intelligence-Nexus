@@ -591,7 +591,7 @@ develop = true
 
 [package.dependencies]
 grpcio = ">=1.84.0,<2.0.0"
-pika = ">=1.4.4,<2.0.0"
+pika = ">=1.5.0,<2.0.0"
 protobuf = ">=7.36.1,<8.0.0"
 psycopg = {version = ">=3.3.4,<4.0.0", extras = ["binary"]}
 pydantic = ">=2.13.5,<3.0.0"
@@ -1539,4 +1539,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "71f4f0e4118f79bd3052dd361c2ff70d53b26e7220ed02af2f040f05d68eb361"
+content-hash = "1e2f7999fe143cbb815d4bce3abbf507c7f871119f4e800058f3c2f9b556aed8"

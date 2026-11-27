@@ -15,6 +15,18 @@ from jobs_status_worker import main as main_module
 from jobs_status_worker.config import StatusWorkerSettings
 
 
+class FakeChannelContext:
+    def __init__(self, channel) -> None:
+        self.channel = channel
+        self.closed = False
+
+    def __enter__(self):
+        return self.channel
+
+    def __exit__(self, *exc_info) -> None:
+        self.closed = True
+
+
 def _valid_settings(monkeypatch, **env):
     monkeypatch.setenv(
         "RABBITMQ_AMQP_URL",
@@ -121,12 +133,11 @@ def test_consumer_threads_declare_status_topology_with_custom_queue(
 
 def test_declare_topology_uses_status_queue_and_closes(monkeypatch):
     channel = object()
-    connection = MagicMock()
-    connection.channel.return_value = channel
+    context = FakeChannelContext(channel)
     monkeypatch.setattr(
-        main_module.pika,
-        "BlockingConnection",
-        MagicMock(return_value=connection),
+        main_module,
+        "open_channel",
+        lambda url: context,
     )
     declarer = MagicMock()
     monkeypatch.setattr(main_module, "declare_status_topology", declarer)
@@ -137,17 +148,16 @@ def test_declare_topology_uses_status_queue_and_closes(monkeypatch):
     )
 
     declarer.assert_called_once_with(channel, "linx.jobs.status.custom")
-    connection.close.assert_called_once_with()
+    assert context.closed is True
 
 
 def test_declare_topology_closes_connection_on_declarer_error(monkeypatch):
     channel = object()
-    connection = MagicMock()
-    connection.channel.return_value = channel
+    context = FakeChannelContext(channel)
     monkeypatch.setattr(
-        main_module.pika,
-        "BlockingConnection",
-        MagicMock(return_value=connection),
+        main_module,
+        "open_channel",
+        lambda url: context,
     )
     declarer = MagicMock(side_effect=RuntimeError("declare failed"))
     monkeypatch.setattr(main_module, "declare_status_topology", declarer)
@@ -159,7 +169,7 @@ def test_declare_topology_closes_connection_on_declarer_error(monkeypatch):
         )
 
     declarer.assert_called_once_with(channel, "linx.jobs.status.custom")
-    connection.close.assert_called_once_with()
+    assert context.closed is True
 
 
 def test_wait_for_dependencies_retries_then_succeeds(monkeypatch):

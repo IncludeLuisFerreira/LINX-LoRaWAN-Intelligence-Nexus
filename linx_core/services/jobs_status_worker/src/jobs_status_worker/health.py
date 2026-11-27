@@ -1,5 +1,5 @@
-import pika
 from linx_shared.db.base import engine
+from linx_shared.messaging.pika_adapter import open_channel
 from sqlalchemy import text
 
 from jobs_status_worker.config import settings
@@ -10,10 +10,5 @@ def check() -> None:
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
 
-    rabbit = pika.BlockingConnection(
-        pika.URLParameters(settings.rabbitmq_amqp_url)
-    )
-    try:
-        rabbit.channel()
-    finally:
-        rabbit.close()
+    with open_channel(settings.rabbitmq_amqp_url):
+        pass

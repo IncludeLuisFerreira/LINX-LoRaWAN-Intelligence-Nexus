@@ -1,10 +1,7 @@
-import json
 import logging
 from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any, Protocol
-
-import pika
 
 from linx_shared.jobs.constants import (
     JOB_DLX,
@@ -16,6 +13,7 @@ from linx_shared.jobs.constants import (
     PROVISIONING_STATUS_DLQ,
     PROVISIONING_STATUS_QUEUE,
 )
+from linx_shared.messaging.pika_adapter import PikaPublisher
 from linx_shared.messaging.topology import (
     JOB_TYPE_TOPOLOGIES,
     JobTypeTopology,
@@ -165,130 +163,4 @@ def declare_topology(
     )
 
 
-class RabbitMQPublisher:
-    def __init__(self, url: str) -> None:
-        self._url = url
-        self._connection: Any = None
-        self._channel: Any = None
-
-    @staticmethod
-    def _is_open(client: Any) -> bool:
-        return bool(getattr(client, "is_open", False))
-
-    def _connect(self) -> Any:
-        if (
-            self._connection is None
-            or self._channel is None
-            or not self._is_open(self._connection)
-            or not self._is_open(self._channel)
-        ):
-            self._reset()
-            self._connection = pika.BlockingConnection(
-                pika.URLParameters(self._url)
-            )
-            self._channel = self._connection.channel()
-            self._channel.confirm_delivery()
-        return self._channel
-
-    def _reset(self) -> None:
-        connection = self._connection
-        self._connection = None
-        self._channel = None
-        if connection is not None and self._is_open(connection):
-            try:
-                connection.close()
-            except pika.exceptions.AMQPError:
-                pass
-
-    def _publish_once(
-        self,
-        exchange: str,
-        routing_key: str,
-        body: bytes,
-        properties: Any,
-    ) -> None:
-        channel = self._connect()
-        channel.basic_publish(
-            exchange=exchange,
-            routing_key=routing_key,
-            body=body,
-            properties=properties,
-            mandatory=True,
-        )
-
-    def _publish_confirmed(
-        self,
-        exchange: str,
-        routing_key: str,
-        body: bytes,
-        properties: Any,
-        *,
-        message_id: str | None,
-    ) -> None:
-        try:
-            self._publish_once(exchange, routing_key, body, properties)
-        except (
-            pika.exceptions.UnroutableError,
-            pika.exceptions.NackError,
-        ):
-            logger.error(
-                "broker did not confirm message exchange=%s routing_key=%s "
-                "message_id=%s",
-                exchange,
-                routing_key,
-                message_id,
-            )
-            raise
-        except (
-            pika.exceptions.AMQPConnectionError,
-            pika.exceptions.AMQPChannelError,
-        ):
-            self._reset()
-            self._publish_once(exchange, routing_key, body, properties)
-
-    def publish(
-        self,
-        exchange: str,
-        routing_key: str,
-        payload: dict[str, Any],
-        *,
-        message_id: str | None = None,
-    ) -> None:
-        body = json.dumps(payload).encode("utf-8")
-        properties = pika.BasicProperties(
-            delivery_mode=2,
-            content_type="application/json",
-            message_id=message_id,
-        )
-        self._publish_confirmed(
-            exchange,
-            routing_key,
-            body,
-            properties,
-            message_id=message_id,
-        )
-
-    def publish_raw(
-        self,
-        exchange: str,
-        routing_key: str,
-        body: bytes,
-        *,
-        message_id: str | None = None,
-    ) -> None:
-        """Publica bytes sem reencodar (usado para DLQ de payload inválido)."""
-        properties = pika.BasicProperties(
-            delivery_mode=2,
-            content_type="application/octet-stream",
-            message_id=message_id,
-        )
-        self._publish_confirmed(
-            exchange,
-            routing_key,
-            body,
-            properties,
-            message_id=message_id,
-        )
-
-    def close(self) -> None:
-        self._reset()
+RabbitMQPublisher = PikaPublisher
