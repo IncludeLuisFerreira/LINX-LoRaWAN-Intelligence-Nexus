@@ -22,6 +22,7 @@ from linx_shared.jobs.constants import (
     PROVISIONING_STATUS_QUEUE,
     RETRY_DELAYS_SECONDS,
 )
+from linx_shared.jobs.consumer import InvalidMessageError, run_consumer
 from linx_shared.jobs.envelope import JobEnvelope, JobStatusEvent
 from pydantic import ValidationError
 from sqlalchemy import text
@@ -30,12 +31,7 @@ from jobs_worker.config import WorkerSettings
 from jobs_worker.health import check
 from jobs_worker.processor import JobProcessor
 from jobs_worker.reaper import JobReaper
-from jobs_worker.runtime import (
-    InvalidMessageError,
-    build_registry,
-    run_consumer,
-    run_outbox_relay,
-)
+from jobs_worker.runtime import build_registry, run_outbox_relay
 from jobs_worker.status import StatusProcessor
 
 logger = logging.getLogger(__name__)
