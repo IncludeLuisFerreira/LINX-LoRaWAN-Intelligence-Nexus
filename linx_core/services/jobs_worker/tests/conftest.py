@@ -15,8 +15,8 @@ os.environ.setdefault(
     "amqp://linx:ci-rabbit-pass@localhost:5672/",
 )
 os.environ.setdefault(
-    "SERVICE_TOKEN",
-    "test-service-token-0123456789abcdef",
+    "PROVISIONER_SERVICE_TOKEN",
+    "test-provisioner-token-0123456789abcdef",
 )
 os.environ.setdefault("PROVISIONER_GRPC_HOST", "127.0.0.1:50052")
 

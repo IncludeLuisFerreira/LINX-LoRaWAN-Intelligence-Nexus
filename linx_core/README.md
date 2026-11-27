@@ -129,7 +129,7 @@ Serviço interno que cria e reaproveita containers Docker por aplicação. É o
 | `DeprovisionApplication` | identity_api → docker_provisioner | Remove o container e a rede dedicada no delete da aplicação. |
 
 Contrato em `proto/linx_docker_provisioner.proto`. A chamada exige o metadado
-`authorization: Bearer <SERVICE_TOKEN>` e a porta não é publicada no host.
+`authorization: Bearer <PROVISIONER_SERVICE_TOKEN>` e a porta não é publicada no host.
 
 ## Provisionamento assíncrono (issues #58 e #60)
 
@@ -213,6 +213,27 @@ Ordem de upgrade obrigatória: **suba o `docker_provisioner` (com
 chamando um provisioner antigo degrada para "limpeza ignorada" (item 5), mas o
 container/rede da aplicação ficam órfãos até o provisioner ser atualizado.
 
+### Cutover do `PROVISIONER_SERVICE_TOKEN`
+
+O provisioner novo aceita apenas `PROVISIONER_SERVICE_TOKEN` no gRPC; clientes
+antigos ainda enviam `SERVICE_TOKEN`. Durante o rollout, qualquer combinação
+mista (cliente antigo × provisioner novo, ou vice-versa) falha com
+`UNAUTHENTICATED`: o `jobs_worker` marca o job como falha permanente e o
+`DELETE` de aplicação responde `502`.
+
+Antes de subir a nova versão:
+
+1. defina `PROVISIONER_SERVICE_TOKEN` (mín. 32 caracteres, diferente de
+   `SERVICE_TOKEN`) no `.env` do Compose ou recrie o Secret do Kubernetes;
+2. drene o `jobs_worker` (pare o consumo) para não perder jobs em voo;
+3. suba `docker_provisioner`, `identity_api` e `jobs_worker` juntos com o mesmo
+   token; o Compose falha no startup se a chave nova faltar (`:?`);
+4. reprocesse os jobs que falharam durante a janela.
+
+Em Kubernetes, o `docker_provisioner` não roda no cluster: atualize também o
+provisioner externo com o token novo na mesma janela. Um Secret existente não
+ganha a chave nova sozinho — recrie-o antes do rollout.
+
 Verificação manual:
 
 ```bash
@@ -269,11 +290,11 @@ stat -c '%g' /var/run/docker.sock
 
 Preencha `DOCKER_GID` no `.env` do `linx_core/`. O `identity_api` **não** monta
 o socket. O `jobs_worker` também **não** monta o socket: ele só fala com o
-provisioner via gRPC autenticado por `SERVICE_TOKEN`.
+provisioner via gRPC autenticado por `PROVISIONER_SERVICE_TOKEN`.
 
 As mensagens do RabbitMQ carregam apenas IDs, tipo de job e payload mínimo.
-Nunca incluem senhas, tokens ou credenciais de banco. O `SERVICE_TOKEN` é lido
-do ambiente do worker, não da mensagem.
+Nunca incluem senhas, tokens ou credenciais de banco. O
+`PROVISIONER_SERVICE_TOKEN` é lido do ambiente do worker, não da mensagem.
 
 ## Desenvolvimento local
 
@@ -413,7 +434,7 @@ do RabbitMQ saudáveis.
 make build-tenant-image
 
 cd linx_core
-cp .env.example .env   # ajuste POSTGRES_PASSWORD, RABBITMQ_ADMIN_PASSWORD, SERVICE_TOKEN e DOCKER_GID
+cp .env.example .env   # ajuste POSTGRES_PASSWORD, RABBITMQ_ADMIN_PASSWORD, SERVICE_TOKEN, PROVISIONER_SERVICE_TOKEN e DOCKER_GID
 docker compose up -d --build
 curl -i http://localhost:8000/health
 ```
@@ -442,7 +463,8 @@ Resposta esperada (`200`):
 | `CHIRPSTACK_API_TOKEN` | Token Bearer de acesso à API do ChirpStack.                    | *(obrigatório)*                 |
 | `CHIRPSTACK_USE_TLS` | Exige TLS na conexão gRPC com o ChirpStack (falha em produção se `false`). | `true`             |
 | `CHIRPSTACK_CA_CERT` | CA usada para validar o certificado do ChirpStack.              | *(vazio)*                       |
-| `SERVICE_TOKEN`      | Token do plano de controle e da chamada gRPC (mín. 32 chars).    | *(obrigatório)*                 |
+| `SERVICE_TOKEN`      | Token do plano de controle/tenant (REST; mín. 32 chars).         | *(obrigatório)*                 |
+| `PROVISIONER_SERVICE_TOKEN` | Token que autentica a chamada gRPC ao `docker_provisioner` (mín. 32 chars). Nunca é injetado no container do tenant. | *(obrigatório)* |
 | `DOCKER_GID`         | GID do grupo dono de `/var/run/docker.sock`.                     | `990`                           |
 | `RABBITMQ_ADMIN_USER` | Usuário admin do broker (Compose).                              | `linx`                          |
 | `RABBITMQ_ADMIN_PASSWORD` | Senha admin do broker (obrigatória no Compose).             | `change-me-in-production`       |
@@ -487,3 +509,6 @@ Resposta esperada (`200`):
    `DeprovisionApplication`) **antes** do `identity_api`. Um `identity_api` novo
    contra um provisioner antigo apenas ignora a limpeza Docker no delete (ver
    *Deprovisionamento e isolamento de rede*), deixando container/rede órfãos.
+7. **Cutover de credencial:** ao introduzir `PROVISIONER_SERVICE_TOKEN`, siga a
+   janela coordenada acima; subir só um dos lados deixa provisionamento e delete
+   falhando com `UNAUTHENTICATED`.

@@ -146,12 +146,49 @@ kubectl create secret generic linx-secrets -n linx \
 O `--dry-run=client -o yaml` gera o Secret e o `kubectl apply` o cria ou
 atualiza, sem falhar em execuções repetidas. As chaves mínimas são as do
 template: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
-`POSTGRES_REPLICATION_PASSWORD`, `SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
+`POSTGRES_REPLICATION_PASSWORD`, `SERVICE_TOKEN`, `PROVISIONER_SERVICE_TOKEN`,
+`AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
 `RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD`, `RABBITMQ_TENANT_SECRET` e
 `RABBITMQ_AMQP_URL` (usada pelo `jobs_worker` e pelo `jobs_status_worker`;
 aponte para um broker real).
 
 `infra/kubernetes/linx-secrets.env` está no `.gitignore` — nunca versionar.
+
+### Cutover do `PROVISIONER_SERVICE_TOKEN`
+
+O `docker_provisioner` não roda neste cluster; o provisioner externo e os
+clientes (`identity-api`, `jobs-worker`) precisam do mesmo token novo. Um
+Secret existente não ganha a chave nova sozinho: recrie-o antes do rollout.
+
+Durante a janela de troca, clientes antigos/novos contra provisioner
+antigo/novo falham com `UNAUTHENTICATED` — o `jobs-worker` trata como falha
+permanente e o `DELETE` de aplicação responde `502`. Procedimento:
+
+1. dê scale down no `jobs-worker` para drenar jobs em voo:
+
+   ```bash
+   kubectl -n linx scale deployment/jobs-worker --replicas=0
+   ```
+
+2. atualize o provisioner externo com o `PROVISIONER_SERVICE_TOKEN` novo
+   (mín. 32 caracteres, diferente de `SERVICE_TOKEN`);
+3. recrie o Secret com a chave nova e reinicie o `identity-api`:
+
+   ```bash
+   kubectl create secret generic linx-secrets -n linx \
+     --from-env-file=infra/kubernetes/linx-secrets.env \
+     --dry-run=client -o yaml | kubectl apply -f -
+   kubectl -n linx rollout restart deployment/identity-api
+   kubectl -n linx rollout status deployment/identity-api
+   ```
+
+4. restaure o `jobs-worker` (ele sobe já com o Secret novo) e reprocesse os
+   jobs de provisionamento que falharam na janela:
+
+   ```bash
+   kubectl -n linx scale deployment/jobs-worker --replicas=3
+   kubectl -n linx rollout status deployment/jobs-worker
+   ```
 
 ### Banco externo (RDS, Cloud SQL etc.)
 

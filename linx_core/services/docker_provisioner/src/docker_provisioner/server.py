@@ -43,24 +43,46 @@ def _extract_bearer_token(
     return None
 
 
-def ensure_service_token() -> None:
-    """Falha o startup se o token estiver ausente ou fraco.
+def _validate_secret(token: str, name: str) -> None:
+    """Rejeita segredo ausente, placeholder ou curto.
 
-    O mesmo token autentica a chamada do identity_api e é injetado no
-    container do tenant; por isso ele precisa ser um segredo real.
+    Levanta ``RuntimeError`` com o nome da variável de ambiente para que o
+    operador saiba exatamente qual credencial corrigir.
     """
-    token = (settings.service_token or "").strip()
-    if not token:
-        raise RuntimeError("SERVICE_TOKEN is not configured.")
-    if token in PLACEHOLDER_SERVICE_TOKENS:
+    cleaned = (token or "").strip()
+    if not cleaned:
+        raise RuntimeError(f"{name} is not configured.")
+    if cleaned in PLACEHOLDER_SERVICE_TOKENS:
         raise RuntimeError(
-            "SERVICE_TOKEN uses a known placeholder value; "
+            f"{name} uses a known placeholder value; "
             "set a unique random secret."
         )
-    if len(token) < MIN_SERVICE_TOKEN_LENGTH:
+    if len(cleaned) < MIN_SERVICE_TOKEN_LENGTH:
         raise RuntimeError(
-            f"SERVICE_TOKEN must be at least "
+            f"{name} must be at least "
             f"{MIN_SERVICE_TOKEN_LENGTH} characters long."
+        )
+
+
+def ensure_service_token() -> None:
+    """Falha o startup se alguma credencial estiver ausente ou fraca.
+
+    ``service_token`` é injetado no container do tenant;
+    ``provisioner_service_token`` autentica a chamada gRPC do identity_api.
+    Ambos precisam ser segredos reais e distintos: se forem iguais, um tenant
+    comprometido teria o token que autentica o gRPC.
+    """
+    _validate_secret(settings.service_token, "SERVICE_TOKEN")
+    _validate_secret(
+        settings.provisioner_service_token, "PROVISIONER_SERVICE_TOKEN"
+    )
+    if secrets.compare_digest(
+        (settings.service_token or "").strip().encode("utf-8"),
+        (settings.provisioner_service_token or "").strip().encode("utf-8"),
+    ):
+        raise RuntimeError(
+            "SERVICE_TOKEN and PROVISIONER_SERVICE_TOKEN must be different "
+            "values."
         )
 
 
@@ -70,9 +92,12 @@ def authorize(context) -> None:
     Falha fechada e em tempo constante: qualquer chamada sem o metadado
     correto é recusada como UNAUTHENTICATED, sem vazar o segredo esperado.
     """
-    expected = settings.service_token
+    expected = (settings.provisioner_service_token or "").strip()
     if not expected:
-        logger.error("SERVICE_TOKEN não configurado; recusando chamada gRPC.")
+        logger.error(
+            "PROVISIONER_SERVICE_TOKEN não configurado; "
+            "recusando chamada gRPC."
+        )
         context.abort(
             grpc.StatusCode.UNAUTHENTICATED, _UNAUTHENTICATED_DETAILS
         )
@@ -215,8 +240,8 @@ def create_server(
 
     logger.warning(
         "Servindo gRPC em modo inseguro em %s. A autorização por "
-        "metadado (SERVICE_TOKEN) é a única barreira; mantenha a porta "
-        "restrita à rede interna até haver TLS.",
+        "metadado (PROVISIONER_SERVICE_TOKEN) é a única barreira; mantenha "
+        "a porta restrita à rede interna até haver TLS.",
         bind_address,
     )
     return server

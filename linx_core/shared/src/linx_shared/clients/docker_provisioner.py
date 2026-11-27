@@ -72,11 +72,11 @@ class DockerProvisionerClient:
         self,
         *,
         target: str,
-        service_token: str,
+        provisioner_service_token: str,
         timeout: float,
     ) -> None:
         self._target = target
-        self._service_token = service_token
+        self._provisioner_service_token = provisioner_service_token
         self._timeout = timeout
         self._channel = grpc.insecure_channel(self._target)
         self._stub = linx_docker_provisioner_pb2_grpc.DockerProvisionerStub(
@@ -85,9 +85,9 @@ class DockerProvisionerClient:
 
     def provision(self, app_id: str) -> ProvisionedApplication:
         """Chama o provisioner e converte a resposta para o domínio local."""
-        if not self._service_token:
+        if not self._provisioner_service_token:
             raise ProvisionerClientError(
-                "Service token is not configured",
+                "Provisioner service token is not configured",
                 status_code=503,
             )
 
@@ -96,7 +96,9 @@ class DockerProvisionerClient:
             "ProvisionApplicationRequest",
         )
         request = request_cls(app_id=app_id)
-        metadata = (("authorization", f"Bearer {self._service_token}"),)
+        metadata = (
+            ("authorization", f"Bearer {self._provisioner_service_token}"),
+        )
 
         try:
             response = self._stub.ProvisionApplication(
@@ -127,9 +129,9 @@ class DockerProvisionerClient:
 
     def deprovision(self, app_id: str) -> DeprovisionedApplication:
         """Remove container e rede dedicada da aplicação."""
-        if not self._service_token:
+        if not self._provisioner_service_token:
             raise ProvisionerClientError(
-                "Service token is not configured",
+                "Provisioner service token is not configured",
                 status_code=503,
             )
 
@@ -138,7 +140,9 @@ class DockerProvisionerClient:
             "DeprovisionApplicationRequest",
         )
         request = request_cls(app_id=app_id)
-        metadata = (("authorization", f"Bearer {self._service_token}"),)
+        metadata = (
+            ("authorization", f"Bearer {self._provisioner_service_token}"),
+        )
 
         try:
             response = self._stub.DeprovisionApplication(

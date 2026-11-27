@@ -102,3 +102,105 @@ def test_startup_rejects_non_positive_job_max_attempts(monkeypatch):
 
     with pytest.raises(ValidationError, match="JOB_MAX_ATTEMPTS"):
         IdentitySettings(_env_file=None)
+
+
+def test_startup_accepts_provisioner_token_when_host_set(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    monkeypatch.setenv(
+        "PROVISIONER_SERVICE_TOKEN", "test-provisioner-token-0123456789abcdef"
+    )
+    settings = IdentitySettings(_env_file=None)
+    assert (
+        settings.provisioner_service_token
+        == "test-provisioner-token-0123456789abcdef"
+    )
+
+
+def test_startup_rejects_missing_provisioner_token_when_host_set(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    with pytest.raises(ValidationError, match="PROVISIONER_SERVICE_TOKEN"):
+        IdentitySettings(_env_file=None)
+
+
+def test_startup_rejects_short_provisioner_token_when_host_set(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    monkeypatch.setenv("PROVISIONER_SERVICE_TOKEN", "short-token")
+
+    with pytest.raises(ValidationError, match="PROVISIONER_SERVICE_TOKEN"):
+        IdentitySettings(_env_file=None)
+
+
+def test_startup_rejects_placeholder_provisioner_token_when_host_set(
+    monkeypatch,
+):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    monkeypatch.setenv("PROVISIONER_SERVICE_TOKEN", "changeme")
+
+    with pytest.raises(ValidationError, match="placeholder"):
+        IdentitySettings(_env_file=None)
+
+
+def test_startup_strips_provisioner_token_when_host_set(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    monkeypatch.setenv("PROVISIONER_SERVICE_TOKEN", f"  {'x' * 32}  ")
+
+    settings = IdentitySettings(_env_file=None)
+
+    assert settings.provisioner_service_token == "x" * 32
+
+
+def test_startup_allows_empty_provisioner_token_when_host_unset(monkeypatch):
+    _valid_env(monkeypatch)  # provisioner_grpc_host default ""
+    settings = IdentitySettings(_env_file=None)
+    assert settings.provisioner_service_token == ""
+
+
+def test_docker_provisioner_client_uses_provisioner_service_token(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "provisioner:50052")
+    monkeypatch.setenv("SERVICE_TOKEN", "s" * 40)
+    monkeypatch.setenv("PROVISIONER_SERVICE_TOKEN", "p" * 40)
+
+    from identity_api import dependencies
+
+    captured: dict[str, object] = {}
+
+    class RecordingClient:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        dependencies, "DockerProvisionerClient", RecordingClient
+    )
+    monkeypatch.setattr(
+        dependencies, "settings", IdentitySettings(_env_file=None)
+    )
+
+    dependency = dependencies.get_docker_provisioner_client()
+    try:
+        client = next(dependency)
+        assert isinstance(client, RecordingClient)
+        assert captured["target"] == "provisioner:50052"
+        assert captured["provisioner_service_token"] == "p" * 40
+    finally:
+        dependency.close()
+
+
+def test_docker_provisioner_client_is_none_when_host_unset(monkeypatch):
+    _valid_env(monkeypatch)
+
+    from identity_api import dependencies
+
+    monkeypatch.setattr(
+        dependencies, "settings", IdentitySettings(_env_file=None)
+    )
+
+    assert list(dependencies.get_docker_provisioner_client()) == [None]

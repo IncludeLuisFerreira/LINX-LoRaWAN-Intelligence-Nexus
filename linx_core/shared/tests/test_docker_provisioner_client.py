@@ -75,10 +75,10 @@ def _serve(servicer):
         server.stop(0)
 
 
-def _client(target: str, *, service_token: str = TOKEN):
+def _client(target: str, *, provisioner_service_token: str = TOKEN):
     return DockerProvisionerClient(
         target=target,
-        service_token=service_token,
+        provisioner_service_token=provisioner_service_token,
         timeout=2.0,
     )
 
@@ -134,10 +134,10 @@ def test_provision_maps_grpc_errors(grpc_code, http_status):
     assert exc_info.value.grpc_code == grpc_code
 
 
-def test_provision_fails_closed_without_service_token():
+def test_provision_fails_closed_without_provisioner_service_token():
     client = DockerProvisionerClient(
         target="127.0.0.1:1",
-        service_token="",
+        provisioner_service_token="",
         timeout=0.1,
     )
     try:
@@ -167,10 +167,10 @@ def test_deprovision_sends_app_id_and_bearer_token():
     assert result.containers_removed == 1
 
 
-def test_deprovision_fails_closed_without_service_token():
+def test_deprovision_fails_closed_without_provisioner_service_token():
     client = DockerProvisionerClient(
         target="127.0.0.1:1",
-        service_token="",
+        provisioner_service_token="",
         timeout=0.1,
     )
     try:

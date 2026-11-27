@@ -22,12 +22,15 @@ PLACEHOLDER_SECRETS = frozenset(
 )
 
 
-def require_secret(env_var: str, value: str | None) -> str:
+def require_secret(
+    env_var: str, value: str | None, *, min_length: int | None = None
+) -> str:
     """Garante que um segredo foi configurado e não é um placeholder.
 
     Chamado por validadores de startup (field_validator). Levanta
     ``ValueError`` com mensagem acionável quando o valor está ausente ou é
-    uma credencial conhecida e insegura; o serviço se recusa a subir.
+    uma credencial conhecida e insegura; o serviço se recusa a subir. Com
+    ``min_length``, também rejeita segredos curtos demais.
     """
     cleaned = (value or "").strip()
     if not cleaned:
@@ -38,6 +41,11 @@ def require_secret(env_var: str, value: str | None) -> str:
     if cleaned.lower() in PLACEHOLDER_SECRETS:
         raise ValueError(
             f"{env_var} uses the forbidden placeholder value {cleaned!r}; "
+            "set a unique secret in the environment before starting."
+        )
+    if min_length is not None and len(cleaned) < min_length:
+        raise ValueError(
+            f"{env_var} must be at least {min_length} characters long; "
             "set a unique secret in the environment before starting."
         )
     return cleaned
@@ -81,6 +89,9 @@ class Settings(BaseSettings):
     database_url: str = ""
     db_connect_timeout: int = 2
     service_token: str = ""
+    # Credencial da chamada gRPC do identity_api ao docker_provisioner,
+    # separada do `service_token` injetado nos containers dos tenants.
+    provisioner_service_token: str = ""
 
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
