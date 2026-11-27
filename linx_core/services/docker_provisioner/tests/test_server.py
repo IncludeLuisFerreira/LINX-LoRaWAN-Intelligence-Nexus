@@ -21,7 +21,8 @@ from docker_provisioner.server import (
 from tests.fakes import FakeDockerClient
 
 TOKEN = "test-service-token-0123456789abcdef"
-AUTH_METADATA = [("authorization", f"Bearer {TOKEN}")]
+PROVISIONER_TOKEN = "test-provisioner-token-0123456789abcdef"
+AUTH_METADATA = [("authorization", f"Bearer {PROVISIONER_TOKEN}")]
 APP_ID = "3d7f1a8e-3f4b-4f0a-9b7c-2e1d9a8b7c6d"
 
 
@@ -45,6 +46,13 @@ class FakeContext:
 @pytest.fixture(autouse=True)
 def service_token(monkeypatch):
     monkeypatch.setattr(settings, "service_token", TOKEN)
+
+
+@pytest.fixture(autouse=True)
+def provisioner_service_token(monkeypatch):
+    monkeypatch.setattr(
+        settings, "provisioner_service_token", PROVISIONER_TOKEN
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -92,8 +100,18 @@ def test_authorize_rejects_wrong_token():
     assert context.aborted[0] == grpc.StatusCode.UNAUTHENTICATED
 
 
+def test_authorize_rejects_service_token():
+    # Token do tenant (injetado) NÃO autentica o gRPC.
+    context = FakeContext(metadata=[("authorization", f"Bearer {TOKEN}")])
+
+    with pytest.raises(AbortError):
+        authorize(context)
+
+    assert context.aborted[0] == grpc.StatusCode.UNAUTHENTICATED
+
+
 def test_authorize_rejects_when_token_not_configured(monkeypatch):
-    monkeypatch.setattr(settings, "service_token", "")
+    monkeypatch.setattr(settings, "provisioner_service_token", "")
     context = FakeContext()
 
     with pytest.raises(AbortError):
@@ -128,6 +146,37 @@ def test_ensure_service_token_rejects_short_token(monkeypatch):
 
 
 def test_ensure_service_token_accepts_strong_token():
+    ensure_service_token()
+
+
+def test_ensure_provisioner_service_token_rejects_blank(monkeypatch):
+    monkeypatch.setattr(settings, "provisioner_service_token", "   ")
+
+    with pytest.raises(RuntimeError):
+        ensure_service_token()
+
+
+@pytest.mark.parametrize(
+    "placeholder",
+    ["changeme", "change-me-in-production"],
+)
+def test_ensure_provisioner_service_token_rejects_placeholder(
+    monkeypatch, placeholder
+):
+    monkeypatch.setattr(settings, "provisioner_service_token", placeholder)
+
+    with pytest.raises(RuntimeError):
+        ensure_service_token()
+
+
+def test_ensure_provisioner_service_token_rejects_short_token(monkeypatch):
+    monkeypatch.setattr(settings, "provisioner_service_token", "short")
+
+    with pytest.raises(RuntimeError):
+        ensure_service_token()
+
+
+def test_ensure_provisioner_service_token_accepts_strong_token():
     ensure_service_token()
 
 

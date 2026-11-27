@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     database_url: str = ""
     db_connect_timeout: int = 2
     service_token: str = ""
+    # Credencial da chamada gRPC do identity_api ao docker_provisioner,
+    # separada do `service_token` injetado nos containers dos tenants.
+    provisioner_service_token: str = ""
 
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
