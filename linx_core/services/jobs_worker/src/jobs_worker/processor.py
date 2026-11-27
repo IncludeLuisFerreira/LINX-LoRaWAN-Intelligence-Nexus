@@ -38,7 +38,7 @@ class JobProcessor:
     """Executa handlers e grava eventos/comandos no outbox.
 
     O processador nunca publica no RabbitMQ nem escreve o status terminal do
-    job: o ``StatusProcessor`` aplica os eventos resultantes.
+    job: o ``jobs_status_worker`` aplica os eventos resultantes.
     """
 
     def __init__(

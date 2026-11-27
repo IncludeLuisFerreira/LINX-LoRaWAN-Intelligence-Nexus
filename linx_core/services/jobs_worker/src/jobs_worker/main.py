@@ -19,10 +19,10 @@ from linx_shared.jobs.broker import (
 from linx_shared.jobs.constants import (
     JOB_TYPE_PROVISION_APPLICATION,
     PROVISIONING_QUEUE,
-    PROVISIONING_STATUS_QUEUE,
     RETRY_DELAYS_SECONDS,
 )
-from linx_shared.jobs.envelope import JobEnvelope, JobStatusEvent
+from linx_shared.jobs.consumer import InvalidMessageError, run_consumer
+from linx_shared.jobs.envelope import JobEnvelope
 from pydantic import ValidationError
 from sqlalchemy import text
 
@@ -30,13 +30,7 @@ from jobs_worker.config import WorkerSettings
 from jobs_worker.health import check
 from jobs_worker.processor import JobProcessor
 from jobs_worker.reaper import JobReaper
-from jobs_worker.runtime import (
-    InvalidMessageError,
-    build_registry,
-    run_consumer,
-    run_outbox_relay,
-)
-from jobs_worker.status import StatusProcessor
+from jobs_worker.runtime import build_registry, run_outbox_relay
 
 logger = logging.getLogger(__name__)
 
@@ -114,13 +108,6 @@ def _parse_envelope(body: bytes) -> JobEnvelope:
         raise InvalidMessageError("invalid job envelope") from exc
 
 
-def _parse_status_event(body: bytes) -> JobStatusEvent:
-    try:
-        return JobStatusEvent.model_validate_json(body)
-    except ValidationError as exc:
-        raise InvalidMessageError("invalid status event") from exc
-
-
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -137,7 +124,6 @@ def main() -> None:
         lock_seconds=settings.job_lock_seconds,
         retry_delays=RETRY_DELAYS_SECONDS,
     )
-    status_processor = StatusProcessor(SessionLocal)
     reaper = JobReaper(
         SessionLocal,
         interval_seconds=settings.job_reaper_interval_seconds,
@@ -150,10 +136,6 @@ def main() -> None:
         # Não consome/ack mensagem antes de banco, schema e broker prontos.
         ready_event.wait()
         processor.process(_parse_envelope(body))
-
-    def status_callback(body: bytes) -> None:
-        ready_event.wait()
-        status_processor.process(_parse_status_event(body))
 
     def declare(channel: Any) -> None:
         declare_topology(channel, queue)
@@ -224,21 +206,6 @@ def main() -> None:
             args=(stop_event,),
             kwargs=singleton_kwargs,
             name="job-reaper",
-            daemon=True,
-        )
-    )
-    threads.append(
-        threading.Thread(
-            target=run_consumer,
-            args=(
-                PROVISIONING_STATUS_QUEUE,
-                status_callback,
-                settings.rabbitmq_amqp_url,
-                settings.worker_prefetch,
-                stop_event,
-            ),
-            kwargs={"declare": declare},
-            name="status-consumer",
             daemon=True,
         )
     )

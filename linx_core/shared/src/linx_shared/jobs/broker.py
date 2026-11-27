@@ -30,6 +30,34 @@ class JobPublisher(Protocol):
     ) -> None: ...
 
 
+def declare_status_topology(
+    channel: Any,
+    queue: str = PROVISIONING_STATUS_QUEUE,
+) -> None:
+    """Declara apenas a topologia consumida pelo status worker.
+
+    Não declara a exchange de comandos, a DLX nem a fila de provisionamento:
+    o status worker não as consome e declará-las criaria filas órfãs quando
+    WORKER_QUEUE fosse customizada. A fila é declarada sem DLX para não
+    conflitar (406) com uma declaração anterior que tenha argumentos
+    diferentes.
+    """
+    channel.exchange_declare(
+        exchange=JOB_EVENTS_EXCHANGE,
+        exchange_type="topic",
+        durable=True,
+    )
+    channel.queue_declare(
+        queue=queue,
+        durable=True,
+    )
+    channel.queue_bind(
+        queue=queue,
+        exchange=JOB_EVENTS_EXCHANGE,
+        routing_key=f"{JOB_TYPE_PROVISION_APPLICATION}.#",
+    )
+
+
 def declare_topology(
     channel: Any,
     queue: str = PROVISIONING_QUEUE,
@@ -74,15 +102,7 @@ def declare_topology(
         routing_key=PROVISIONING_DEAD,
     )
 
-    channel.queue_declare(
-        queue=PROVISIONING_STATUS_QUEUE,
-        durable=True,
-    )
-    channel.queue_bind(
-        queue=PROVISIONING_STATUS_QUEUE,
-        exchange=JOB_EVENTS_EXCHANGE,
-        routing_key=f"{JOB_TYPE_PROVISION_APPLICATION}.#",
-    )
+    declare_status_topology(channel)
 
 
 class RabbitMQPublisher:
