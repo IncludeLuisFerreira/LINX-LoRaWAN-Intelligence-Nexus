@@ -69,12 +69,21 @@ def ensure_service_token() -> None:
 
     ``service_token`` é injetado no container do tenant;
     ``provisioner_service_token`` autentica a chamada gRPC do identity_api.
-    Ambos precisam ser segredos reais.
+    Ambos precisam ser segredos reais e distintos: se forem iguais, um tenant
+    comprometido teria o token que autentica o gRPC.
     """
     _validate_secret(settings.service_token, "SERVICE_TOKEN")
     _validate_secret(
         settings.provisioner_service_token, "PROVISIONER_SERVICE_TOKEN"
     )
+    if secrets.compare_digest(
+        (settings.service_token or "").strip().encode("utf-8"),
+        (settings.provisioner_service_token or "").strip().encode("utf-8"),
+    ):
+        raise RuntimeError(
+            "SERVICE_TOKEN and PROVISIONER_SERVICE_TOKEN must be different "
+            "values."
+        )
 
 
 def authorize(context) -> None:
