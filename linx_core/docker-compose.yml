@@ -152,6 +152,34 @@ services:
       retries: 3
       start_period: 10s
 
+  jobs_status_worker:
+    build:
+      context: .
+      dockerfile: services/jobs_status_worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - RABBITMQ_AMQP_URL=amqp://${RABBITMQ_ADMIN_USER:-linx}:${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}@rabbitmq:5672/
+      - STATUS_QUEUE=${STATUS_QUEUE:-linx.jobs.status}
+      - STATUS_CONCURRENCY=${STATUS_CONCURRENCY:-2}
+      - STATUS_PREFETCH=${STATUS_PREFETCH:-4}
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from jobs_status_worker.health import check; check()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 volumes:
   pgdata:
   rabbitmqdata:

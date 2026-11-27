@@ -4,7 +4,8 @@
 #   agent_bridge       -> gRPC  (localhost:50051)
 #   docker_provisioner -> gRPC  (localhost:50052)
 #   jobs_worker        -> consome RabbitMQ e chama o docker_provisioner
-# Ctrl+C encerra os quatro.
+#   jobs_status_worker -> consome RabbitMQ e atualiza o status dos jobs
+# Ctrl+C encerra os cinco.
 #
 # Requer um RabbitMQ acessível em RABBITMQ_AMQP_URL (por exemplo,
 # `docker compose up -d rabbitmq` ou um broker local na porta 5672).
@@ -47,6 +48,10 @@ pids+=("$!")
 
 echo "Subindo jobs_worker (RabbitMQ)..."
 poetry -C services/jobs_worker run python -m jobs_worker.main &
+pids+=("$!")
+
+echo "Subindo jobs_status_worker (RabbitMQ)..."
+poetry -C services/jobs_status_worker run python -m jobs_status_worker.main &
 pids+=("$!")
 
 echo "Serviços rodando. Pressione Ctrl+C para encerrar."
