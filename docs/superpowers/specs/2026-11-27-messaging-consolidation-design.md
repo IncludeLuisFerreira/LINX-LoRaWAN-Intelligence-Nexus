@@ -42,14 +42,14 @@ Hoje convivem duas bibliotecas, três brokers em dev/test e implementações de 
 - Isolamento por vhost agora (vira follow-up com o `TenantProvisioner`).
 - Unificar todos os compose em um único arquivo (Arquitetura B). O merge de stacks fica para depois, se ainda fizer sentido.
 - Métricas Prometheus completas (issue #118 segue fora): nesta entrega, logs estruturados + health + contadores internos.
-- **Kubernetes.** `infra/kubernetes/base/rabbitmq.yaml` fica fora desta entrega por decisão explícita. O épico garante um broker nos stacks Docker (dev/deploy/CI). A convergência do manifesto k8s vira issue de follow-up, com o mesmo contrato de topologia e env.
+- **Kubernetes.** `infra/kubernetes/base/rabbitmq.yaml` fica fora desta entrega por decisão explícita. O épico garante um broker nos stacks Docker (`base`, `core`, `client` e CI). A convergência do manifesto k8s vira issue de follow-up, com o mesmo contrato de topologia e env.
 
 ## Requisitos de produto (fora do escopo desta entrega, mas registrados)
 
 O código vai virar produto real. Este épico entrega mensageria correta e resiliente a falhas de aplicação/broker, mas **não** entrega tudo que produção exige. Ficam como issues de follow-up obrigatórias, sem serem silenciadas:
 
 - **HA do broker:** um RabbitMQ único em compose/k8s é ponto único de falha. Produção exige cluster (quorum queues) ou broker gerenciado, com política de réplica.
-- **TLS/AMQP seguro** (issue #78) e rotação de credenciais; hoje o management e o AMQP ficam em loopback no deploy.
+- **TLS/AMQP seguro** (issue #78) e rotação de credenciais; hoje o management e o AMQP ficam em loopback no stack base.
 - **Observabilidade de produção:** métricas Prometheus (#118), alarmes de DLQ/quarentena/reconexão e dashboards.
 - **DR/backup:** backup de definitions e runbook de recuperação (`docs/backend/DR.md`, #128).
 - **K8s:** convergir o broker do laboratório para o broker único do produto.
@@ -101,12 +101,9 @@ Infraestrutura/abstração de A, biblioteca/API de C. Rejeitamos padronizar em `
 ### Broker único
 
 - `infra/docker-compose.base.yml` passa a declarar `rabbitmq` (imagem `rabbitmq:3-management`), volume próprio, healthcheck, portas publicadas apenas no loopback, na rede `linx-network`.
-- Remover o serviço `rabbitmq` de:
-  - `linx_core/docker-compose.yml`
-  - `deploy/docker-compose.yml`
-  - `tests/integration/telemetry/docker-compose.override.yml`
+- Remover o serviço `rabbitmq` de `linx_core/docker-compose.yml`. O stack `deploy` foi removido por não representar a arquitetura futura; a suíte de integração monta os serviços reais em `tests/integration/telemetry/docker-compose.stack.yml`.
 - Todos os serviços que falam AMQP entram na rede `linx-network` e usam o host `rabbitmq`.
-- `make up-core` e `make up-deploy` passam a exigir o broker no ar. O Makefile deve falhar com mensagem clara se `rabbitmq` não estiver acessível, em vez de subir um broker implícito.
+- `make up-core` e `make up-client` passam a exigir o broker no ar. O Makefile deve falhar com mensagem clara se `rabbitmq` não estiver acessível, em vez de subir um broker implícito.
 - O CI usa **service container** de RabbitMQ por workflow (não compose): `backend-ci.yml` ganha o serviço; `telemetry-consumer-ci.yml` já tem e permanece.
 - Nenhum compose pode voltar a declarar um segundo `rabbitmq`; isso é verificado por teste/checagem de CI (grep nos compose).
 
@@ -244,7 +241,7 @@ Saída: ADR curto (`docs/superpowers/specs/2026-11-27-pika-connection-adr.md`) c
 | Fatia | Entrega | Critério de aceite |
 |---|---|---|
 | 0 | Spike + ADR | Perguntas acima respondidas com código rodando |
-| 1 | Broker único no base; stacks sem broker próprio; `linx-network` | `make up-base` + `up-core` + `up-deploy` usam o mesmo broker; grep de CI garante um só `rabbitmq` |
+| 1 | Broker único no base; stacks sem broker próprio; `linx-network` | `make up-base` + `up-core` + `up-client` usam o mesmo broker; grep de CI garante um só `rabbitmq` |
 | 2 | `topology.py` + #233 | Segundo tipo publica todos os eventos e é roteado (teste com broker real ou fake que simula topic) |
 | 3 | `policy.py` + DLQ de status + #234 | Poison e retry esgotado vão para DLQ; job com comando quarentenado não fica `PENDING` para sempre |
 | 4 | Jobs no `pika_adapter`; remover `pika.BlockingConnection` e `rabbitpy` | Nenhum import de `BlockingConnection`/`rabbitpy` no código de produção |

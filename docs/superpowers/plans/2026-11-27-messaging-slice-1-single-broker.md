@@ -2,13 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deixar um único RabbitMQ, definido em `infra/docker-compose.base.yml`, compartilhado por `linx_core`, `deploy` e testes, com credenciais canônicas e guardas de CI contra regressão.
+**Goal:** Deixar um único RabbitMQ, definido em `infra/docker-compose.base.yml`, compartilhado por `linx_core`, `client` e testes, com credenciais canônicas e guardas de CI contra regressão.
 
-**Architecture:** O broker passa a viver no stack base, na rede externa `linx-network` (nome parametrizável por `LINX_NETWORK`). `linx_core` e `deploy` removem seus brokers e apenas consomem o serviço externo. A suíte de integração sobe o broker a partir da definição do base, em rede/projeto isolados. Um verificador estático garante que nenhuma outra definição de RabbitMQ reapareça.
+**Architecture:** O broker passa a viver no stack base, na rede externa `linx-network` (nome parametrizável por `LINX_NETWORK`). `linx_core` deixa de ter broker próprio e consome o serviço externo; o stack `deploy` foi removido. A suíte de integração sobe os serviços reais em uma montagem própria, em rede/projeto isolados. Um verificador estático garante que nenhuma outra definição de RabbitMQ reapareça.
 
 **Tech Stack:** Docker Compose v2, Python 3.12 (stdlib), GitHub Actions, Bash/Make.
 
 **Spec:** `docs/superpowers/specs/2026-11-27-messaging-consolidation-design.md`
+
+## Status de execução (2026-11-27)
+
+Este plano foi ajustado durante a execução:
+
+- O stack `deploy/` foi removido por decisão de produto (commit `22833cf`).
+- Task 3 virou "remover o stack deploy e limpar Makefile/README", não "deploy sem broker".
+- Task 4 usa `tests/integration/telemetry/docker-compose.stack.yml`, com `routing` e `telemetry_consumer` construídos dos Dockerfiles reais; as portas vêm de `test.env`, sem `!override`.
+- Task 5 cria `.github/workflows/messaging-ci.yml` e `scripts/requirements-tools.txt`.
+- Commits da fatia: `3503302` (broker + checker), `c478ccb` (integração), `d64b128` (portas por env), `22833cf` (remoção do deploy).
 
 ## Global Constraints
 
@@ -327,7 +337,12 @@ git commit -m "feat(messaging): linx_core usa o broker do stack base (#N)"
 
 ---
 
-### Task 3: `deploy` sem broker próprio e credenciais canônicas
+### Task 3: Remoção do stack deploy (superseded)
+
+> **Execução real:** o `deploy/` foi removido por completo (commit `22833cf`).
+> Os passos abaixo descrevem a versão original do plano ("deploy sem broker") e
+> ficam como registro histórico. A limpeza de Makefile/README/docs está no
+> commit seguinte da fatia.
 
 **Files:**
 - Modify: `deploy/docker-compose.yml`
@@ -403,7 +418,12 @@ git commit -m "feat(messaging): deploy usa o broker único e credenciais admin (
 
 ---
 
-### Task 4: Suíte de integração isolada usando o broker do base
+### Task 4: Suíte de integração isolada com montagem de teste (ajustada)
+
+> **Execução real:** implementada com `tests/integration/telemetry/docker-compose.stack.yml`,
+> construindo `routing` e `telemetry_consumer` dos Dockerfiles reais. As portas
+> vêm de `test.env` (`RABBITMQ_AMQP_PORT` etc.); não há mais
+> `docker-compose.override.yml`, `broker-override` nem `!override`.
 
 **Files:**
 - Modify: `tests/integration/telemetry/conftest.py`
@@ -489,7 +509,12 @@ git commit -m "test(messaging): integração usa o broker do base em rede isolad
 
 ---
 
-### Task 5: Guardas de CI, Makefile e documentação
+### Task 5: Guardas de CI, Makefile e documentação (ajustada)
+
+> **Execução real:** `.github/workflows/messaging-ci.yml` instala
+> `scripts/requirements-tools.txt` (PyYAML) e roda o checker + testes. O
+> Makefile perdeu `up-deploy`/`up-client-agent`; `up-core`/`up-client` assumem
+> o broker do `up-base`. README e docs vivos foram atualizados.
 
 **Files:**
 - Create: `.github/workflows/messaging-ci.yml`
@@ -597,7 +622,6 @@ Run:
 python3 scripts/check_messaging_topology.py --root .
 docker compose -f infra/docker-compose.base.yml config --quiet
 docker compose -f linx_core/docker-compose.yml config --quiet
-docker compose -f deploy/docker-compose.yml config --quiet
 ```
 Expected: todos exit 0; o verificador imprime `ok`.
 
@@ -611,14 +635,14 @@ docker ps --format '{{.Image}}' | grep -c '^rabbitmq:3-management-alpine$'
 ```
 Expected: `1`. Os serviços de `linx_core` sobem com health `healthy` (ou `starting` no primeiro minuto).
 
-- [ ] **Step 3: Smoke de deploy (sem TLS externo)**
+- [ ] **Step 3: Smoke do client**
 
 Run:
 ```
-make up-deploy
+make up-client
 docker ps --format '{{.Image}}' | grep -c '^rabbitmq:3-management-alpine$'
 ```
-Expected: `1` (o mesmo container). `telemetry_consumer` e `routing` alcançam `rabbitmq:5672`.
+Expected: `1` (o mesmo container). `telemetry_consumer` alcança `rabbitmq:5672`.
 
 - [ ] **Step 4: Derrubar e confirmar limpeza**
 

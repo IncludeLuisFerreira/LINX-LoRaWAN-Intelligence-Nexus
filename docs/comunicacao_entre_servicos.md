@@ -10,8 +10,9 @@
 ## 1. Visão geral
 
 A plataforma é um **sistema distribuído de serviços que conversam entre si**. A
-orquestração é feita por um único `docker compose` (`deploy/docker-compose.yml`), que
-coloca todos os serviços na mesma rede Docker e permite que se alcancem pelo **nome do
+orquestração é feita por stacks Compose por domínio (`infra`,
+`infra/docker-compose.base.yml`, `linx_core` e `client`), conectados à rede
+externa `linx-network`, o que permite alcançar cada serviço pelo **nome do
 serviço** (resolução DNS interna do Compose).
 
 Quatro protocolos sustentam a comunicação:
@@ -351,13 +352,15 @@ retry (`CONSUMER_MAX_RETRIES` com backoff) e, esgotado ou payload inválido, a m
 vai para a DLQ `linx.telemetry.{app_id}.dlq` e recebe ack.
 
 > **Status de execução:** o pipeline está implementado em `middleware/services/routing`
-> e no `client/services/telemetry_consumer`. O `routing` sobe no `deploy` com
-> `rabbitmq` e consome o broker Mosquitto do stack `infra` pela rede
-> `linx-network`; ele publica no exchange do tenant (`linx.telemetry.{app_id}`).
-> O `telemetry_consumer` sobe junto de `timescaledb` e `rabbitmq` e consome a fila
-> do tenant com credencial própria. O `identity_api` provisiona essa credencial na
-> criação da aplicação (management API do RabbitMQ). A ingestão REST via
-> `POST /ingest` foi **removida**: o RabbitMQ é o único caminho de ingestão.
+> e no `client/services/telemetry_consumer`. O `routing` e o `telemetry_consumer`
+> sobem na montagem de teste de integração
+> (`tests/integration/telemetry/docker-compose.stack.yml`), com o `rabbitmq` do
+> stack base e o Mosquitto do `infra` na rede `linx-network`. O `routing` publica
+> no exchange do tenant (`linx.telemetry.{app_id}`); o `telemetry_consumer` sobe
+> junto de `timescaledb` e consome a fila do tenant com credencial própria. O
+> `identity_api` provisiona essa credencial na criação da aplicação (management
+> API do RabbitMQ). A ingestão REST via `POST /ingest` foi **removida**: o
+> RabbitMQ é o único caminho de ingestão.
 > Detalhes de isolamento: `docs/telemetry-consumer/rabbitmq-isolation.md`.
 
 ### 5.5 Health check do tenant
@@ -396,7 +399,7 @@ executa `SELECT 1` no TimescaleDB e consulta o estado do consumidor:
   operacional explícita.
 
 ```bash
-docker compose -f deploy/docker-compose.yml exec telemetry_consumer \
+docker compose -f client/docker-compose.yml exec telemetry_consumer \
   python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read().decode())"
 ```
 
@@ -430,7 +433,7 @@ resolver a configuração via gRPC.
 ## 7. Variáveis de ambiente de comunicação
 
 As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de cada módulo e
-`deploy/.env`):
+os `.env` dos stacks `linx_core`, `client` e `infra`):
 
 | Variável                 | Serviço                    | Exemplo                                    | Descrição                                                        |
 | :----------------------- | :------------------------- | :----------------------------------------- | :--------------------------------------------------------------- |
@@ -474,14 +477,15 @@ As variáveis que **ligam os serviços** entre si (arquivos `.env.example` de ca
 ## 8. Como verificar
 
 ```bash
-# 1. Subir a infra primeiro (ChirpStack + Mosquitto), depois o deploy
+# 1. Subir infra (ChirpStack + Mosquitto), base (broker) e core
 make up-infra
-make up-deploy
-docker compose -f deploy/docker-compose.yml ps   # todos os serviços "Up"
+make up-base
+make up-core
+docker compose -f linx_core/docker-compose.yml ps   # serviços do plano de controle "Up"
 
-# 2. Prova do gRPC: conectividade do client_agent com o SaaS
-docker compose -f deploy/docker-compose.yml logs client_agent \
-  | grep "Linx Core acessível"
+# 2. Prova do gRPC: conectividade do agent_bridge
+docker compose -f linx_core/docker-compose.yml logs agent_bridge \
+  | grep -i "grpc"
 
 # 3. Prova do REST: criar um tenant no banco do plano de controle
 curl -i -X POST localhost:8000/api/v1/tenant/ \
@@ -507,7 +511,7 @@ mosquitto_pub -h localhost -p 1883 \
 # 4. Prova da leitura: histórico persistido do tenant
 # O telemetry_consumer NÃO publica a porta 8000 no host (no stack unificado
 # localhost:8000 é o identity_api). Rode o curl DENTRO do container:
-docker compose -f deploy/docker-compose.yml exec telemetry_consumer \
+docker compose -f client/docker-compose.yml exec telemetry_consumer \
   python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/telemetry?limit=10').read().decode())"
 # esperado: 200 {"items": [...], "next_cursor": ...}
 ```

@@ -5,15 +5,15 @@ Documento de migração para bancos TimescaleDB já existentes que rodavam o ant
 colunas `app_id` e `event_type` e um índice único de deduplicação; bancos criados
 antes dessa mudança precisam ser migrados **uma vez** antes de subir o serviço.
 
-O esquema canônico é único: `client/db/schema.sql` (o compose de deploy monta
-esse arquivo via `../client/db/schema.sql`). Bancos novos já nascem migrados; o
+O esquema canônico é único: `client/db/schema.sql` (os composes que sobem o
+TimescaleDB montam esse arquivo). Bancos novos já nascem migrados; o
 procedimento abaixo é apenas para bancos existentes.
 
 ## Ordem de deploy
 
 1. **Aplicar a migração** no TimescaleDB do tenant (SQL abaixo).
-2. **Subir o `telemetry_consumer`** (`deploy/docker-compose.yml` ou
-   `client/docker-compose.yml`).
+2. **Subir o `telemetry_consumer`** (`client/docker-compose.yml` ou a montagem
+   de teste em `tests/integration/telemetry/docker-compose.stack.yml`).
 
 A migração precisa vir antes do serviço: o `insert_event` usa
 `ON CONFLICT (app_id, dev_eui, time, event_type)` e falha se o índice único não
@@ -97,9 +97,8 @@ A partir do isolamento por tenant, cada aplicação consome do seu próprio exch
 `linx.telemetry.{app_id}` (antes havia um exchange único `linx.telemetry`) com um
 usuário RabbitMQ dedicado. Para um tenant que já estava rodando:
 
-1. Provisionar a credencial do tenant
-   (`deploy/scripts/provision-rabbitmq-tenant.sh` ou a criação da aplicação no
-   `identity_api`, que já faz o provisionamento).
+1. Provisionar a credencial do tenant (criando a aplicação no `identity_api`,
+   que já faz o provisionamento via management API).
 2. Criar o exchange `linx.telemetry.{app_id}` (o `routing` o declara sob demanda na
    primeira publicação, e o `telemetry_consumer` também o declara).
 3. Re-bindar a fila `linx.telemetry.{app_id}` ao novo exchange

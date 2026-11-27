@@ -1,6 +1,6 @@
 services:
   timescaledb:
-    image: timescale/timescaledb:2.13-pg14
+    image: timescale/timescaledb:2.13.1-pg14
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${DB_USER}

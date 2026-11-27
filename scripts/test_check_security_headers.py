@@ -12,7 +12,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GUARD = ROOT / "scripts" / "check_security_headers.py"
 FILES = (
-    "deploy/nginx/nginx.conf",
     "client/frontend/nginx.conf",
     "client/frontend/nginx-tls.conf",
 )
@@ -49,20 +48,6 @@ def main() -> int:
         root = Path(temp)
         result = run_guard(root)
         assert result.returncode == 0, result.stderr
-
-        deploy = root / "deploy/nginx/nginx.conf"
-        original = deploy.read_text()
-        deploy.write_text(
-            original.replace(
-                '    add_header Content-Security-Policy "default-src '
-                "'none'; frame-ancestors 'none'; base-uri 'none'\" "
-                "always;\n",
-                "",
-                1,
-            )
-        )
-        expect_fail(root, "CSP removida de um server do deploy")
-        deploy.write_text(original)
 
         frontend = root / "client/frontend/nginx.conf"
         original = frontend.read_text()
