@@ -1025,8 +1025,15 @@ No step `Render base manifests`, após os asserts existentes:
 ```yaml
           # Status worker roda isolado, sem leader election (#232).
           echo "$out" | grep -q "name: jobs-status-worker"
-          echo "$out" | grep -q "replicas: 2"
+          echo "$out" | grep -A6 "^  name: jobs-status-worker$" \
+            | grep -q "^  replicas: 2$"
+          ! echo "$out" | grep -q "jobs-status-worker-leader-election"
 ```
+
+O assert de réplicas precisa ser escopado ao Deployment: outros três
+manifests base já usam `replicas: 2`, então um `grep` global não falharia se
+o status worker regredisse para 1 réplica. A guarda negativa garante que
+nenhum Lease/RBAC de líder seja adicionado ao worker.
 
 - [ ] **Step 4: Validar render**
 
