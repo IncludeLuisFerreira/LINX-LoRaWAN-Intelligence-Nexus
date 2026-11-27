@@ -30,6 +30,8 @@ class FakeConsumer:
             "rabbitmq_connected": False,
             "processed": 0,
             "failed": 0,
+            "dead_lettered": 0,
+            "reconnects": 0,
             "last_processed_at": None,
             "last_error": None,
         }

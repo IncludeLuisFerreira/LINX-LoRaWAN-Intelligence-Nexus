@@ -63,6 +63,8 @@ def test_valid_envelope_is_acked():
     consumer._handle_message(message)
     assert message.acked is True
     assert consumer.health()["processed"] == 1
+    assert consumer.health()["dead_lettered"] == 0
+    assert consumer.health()["reconnects"] == 0
 
 
 def test_partial_envelope_goes_to_dlq_and_acks():
@@ -74,6 +76,7 @@ def test_partial_envelope_goes_to_dlq_and_acks():
     assert message.acked is True
     assert channel.published[0][2] == "linx.telemetry.app-1.dlq"
     assert consumer.health()["failed"] == 1
+    assert consumer.health()["dead_lettered"] == 1
 
 
 def test_retry_exhausted_goes_to_dlq_and_acks():
@@ -85,6 +88,7 @@ def test_retry_exhausted_goes_to_dlq_and_acks():
     assert message.acked is True
     assert channel.published[0][2] == "linx.telemetry.app-1.dlq"
     assert consumer.health()["failed"] == 1
+    assert consumer.health()["dead_lettered"] == 1
 
 
 def test_retry_count_is_initial_plus_max_retries():
@@ -313,6 +317,7 @@ def test_run_recovers_from_connection_loss():
     consumer.connect = fake_connect
     consumer._run()
     assert calls["n"] == 1
+    assert consumer.health()["reconnects"] >= 1
 
 
 def test_stop_signals_and_closes():

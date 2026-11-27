@@ -6,12 +6,16 @@
 
 | Fatia | Escopo | Issue | Status |
 |---|---|---|---|
-| 0 | Spike Pika 1.5.0 (`pika.Connection`) | #302 | aberta |
-| 2 | Topologia declarativa por tipo | #233 | aberta |
-| 3 | Retry/DLQ/poison + outbox (#234) | #303 | aberta |
-| 4 | Migrar jobs para `pika.Connection` | #304 | aberta |
-| 5 | Telemetria no adaptador + CI real (#254) | #305 | aberta |
-| 6 | Observabilidade, runbook e fechamento | #306 | aberta |
+| 0 | Spike Pika 1.5.0 (`pika.Connection`) | #302 | mergeada (PR #310) |
+| 2 | Topologia declarativa por tipo | #233 | mergeada (PR #308) |
+| 3 | Retry/DLQ/poison + outbox (#234) | #303 | mergeada (PR #309) |
+| 4 | Migrar jobs para `pika.Connection` | #304 | mergeada (PR #310) |
+| 5 | Telemetria no adaptador + CI real (#254) | #305 | PR #311 aberta |
+| 6 | Observabilidade, runbook e fechamento | #306 | PR #315 aberta (empilhada na #311) |
+
+Itens de produto criados: HA #312, convergência k8s #313, métricas #314.
+TLS #78 e DR #128 já existiam. A quarentena de outbox fica observável por
+log/SQL nesta entrega; o contador dedicado está no escopo de #314.
 
 ## Como este documento é usado
 
