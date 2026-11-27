@@ -55,6 +55,7 @@ logs-infra:
 
 # --- Base de dev (PostgreSQL 15 + Redis 7 + Mosquitto) ---
 up-base:
+	@docker network inspect "$${LINX_NETWORK:-linx-network}" >/dev/null 2>&1 || docker network create "$${LINX_NETWORK:-linx-network}"
 	docker compose -f $(INFRA_BASE) up -d
 down-base:
 	docker compose -f $(INFRA_BASE) down

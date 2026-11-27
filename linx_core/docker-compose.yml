@@ -19,23 +19,6 @@ services:
       timeout: 5s
       retries: 5
 
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    restart: unless-stopped
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_ADMIN_USER:-linx}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmqdata:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   identity_api:
     build:
       context: .
@@ -56,6 +39,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - linx-network
     healthcheck:
       test:
         - CMD
@@ -141,10 +127,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
       docker_provisioner:
         condition: service_started
+    networks:
+      - default
+      - linx-network
     healthcheck:
       test: ["CMD", "python", "-c", "from jobs_worker.health import check; check()"]
       interval: 30s
@@ -167,8 +154,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+    networks:
+      - default
+      - linx-network
     healthcheck:
       test:
         - CMD
@@ -182,4 +170,8 @@ services:
 
 volumes:
   pgdata:
-  rabbitmqdata:
+
+networks:
+  linx-network:
+    external: true
+    name: ${LINX_NETWORK:-linx-network}
