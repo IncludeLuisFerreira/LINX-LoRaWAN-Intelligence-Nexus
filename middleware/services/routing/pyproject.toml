@@ -19,7 +19,7 @@ packages = [{include="routing", from="src"}]
 linx-shared = { path = "../../../linx_core/shared", develop = true }
 paho-mqtt = ">=2.1.0,<3.0.0"
 pydantic-settings = ">=2.15.0,<3.0.0"
-rabbitpy = ">=3.0,<4.0"
+pika = ">=1.5.0,<2.0.0"
 
 [dependency-groups]
 dev = [

@@ -10,8 +10,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
-import rabbitpy
-
+from telemetry_consumer import pika_compat as amqp
 from telemetry_consumer.config import ConsumerSettings
 
 logger = logging.getLogger(__name__)
@@ -100,16 +99,16 @@ class RabbitConsumer:
             self._thread.join(timeout=5)
 
     def _open(self) -> None:
-        self._connection = rabbitpy.Connection(self._settings.rabbit_url)
+        self._connection = amqp.Connection(self._settings.rabbit_url)
         self._channel = self._connection.channel()
-        self._exchange = rabbitpy.Exchange(
+        self._exchange = amqp.Exchange(
             self._channel,
             self._settings.rabbit_exchange,
             exchange_type="topic",
             durable=True,
         )
         self._exchange.declare()
-        self._queue = rabbitpy.Queue(
+        self._queue = amqp.Queue(
             self._channel,
             self._settings.queue_name,
             durable=True,
@@ -119,14 +118,14 @@ class RabbitConsumer:
         self._queue.bind(
             self._exchange, routing_key=self._settings.binding_key
         )
-        self._dlx = rabbitpy.Exchange(
+        self._dlx = amqp.Exchange(
             self._channel,
             self._settings.dead_letter_exchange_name,
             exchange_type="direct",
             durable=True,
         )
         self._dlx.declare()
-        self._dlq = rabbitpy.Queue(
+        self._dlq = amqp.Queue(
             self._channel,
             self._settings.dead_letter_queue_name,
             durable=True,
@@ -320,7 +319,7 @@ class RabbitConsumer:
             if hasattr(channel, "basic_publish"):
                 result = channel.basic_publish(raw_body, dlx, routing_key)
             else:
-                message = rabbitpy.Message(
+                message = amqp.Message(
                     channel,
                     raw_body,
                     properties={

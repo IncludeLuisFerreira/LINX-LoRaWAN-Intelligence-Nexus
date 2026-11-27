@@ -23,7 +23,7 @@ from typing import Any, Iterator
 
 import httpx
 import pytest
-import rabbitpy
+import pika
 from websockets.sync.client import connect as ws_connect
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -386,26 +386,28 @@ def publish_amqp() -> Any:
     ) -> bool:
         dev = dev_eui or envelope["dev_eui"]
         routing_key = f"application.{APP_ID}.device.{dev}.{event_type}"
-        connection = rabbitpy.Connection(AMQP_URL)
+        connection = pika.Connection(
+            pika.URLParameters(AMQP_URL),
+            timeout=10,
+        )
         try:
             channel = connection.channel()
-            channel.enable_publisher_confirms()
-            exchange = rabbitpy.Exchange(
-                channel,
-                f"linx.telemetry.{APP_ID}",
+            channel.exchange_declare(
+                exchange=f"linx.telemetry.{APP_ID}",
                 exchange_type="topic",
                 durable=True,
             )
-            exchange.declare()
-            message = rabbitpy.Message(
-                channel,
-                json.dumps(envelope).encode(),
-                properties={
-                    "content_type": "application/json",
-                    "delivery_mode": 2,
-                },
+            channel.basic_publish(
+                exchange=f"linx.telemetry.{APP_ID}",
+                routing_key=routing_key,
+                body=json.dumps(envelope).encode(),
+                properties=pika.BasicProperties(
+                    content_type="application/json",
+                    delivery_mode=2,
+                ),
+                mandatory=True,
             )
-            return bool(message.publish(exchange, routing_key))
+            return True
         finally:
             connection.close()
 

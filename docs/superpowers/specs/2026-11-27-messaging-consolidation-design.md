@@ -11,7 +11,7 @@ Consolidar a mensageria AMQP do LINX em **um único RabbitMQ**, com **uma única
 O sistema tem dois domínios de mensageria:
 
 - **Jobs internos** (`linx_shared.jobs`, `jobs_worker`, `jobs_status_worker`), hoje em `pika.BlockingConnection`, com topologia fixa para `provisioning.application` e sem DLQ na fila de status.
-- **Telemetria** (`middleware/services/routing`, `client/services/telemetry_consumer`), hoje em `rabbitpy`, com topologia por tenant, retry, DLQ e reconexão.
+- **Telemetria** (`middleware/services/routing`, `client/services/telemetry_consumer`), originalmente em `rabbitpy` (migrada para Pika na Fatia 5), com topologia por tenant, retry, DLQ e reconexão.
 
 Hoje convivem duas bibliotecas, três brokers em dev/test e implementações de resiliência desiguais. A telemetria é a referência de resiliência; os jobs são o ponto frágil.
 

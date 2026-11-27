@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Any
 
-import rabbitpy
+from linx_shared.messaging import pika_compat as amqp
 
 from routing.backoff import retry_delay
 
@@ -50,13 +50,13 @@ class RabbitPublisher:
         return parts[1]
 
     def _open(self) -> None:
-        self._connection = rabbitpy.Connection(self._url)
+        self._connection = amqp.Connection(self._url)
         self._channel = self._connection.channel()
         self._channel.enable_publisher_confirms()
         self._exchanges = {}
         self._audit_queue = None
         if self._audit_queue_name:
-            queue = rabbitpy.Queue(
+            queue = amqp.Queue(
                 self._channel,
                 self._audit_queue_name,
                 durable=True,
@@ -69,7 +69,7 @@ class RabbitPublisher:
         exchange = self._exchanges.get(app_id)
         if exchange is not None:
             return exchange
-        exchange = rabbitpy.Exchange(
+        exchange = amqp.Exchange(
             self._channel,
             self._exchange_name(app_id),
             exchange_type="topic",
@@ -134,7 +134,7 @@ class RabbitPublisher:
                     self.close()
                     self._open()
                 exchange = self._ensure_namespace(app_id)
-                message = rabbitpy.Message(
+                message = amqp.Message(
                     self._channel,
                     payload,
                     properties={
