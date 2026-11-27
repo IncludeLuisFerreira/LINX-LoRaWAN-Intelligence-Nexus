@@ -9,9 +9,9 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import time
 import uuid
 from concurrent.futures import Future
-from concurrent.futures import TimeoutError as FutureTimeout
 from typing import Any, Iterator
 
 import pika
@@ -21,36 +21,64 @@ DEFAULT_TIMEOUT_SECONDS = 10.0
 
 class Connection:
     def __init__(self, url: str, timeout: float = DEFAULT_TIMEOUT_SECONDS):
+        self._closed = threading.Event()
         self._connection = pika.Connection(
             pika.URLParameters(url),
             timeout=timeout,
+            on_close_callback=self._on_close,
         )
 
+    def _on_close(self, connection, reason) -> None:
+        self._closed.set()
+
     def channel(self) -> "Channel":
-        return Channel(self._connection.channel())
+        return Channel(self._connection.channel(), self)
 
     @property
     def closed(self) -> bool:
-        return not bool(getattr(self._connection, "is_open", False))
+        return self._closed.is_set() or not bool(
+            getattr(self._connection, "is_open", False)
+        )
 
     def close(self) -> None:
         self._connection.close(timeout=DEFAULT_TIMEOUT_SECONDS)
 
 
 class Channel:
-    def __init__(self, channel: Any) -> None:
+    def __init__(
+        self, channel: Any, connection: Connection | None = None
+    ) -> None:
         self._channel = channel
+        self._connection = connection
+        self._closed = threading.Event()
         self._lock = threading.Lock()
         self._confirm_callback = None
         self._return_callback = None
-        self._tag = 0
         self._pending: dict[int, Future] = {}
         self._publish_ids: dict[int, str] = {}
         self._returned: set[str] = set()
 
     @property
     def closed(self) -> bool:
+        if self._closed.is_set():
+            return True
+        if self._connection is not None and self._connection.closed:
+            return True
+        if getattr(self._channel, "is_closed", False):
+            return True
         return not bool(getattr(self._channel, "is_open", False))
+
+    def _fail_pending(self, reason: object) -> None:
+        message = f"canal RabbitMQ fechado: {reason}"
+        with self._lock:
+            futures = list(self._pending.values())
+            self._pending.clear()
+            self._publish_ids.clear()
+        for future in futures:
+            if not future.done():
+                future.set_exception(
+                    pika.exceptions.ChannelWrongStateError(message)
+                )
 
     def enable_publisher_confirms(self) -> None:
         self._channel.confirm_delivery(self._on_confirm)
@@ -96,34 +124,57 @@ class Channel:
         properties: dict[str, Any] | None = None,
     ) -> bool:
         publish_id = uuid.uuid4().hex
-        self._tag += 1
-        tag = self._tag
         future: Future = Future()
-        with self._lock:
-            self._pending[tag] = future
-            self._publish_ids[tag] = publish_id
         props_data: dict[str, Any] = {
             "delivery_mode": 2,
             "content_type": "application/json",
         }
         props_data.update(properties or {})
-        props = pika.BasicProperties(
-            headers={"x-publish-id": publish_id},
-            **props_data,
-        )
-        self._channel.basic_publish(
-            exchange=exchange,
-            routing_key=routing_key,
-            body=body,
-            properties=props,
-            mandatory=True,
-            on_publish=lambda _tag: None,
-        )
+        headers = dict(props_data.pop("headers", {}) or {})
+        headers["x-publish-id"] = publish_id
+        props = pika.BasicProperties(headers=headers, **props_data)
+
+        def on_publish(tag: int) -> None:
+            if future.done():
+                return
+            with self._lock:
+                self._pending[tag] = future
+                self._publish_ids[tag] = publish_id
+
         try:
-            future.result(timeout=DEFAULT_TIMEOUT_SECONDS)
-        except FutureTimeout as exc:
-            raise TimeoutError("broker não confirmou publicação") from exc
-        return True
+            self._channel.basic_publish(
+                exchange=exchange,
+                routing_key=routing_key,
+                body=body,
+                properties=props,
+                mandatory=True,
+                on_publish=on_publish,
+            )
+        except Exception:
+            self._returned.discard(publish_id)
+            raise
+        deadline = time.monotonic() + DEFAULT_TIMEOUT_SECONDS
+        while not future.done():
+            if self.closed:
+                self._fail_pending("canal fechado")
+                break
+            if time.monotonic() >= deadline:
+                self._drop_publish(publish_id)
+                raise TimeoutError("broker não confirmou publicação")
+            time.sleep(0.02)
+        return future.result()
+
+    def _drop_publish(self, publish_id: str) -> None:
+        with self._lock:
+            tags = [
+                tag
+                for tag, current_id in self._publish_ids.items()
+                if current_id == publish_id
+            ]
+            for tag in tags:
+                self._pending.pop(tag, None)
+                self._publish_ids.pop(tag, None)
+            self._returned.discard(publish_id)
 
     def basic_publish(
         self,
@@ -205,8 +256,9 @@ class Queue:
             on_message_callback=on_message,
             auto_ack=no_ack,
         )
-        self._stop.clear()
         while not self._stop.is_set():
+            if self.channel.closed:
+                raise ConnectionError("canal RabbitMQ fechado")
             try:
                 yield messages.get(timeout=0.1)
             except queue.Empty:

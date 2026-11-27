@@ -17,13 +17,14 @@ import contextlib
 import json
 import os
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Iterator
 
 import httpx
-import pytest
 import pika
+import pytest
 from websockets.sync.client import connect as ws_connect
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -397,6 +398,17 @@ def publish_amqp() -> Any:
                 exchange_type="topic",
                 durable=True,
             )
+            confirmed = threading.Event()
+            returned: list[bool] = []
+
+            def on_confirm(frame) -> None:
+                confirmed.set()
+
+            def on_return(channel, method, properties, body) -> None:
+                returned.append(True)
+
+            channel.confirm_delivery(on_confirm)
+            channel.add_on_return_callback(on_return)
             channel.basic_publish(
                 exchange=f"linx.telemetry.{APP_ID}",
                 routing_key=routing_key,
@@ -407,7 +419,9 @@ def publish_amqp() -> Any:
                 ),
                 mandatory=True,
             )
-            return True
+            if not confirmed.wait(10):
+                raise TimeoutError("broker não confirmou a publicação AMQP")
+            return not returned
         finally:
             connection.close()
 

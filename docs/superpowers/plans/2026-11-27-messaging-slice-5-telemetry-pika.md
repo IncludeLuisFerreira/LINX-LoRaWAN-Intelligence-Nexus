@@ -38,6 +38,8 @@ A camada é transitória: a próxima evolução pode substituí-la diretamente p
 
 - Substituir a compat layer por `linx_shared.messaging.ports` no telemetry
   consumer (follow-up).
+- Topologia declarativa de telemetria compartilhada: adiada para #316 (a Fatia 5
+  preserva a topologia existente nos dois serviços).
 - MQTT/Mosquitto.
 
 ## Critérios de aceite

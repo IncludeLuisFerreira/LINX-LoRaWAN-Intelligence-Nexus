@@ -158,6 +158,8 @@ Escopo:
 - Migrar `middleware/services/routing` e `client/services/telemetry_consumer`
   para `linx_shared.messaging`.
 - Topologia de telemetria declarativa (exchange/fila/DLQ por tenant).
+  *Pendência:* o builder compartilhado foi adiado para #316; a fatia preserva a
+  topologia atual nos dois serviços.
 - Remover `rabbitpy` dos pyprojects/locks.
 - CI: broker de verdade nos jobs de integração; #254 (script de isolamento no
   CI) incluído.
