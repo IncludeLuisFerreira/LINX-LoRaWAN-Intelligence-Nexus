@@ -62,8 +62,9 @@ def test_build_consumer_threads_uses_status_queue_and_concurrency(
     monkeypatch,
 ):
     settings = _valid_settings(monkeypatch, STATUS_CONCURRENCY="3")
+    stop_event = main_module.threading.Event()
     threads = main_module.build_consumer_threads(
-        settings, MagicMock(), main_module.threading.Event()
+        settings, MagicMock(), stop_event
     )
 
     assert len(threads) == 3
@@ -72,11 +73,29 @@ def test_build_consumer_threads_uses_status_queue_and_concurrency(
         "status-consumer-1",
         "status-consumer-2",
     ]
-    assert all(
-        getattr(thread, "_args")[0] == PROVISIONING_STATUS_QUEUE
-        for thread in threads
-    )
     assert all(thread.daemon is True for thread in threads)
+    for thread in threads:
+        args = getattr(thread, "_args")
+        assert args[0] == PROVISIONING_STATUS_QUEUE
+        assert callable(args[1])
+        assert args[2] == settings.rabbitmq_amqp_url
+        assert args[3] == settings.status_prefetch
+        assert args[4] is stop_event
+        assert set(getattr(thread, "_kwargs")) == {"declare"}
+
+
+def test_consumer_threads_declare_topology_without_extra_queue(monkeypatch):
+    settings = _valid_settings(monkeypatch)
+    declare_calls = MagicMock()
+    monkeypatch.setattr(main_module, "declare_topology", declare_calls)
+    threads = main_module.build_consumer_threads(
+        settings, MagicMock(), main_module.threading.Event()
+    )
+    channel = object()
+
+    getattr(threads[0], "_kwargs")["declare"](channel)
+
+    declare_calls.assert_called_once_with(channel)
 
 
 def test_wait_for_dependencies_retries_then_succeeds(monkeypatch):
@@ -137,14 +156,26 @@ def test_main_starts_threads_and_stops(monkeypatch):
 
     monkeypatch.setattr(main_module, "StatusWorkerSettings", lambda: settings)
     monkeypatch.setattr(main_module, "SessionLocal", MagicMock())
-    monkeypatch.setattr(main_module, "_wait_for_dependencies", lambda: None)
-    monkeypatch.setattr(main_module, "_declare_topology", lambda *a: None)
+    wait_for_dependencies = MagicMock()
+    declare_topology = MagicMock()
+    signal_handler = MagicMock()
+    monkeypatch.setattr(
+        main_module, "_wait_for_dependencies", wait_for_dependencies
+    )
+    monkeypatch.setattr(main_module, "_declare_topology", declare_topology)
     monkeypatch.setattr(main_module.threading, "Event", lambda: stop_event)
     monkeypatch.setattr(main_module.threading, "Thread", FakeThread)
-    monkeypatch.setattr(main_module.signal, "signal", lambda *a: None)
+    monkeypatch.setattr(main_module.signal, "signal", signal_handler)
 
     main_module.main()
 
     assert len(created) == 1
     assert created[0].started is True
     assert created[0].joined is True
+    wait_for_dependencies.assert_called_once_with()
+    declare_topology.assert_called_once_with(settings.rabbitmq_amqp_url)
+    signalled = {call.args[0] for call in signal_handler.call_args_list}
+    assert signalled == {
+        main_module.signal.SIGTERM,
+        main_module.signal.SIGINT,
+    }

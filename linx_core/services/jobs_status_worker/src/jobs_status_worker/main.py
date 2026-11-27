@@ -46,10 +46,10 @@ def _wait_for_dependencies() -> None:
     raise RuntimeError("dependencies did not become ready") from last_error
 
 
-def _declare_topology(url: str, queue: str) -> None:
+def _declare_topology(url: str) -> None:
     connection = pika.BlockingConnection(pika.URLParameters(url))
     try:
-        declare_topology(connection.channel(), queue)
+        declare_topology(connection.channel())
     finally:
         connection.close()
 
@@ -78,7 +78,7 @@ def build_consumer_threads(
     callback = build_status_callback(processor)
 
     def declare(channel: Any) -> None:
-        declare_topology(channel, settings.status_queue)
+        declare_topology(channel)
 
     return [
         threading.Thread(
@@ -106,7 +106,7 @@ def main() -> None:
     settings = StatusWorkerSettings()
     processor = StatusProcessor(SessionLocal)
     _wait_for_dependencies()
-    _declare_topology(settings.rabbitmq_amqp_url, settings.status_queue)
+    _declare_topology(settings.rabbitmq_amqp_url)
 
     stop_event = threading.Event()
     threads = build_consumer_threads(settings, processor, stop_event)
