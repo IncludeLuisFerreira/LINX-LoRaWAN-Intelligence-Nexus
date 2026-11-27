@@ -46,6 +46,14 @@ def test_startup_rejects_placeholder_provisioner_service_token(monkeypatch):
         WorkerSettings(_env_file=None)
 
 
+def test_startup_rejects_short_provisioner_service_token(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_SERVICE_TOKEN", "short-token")
+
+    with pytest.raises(ValidationError, match="PROVISIONER_SERVICE_TOKEN"):
+        WorkerSettings(_env_file=None)
+
+
 def test_startup_rejects_empty_provisioner_host(monkeypatch):
     _valid_env(monkeypatch)
     monkeypatch.setenv("PROVISIONER_GRPC_HOST", " ")

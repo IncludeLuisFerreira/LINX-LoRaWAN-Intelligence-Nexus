@@ -213,6 +213,26 @@ Ordem de upgrade obrigatória: **suba o `docker_provisioner` (com
 chamando um provisioner antigo degrada para "limpeza ignorada" (item 5), mas o
 container/rede da aplicação ficam órfãos até o provisioner ser atualizado.
 
+### Cutover do `PROVISIONER_SERVICE_TOKEN`
+
+O provisioner novo aceita apenas `PROVISIONER_SERVICE_TOKEN` no gRPC; clientes
+antigos ainda enviam `SERVICE_TOKEN`. Durante o rollout, qualquer combinação
+antigo/novo falha com `UNAUTHENTICATED`: o `jobs_worker` marca o job como falha
+permanente e o `DELETE` de aplicação responde `502`.
+
+Antes de subir a nova versão:
+
+1. defina `PROVISIONER_SERVICE_TOKEN` (mín. 32 caracteres, diferente de
+   `SERVICE_TOKEN`) no `.env` do Compose ou recrie o Secret do Kubernetes;
+2. drene o `jobs_worker` (pare o consumo) para não perder jobs em voo;
+3. suba `docker_provisioner`, `identity_api` e `jobs_worker` juntos com o mesmo
+   token; o Compose falha no startup se a chave nova faltar (`:?`);
+4. reinicie o `jobs_worker` e reprocesse os jobs que falharam durante a janela.
+
+Em Kubernetes, o `docker_provisioner` não roda no cluster: atualize também o
+provisioner externo com o token novo na mesma janela. Um Secret existente não
+ganha a chave nova sozinho — recrie-o antes do rollout.
+
 Verificação manual:
 
 ```bash
@@ -488,3 +508,6 @@ Resposta esperada (`200`):
    `DeprovisionApplication`) **antes** do `identity_api`. Um `identity_api` novo
    contra um provisioner antigo apenas ignora a limpeza Docker no delete (ver
    *Deprovisionamento e isolamento de rede*), deixando container/rede órfãos.
+7. **Cutover de credencial:** ao introduzir `PROVISIONER_SERVICE_TOKEN`, siga a
+   janela coordenada acima; subir só um dos lados deixa provisionamento e delete
+   falhando com `UNAUTHENTICATED`.

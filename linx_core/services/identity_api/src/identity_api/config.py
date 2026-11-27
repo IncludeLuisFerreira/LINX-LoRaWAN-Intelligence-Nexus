@@ -62,8 +62,10 @@ class IdentitySettings(Settings):
         # exigido. Com host configurado, o client gRPC precisa de credencial
         # própria (separada do `service_token` dos containers dos tenants).
         if self.provisioner_grpc_host:
-            require_secret(
-                "PROVISIONER_SERVICE_TOKEN", self.provisioner_service_token
+            self.provisioner_service_token = require_secret(
+                "PROVISIONER_SERVICE_TOKEN",
+                self.provisioner_service_token,
+                min_length=32,
             )
         return self
 

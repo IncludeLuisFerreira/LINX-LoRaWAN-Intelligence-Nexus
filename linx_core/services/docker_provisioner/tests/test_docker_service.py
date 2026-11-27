@@ -153,6 +153,13 @@ def test_provision_creates_network_and_container_with_env_and_labels():
         f"application/{APP_ID}/device/+/event/up"
     )
     assert call["environment"]["DB_PASSWORD"]
+    assert set(call["environment"]) == {
+        "APP_ID",
+        "DB_PASSWORD",
+        "MQTT_TOPIC",
+        "SERVICE_TOKEN",
+    }
+    assert "PROVISIONER_SERVICE_TOKEN" not in call["environment"]
     assert "db_password" not in result.__dict__
 
 

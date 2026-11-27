@@ -34,7 +34,9 @@ class WorkerSettings(Settings):
     @field_validator("provisioner_service_token")
     @classmethod
     def _validate_provisioner_service_token(cls, value: str) -> str:
-        return require_secret("PROVISIONER_SERVICE_TOKEN", value)
+        return require_secret(
+            "PROVISIONER_SERVICE_TOKEN", value, min_length=32
+        )
 
     @field_validator("provisioner_grpc_host")
     @classmethod

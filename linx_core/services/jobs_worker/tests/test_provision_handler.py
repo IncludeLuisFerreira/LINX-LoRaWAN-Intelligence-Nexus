@@ -59,6 +59,34 @@ def _result() -> ProvisionedApplication:
     )
 
 
+def test_create_client_uses_provisioner_service_token(monkeypatch):
+    from jobs_worker.handlers import provision_application as module
+
+    captured: dict[str, object] = {}
+
+    class RecordingClient:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr(module, "DockerProvisionerClient", RecordingClient)
+    monkeypatch.setattr(
+        module.settings, "provisioner_grpc_host", "provisioner:50052"
+    )
+    monkeypatch.setattr(module.settings, "provisioner_service_token", "p" * 40)
+    monkeypatch.setattr(
+        module.settings, "provisioner_grpc_timeout_seconds", 7.5
+    )
+
+    client = module.ProvisionApplicationHandler()._create_client()
+
+    assert isinstance(client, RecordingClient)
+    assert captured == {
+        "target": "provisioner:50052",
+        "service_token": "p" * 40,
+        "timeout": 7.5,
+    }
+
+
 def test_handler_returns_result_dict():
     client = FakeClient(result=_result())
     handler = ProvisionApplicationHandler(client_factory=lambda: client)

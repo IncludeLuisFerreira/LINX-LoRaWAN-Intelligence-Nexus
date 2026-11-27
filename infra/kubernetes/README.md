@@ -154,6 +154,38 @@ aponte para um broker real).
 
 `infra/kubernetes/linx-secrets.env` está no `.gitignore` — nunca versionar.
 
+### Cutover do `PROVISIONER_SERVICE_TOKEN`
+
+O `docker_provisioner` não roda neste cluster; o provisioner externo e os
+clientes (`identity-api`, `jobs-worker`) precisam do mesmo token novo. Um
+Secret existente não ganha a chave nova sozinho: recrie-o antes do rollout.
+
+Durante a janela de troca, clientes antigos/novos contra provisioner
+antigo/novo falham com `UNAUTHENTICATED` — o `jobs-worker` trata como falha
+permanente e o `DELETE` de aplicação responde `502`. Procedimento:
+
+1. dê scale down no `jobs-worker` para drenar jobs em voo:
+
+   ```bash
+   kubectl -n linx scale deployment/jobs-worker --replicas=0
+   ```
+
+2. atualize o provisioner externo com o `PROVISIONER_SERVICE_TOKEN` novo
+   (mín. 32 caracteres, diferente de `SERVICE_TOKEN`);
+3. recrie o Secret com a chave nova e reinicie os clientes:
+
+   ```bash
+   kubectl create secret generic linx-secrets -n linx \
+     --from-env-file=infra/kubernetes/linx-secrets.env \
+     --dry-run=client -o yaml | kubectl apply -f -
+   kubectl -n linx rollout restart deployment/identity-api deployment/jobs-worker
+   kubectl -n linx rollout status deployment/identity-api
+   kubectl -n linx rollout status deployment/jobs-worker
+   ```
+
+4. restaure o `jobs-worker` e reprocesse os jobs de provisionamento que
+   falharam na janela.
+
 ### Banco externo (RDS, Cloud SQL etc.)
 
 Para apontar para um banco gerenciado, altere **somente** `DATABASE_URL` em
