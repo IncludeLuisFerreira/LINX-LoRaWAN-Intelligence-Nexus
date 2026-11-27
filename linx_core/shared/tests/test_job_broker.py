@@ -13,6 +13,7 @@ from linx_shared.jobs.constants import (
     JOB_DLX,
     JOB_EVENTS_EXCHANGE,
     JOB_EXCHANGE,
+    JOB_TYPE_PROVISION_APPLICATION,
     PROVISIONING_DEAD,
     PROVISIONING_DLQ,
     PROVISIONING_QUEUE,
@@ -322,3 +323,132 @@ def test_declare_topology_uses_custom_queue():
         (item["queue"], item["exchange"], item["routing_key"])
         for item in channel.bindings
     }
+
+
+SECOND_JOB_TYPE = "provisioning.tenant"
+
+
+def test_declare_topology_declares_second_job_type():
+    channel = FakeChannel()
+
+    declare_topology(
+        channel,
+        job_types=(JOB_TYPE_PROVISION_APPLICATION, SECOND_JOB_TYPE),
+    )
+
+    queues = {item["queue"]: item for item in channel.queues}
+    assert set(queues) == {
+        PROVISIONING_QUEUE,
+        PROVISIONING_DLQ,
+        PROVISIONING_STATUS_QUEUE,
+        f"linx.jobs.{SECOND_JOB_TYPE}",
+        f"linx.jobs.{SECOND_JOB_TYPE}.dlq",
+    }
+    assert queues[f"linx.jobs.{SECOND_JOB_TYPE}"]["arguments"] == {
+        "x-dead-letter-exchange": JOB_DLX,
+        "x-dead-letter-routing-key": f"{SECOND_JOB_TYPE}.dead",
+    }
+
+    bindings = {
+        (item["queue"], item["exchange"], item["routing_key"])
+        for item in channel.bindings
+    }
+    assert (
+        f"linx.jobs.{SECOND_JOB_TYPE}",
+        JOB_EXCHANGE,
+        f"{SECOND_JOB_TYPE}.requested",
+    ) in bindings
+    assert (
+        f"linx.jobs.{SECOND_JOB_TYPE}.dlq",
+        JOB_DLX,
+        f"{SECOND_JOB_TYPE}.dead",
+    ) in bindings
+    assert (
+        PROVISIONING_STATUS_QUEUE,
+        JOB_EVENTS_EXCHANGE,
+        f"{SECOND_JOB_TYPE}.#",
+    ) in bindings
+
+
+def test_declare_status_topology_binds_each_job_type():
+    channel = FakeChannel()
+
+    declare_status_topology(
+        channel,
+        job_types=(JOB_TYPE_PROVISION_APPLICATION, SECOND_JOB_TYPE),
+    )
+
+    assert [item["queue"] for item in channel.queues] == [
+        PROVISIONING_STATUS_QUEUE
+    ]
+    assert {
+        (item["queue"], item["exchange"], item["routing_key"])
+        for item in channel.bindings
+    } == {
+        (
+            PROVISIONING_STATUS_QUEUE,
+            JOB_EVENTS_EXCHANGE,
+            f"{JOB_TYPE_PROVISION_APPLICATION}.#",
+        ),
+        (
+            PROVISIONING_STATUS_QUEUE,
+            JOB_EVENTS_EXCHANGE,
+            f"{SECOND_JOB_TYPE}.#",
+        ),
+    }
+
+
+def test_declare_topology_rejects_queue_override_without_legacy_type():
+    with pytest.raises(ValueError, match="override"):
+        declare_topology(
+            FakeChannel(),
+            "linx.jobs.custom",
+            job_types=(SECOND_JOB_TYPE,),
+        )
+
+
+def _topic_matches(pattern: str, key: str) -> bool:
+    """Matcher mínimo de topic exchange do RabbitMQ (``*`` e ``#``)."""
+    pattern_parts = pattern.split(".")
+    key_parts = key.split(".")
+
+    def match(pattern_index: int, key_index: int) -> bool:
+        if pattern_index == len(pattern_parts):
+            return key_index == len(key_parts)
+        part = pattern_parts[pattern_index]
+        if part == "#":
+            return any(
+                match(pattern_index + 1, next_index)
+                for next_index in range(key_index, len(key_parts) + 1)
+            )
+        if key_index == len(key_parts):
+            return False
+        if part == "*" or part == key_parts[key_index]:
+            return match(pattern_index + 1, key_index + 1)
+        return False
+
+    return match(0, 0)
+
+
+def _routable(channel, exchange: str, key: str) -> bool:
+    return any(
+        item["exchange"] == exchange
+        and _topic_matches(item["routing_key"], key)
+        for item in channel.bindings
+    )
+
+
+def test_second_job_type_events_are_routable():
+    channel = FakeChannel()
+    declare_topology(
+        channel,
+        job_types=(JOB_TYPE_PROVISION_APPLICATION, SECOND_JOB_TYPE),
+    )
+
+    for job_type in (JOB_TYPE_PROVISION_APPLICATION, SECOND_JOB_TYPE):
+        assert _routable(channel, JOB_EXCHANGE, f"{job_type}.requested")
+        for suffix in ("started", "succeeded", "failed", "retry"):
+            assert _routable(
+                channel, JOB_EVENTS_EXCHANGE, f"{job_type}.{suffix}"
+            )
+        assert _routable(channel, JOB_DLX, f"{job_type}.dead")
