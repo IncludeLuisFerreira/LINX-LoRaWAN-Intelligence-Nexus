@@ -231,8 +231,8 @@ def create_server(
 
     logger.warning(
         "Servindo gRPC em modo inseguro em %s. A autorização por "
-        "metadado (SERVICE_TOKEN) é a única barreira; mantenha a porta "
-        "restrita à rede interna até haver TLS.",
+        "metadado (PROVISIONER_SERVICE_TOKEN) é a única barreira; mantenha "
+        "a porta restrita à rede interna até haver TLS.",
         bind_address,
     )
     return server

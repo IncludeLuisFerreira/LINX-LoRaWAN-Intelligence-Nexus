@@ -110,7 +110,7 @@ ambiente.
 | Serviço | `DockerProvisioner` |
 | RPCs | `ProvisionApplication`, `DeprovisionApplication` |
 | Porta | `50052` (rede interna do Compose) |
-| Autenticação | metadado `authorization: Bearer <SERVICE_TOKEN>` |
+| Autenticação | metadado `authorization: Bearer <PROVISIONER_SERVICE_TOKEN>` |
 | Request (provision) | `ProvisionApplicationRequest { string app_id = 1; }` |
 | Response (provision) | `container_id`, `port`, `network`, `image`, `status`, `created`, `mqtt_topic` |
 | Request (deprovision) | `DeprovisionApplicationRequest { string app_id = 1; }` |

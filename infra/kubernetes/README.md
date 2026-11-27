@@ -146,7 +146,8 @@ kubectl create secret generic linx-secrets -n linx \
 O `--dry-run=client -o yaml` gera o Secret e o `kubectl apply` o cria ou
 atualiza, sem falhar em execuções repetidas. As chaves mínimas são as do
 template: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
-`POSTGRES_REPLICATION_PASSWORD`, `SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
+`POSTGRES_REPLICATION_PASSWORD`, `SERVICE_TOKEN`, `PROVISIONER_SERVICE_TOKEN`,
+`AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
 `RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD`, `RABBITMQ_TENANT_SECRET` e
 `RABBITMQ_AMQP_URL` (usada pelo `jobs_worker` e pelo `jobs_status_worker`;
 aponte para um broker real).
