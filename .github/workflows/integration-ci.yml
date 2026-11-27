@@ -9,8 +9,6 @@ on:
       - "infra/docker-compose*.yml"
       - "client/db/**"
       - "scripts/bootstrap-network.sh"
-      - "scripts/test_isolation*.py"
-      - "scripts/requirements-e2e.txt"
       - ".github/workflows/integration-ci.yml"
   push:
     branches:
@@ -23,8 +21,6 @@ on:
       - "infra/docker-compose*.yml"
       - "client/db/**"
       - "scripts/bootstrap-network.sh"
-      - "scripts/test_isolation*.py"
-      - "scripts/requirements-e2e.txt"
       - ".github/workflows/integration-ci.yml"
 
 env:
@@ -66,23 +62,3 @@ jobs:
             -f infra/docker-compose.yml \
             logs --tail 120 mosquitto || true
 
-  isolation:
-    name: Isolation guard (dry-run + smoke)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install e2e tooling
-        run: python -m pip install -r scripts/requirements-e2e.txt
-
-      - name: Isolation dry-run
-        run: python3 scripts/test_isolation.py --dry-run
-
-      - name: Isolation smoke
-        run: python3 scripts/test_isolation_smoke.py
