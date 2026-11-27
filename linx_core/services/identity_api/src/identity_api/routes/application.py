@@ -136,7 +136,7 @@ def create_application(
         description=payload.description,
     )
     db.add(new_application)
-    db.add(ApplicationInstance(app_id=application_uuid, status="PENDING"))
+    db.add(ApplicationInstance(app_id=application_uuid, status="pending"))
     try:
         create_provisioning_job(
             db,
