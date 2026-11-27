@@ -23,10 +23,38 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      - "127.0.0.1:${MQTT_HOST_PORT:-1883}:1883"
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    hostname: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672"   # AMQP
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672" # Painel de gerenciamento
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_ADMIN_USER:-linx}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}
+    volumes:
+      - rabbitmqdata_base:/var/lib/rabbitmq
+    networks:
+      - linx-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+
+networks:
+  linx-network:
+    external: true
+    name: ${LINX_NETWORK:-linx-network}
 
 volumes:
   postgresqldata_base:
   redisdata_base:
+  rabbitmqdata_base:

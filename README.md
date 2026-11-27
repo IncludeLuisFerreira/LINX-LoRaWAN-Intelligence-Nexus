@@ -71,24 +71,16 @@ Cada compose do repositório tem um target `up-<stack>` (e `down-<stack>` /
 | Target | Compose | Conteúdo |
 | --- | --- | --- |
 | `make up` / `up-infra` | `infra/docker-compose.yml` | ChirpStack v4 + MQTT + PostgreSQL |
-| `make up-base` | `infra/docker-compose.base.yml` | Base de dev (PostgreSQL + Redis + Mosquitto) |
-| `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + docker_provisioner + db) |
+| `make up-base` | `infra/docker-compose.base.yml` | Base de dev (PostgreSQL + Redis + Mosquitto + RabbitMQ) |
+| `make up-core` | `linx_core/docker-compose.yml` | Plano de controle (identity_api + agent_bridge + docker_provisioner + jobs + db) |
 | `make up-client` | `client/docker-compose.yml` | Ambiente isolado (frontend + telemetry_consumer + TimescaleDB) |
-| `make up-deploy` | `deploy/docker-compose.yml` | Stack full-stack (nginx + TLS + todos os serviços); requer `infra` no ar |
-| `make up-client-agent` | `deploy/docker-compose.client-agent.yml` | Client Agent isolado (ver nota abaixo) |
 | `make build-tenant-image` | `client/tenant_app/` | Imagem mínima `linx-tenant-app:latest` usada no provisionamento |
 | `make test-integration` | `tests/integration/run.sh` | Testes de integração ponta-a-ponta |
 
-> O stack `deploy` não sobe Mosquitto próprio. O `routing` consome o broker do
-> stack `infra` pela rede `linx-network`; rode `make up-infra` antes de
-> `make up-deploy` (os targets garantem a rede). As credenciais do broker
-> pertencem a `infra/.env`.
-
-> `make up-client-agent` exige um `AGENT_SERVICE_TOKEN` real (não placeholder)
-> no `deploy/.env` e um `agent_bridge` alcançável. O default
-> `SAAS_GRPC_HOST=agent_bridge:50051` só resolve com a stack de
-> `deploy/docker-compose.yml` em execução; para outro host, defina
-> `SAAS_GRPC_HOST` no ambiente antes de subir o target.
+> `make up-core` e `make up-client` assumem o broker e a rede do `make up-base`
+> no ar. O `infra` fornece ChirpStack e Mosquitto; o pipeline completo de
+> telemetria (`routing` + `telemetry_consumer`) é montado pela suíte de
+> integração em `tests/integration`.
 
 > `make help` lista a matriz completa. Rode `make down-<stack>` para derrubar
 > uma stack específica.
@@ -100,8 +92,7 @@ LINX/
 ├── linx_core/     # Plano de controle (REST FastAPI + gRPC AgentBridge/DockerProvisioner)
 ├── middleware/    # Middleware: roteamento de uplinks (routing) + agente por tenant (client_agent)
 ├── client/        # Ambiente isolado do cliente (frontend + telemetry_consumer + tenant_app + TimescaleDB)
-├── infra/         # Stack ChirpStack v4 (gateway bridge, MQTT, PostgreSQL)
-├── deploy/        # Compose full-stack (nginx, TLS, todos os serviços)
+├── infra/         # Stack ChirpStack v4 (gateway bridge, MQTT, PostgreSQL) + broker base
 ├── proto/         # Contratos gRPC compartilhados (AgentBridge + DockerProvisioner)
 ├── docs/          # Documentação (MkDocs)
 └── website/       # Site institucional (Astro)

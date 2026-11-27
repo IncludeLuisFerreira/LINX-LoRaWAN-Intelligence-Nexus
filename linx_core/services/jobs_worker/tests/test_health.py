@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from unittest.mock import MagicMock
 
 from jobs_worker import health
@@ -9,12 +10,16 @@ def test_check_reaches_postgres_and_rabbitmq(monkeypatch) -> None:
     engine.connect.return_value.__enter__.return_value = connection
     monkeypatch.setattr(health, "engine", engine)
 
-    rabbit = MagicMock()
-    connection_factory = MagicMock(return_value=rabbit)
-    monkeypatch.setattr(health.pika, "BlockingConnection", connection_factory)
+    opened: list[str] = []
+
+    @contextmanager
+    def fake_open_channel(url: str):
+        opened.append(url)
+        yield MagicMock()
+
+    monkeypatch.setattr(health, "open_channel", fake_open_channel)
 
     health.check()
 
     connection.execute.assert_called_once()
-    rabbit.channel.assert_called_once()
-    rabbit.close.assert_called_once()
+    assert opened == [health.settings.rabbitmq_amqp_url]

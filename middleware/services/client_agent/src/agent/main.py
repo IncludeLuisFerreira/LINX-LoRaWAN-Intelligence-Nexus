@@ -3,8 +3,9 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response, status
+from fastapi import Depends, FastAPI, Request, Response, status
 
+from agent.auth import get_current_user
 from agent.config import AgentSettings
 from agent.grpc_client import SaasGrpcClient
 
@@ -20,6 +21,9 @@ async def lifespan(app: FastAPI):
         server=settings.saas_grpc_host,
         timeout=settings.grpc_timeout_seconds,
         cache_ttl_seconds=settings.config_cache_ttl_seconds,
+        ca_cert_path=settings.grpc_ca_cert_path,
+        client_cert_path=settings.grpc_client_cert_path,
+        client_key_path=settings.grpc_client_key_path,
     )
     connected = await asyncio.to_thread(client.check_connectivity)
     if connected:
@@ -62,3 +66,13 @@ async def health(request: Request, response: Response) -> dict:
         "status": "ok" if connected else "degraded",
         "saas_grpc": connected,
     }
+
+
+@app.get("/api/v1/agent/me")
+async def agent_me(user: dict = Depends(get_current_user)) -> dict:
+    """Endpoint protegido: devolve as claims do JWT validado.
+
+    `GET /health` continua público (probe/readiness) e não é afetado por
+    esta dependência.
+    """
+    return user

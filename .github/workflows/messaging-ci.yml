@@ -1,0 +1,51 @@
+name: messaging-ci
+
+on:
+  pull_request:
+    paths:
+      - "infra/docker-compose*.yml"
+      - "linx_core/docker-compose*.yml"
+      - "client/docker-compose*.yml"
+      - "tests/integration/**/docker-compose*.yml"
+      - "scripts/check_messaging_topology.py"
+      - "scripts/tests/**"
+      - "scripts/requirements-tools.txt"
+      - ".github/workflows/messaging-ci.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "infra/docker-compose*.yml"
+      - "linx_core/docker-compose*.yml"
+      - "client/docker-compose*.yml"
+      - "tests/integration/**/docker-compose*.yml"
+      - "scripts/check_messaging_topology.py"
+      - "scripts/tests/**"
+      - "scripts/requirements-tools.txt"
+      - ".github/workflows/messaging-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  topology:
+    name: Broker único e checagens de mensageria
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling dependencies
+        run: python -m pip install -r scripts/requirements-tools.txt
+
+      - name: Check messaging topology
+        run: python3 scripts/check_messaging_topology.py --root .
+
+      - name: Run tooling tests
+        run: python3 -m unittest discover -s scripts/tests -t . -v

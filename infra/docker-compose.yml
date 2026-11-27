@@ -85,7 +85,7 @@ services:
     ports:
       # Bind SOMENTE em loopback (#208): ChirpStack e routing alcançam o
       # broker pela rede interna, não pela porta publicada no host.
-      - "127.0.0.1:1883:1883"
+      - "127.0.0.1:${MQTT_HOST_PORT:-1883}:1883"
     volumes:
       # config/ traz mosquitto.conf + mosquitto.passwd + mosquitto.acl
       # (gerados por infra/scripts/gen-mosquitto-passwd.sh). Read-only.
@@ -132,10 +132,11 @@ services:
       - ./configuration/mosquitto/config/:/mosquitto/config/
 
 networks:
-  # Rede compartilhada com o stack deploy. Criada por
-  # deploy/scripts/bootstrap-network.sh antes de subir os stacks.
+  # Rede compartilhada entre os stacks. Criada por
+  # scripts/bootstrap-network.sh antes de subir os stacks.
   linx-network:
     external: true
+    name: ${LINX_NETWORK:-linx-network}
 
 volumes:
   postgresqldata:

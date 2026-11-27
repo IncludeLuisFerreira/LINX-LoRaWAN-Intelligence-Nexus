@@ -64,6 +64,25 @@ jobs:
         run: ./scripts/check-nginx-template.sh
         working-directory: ./client/frontend
 
+      - name: Borda TLS (config + nginx -t)
+        run: ./scripts/check-nginx-tls.sh
+        working-directory: ./client/frontend
+
+      - name: Sintaxe dos scripts de certificado/borda (bash -n)
+        working-directory: .
+        run: |
+          bash -n client/scripts/frontend-cert.sh
+          bash -n client/frontend/scripts/check-nginx-tls.sh
+          # shellcheck vem pré-instalado nos runners do GitHub; se faltar,
+          # seguimos apenas com a validação sintática acima. SC2016 (info) é
+          # intencional nos asserts com variáveis do nginx em aspas simples.
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck --severity=warning client/scripts/frontend-cert.sh
+            shellcheck --severity=warning client/frontend/scripts/check-nginx-tls.sh
+          else
+            echo "shellcheck indisponível; bash -n já validou a sintaxe."
+          fi
+
       - name: Security headers guard
         run: |
           ./scripts/check-security-headers.sh

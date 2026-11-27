@@ -85,3 +85,11 @@ export const Users = (p: IconProps) => (
     <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
   </Base>
 );
+
+export const Rules = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+    <circle cx="15" cy="7" r="2" />
+    <circle cx="9" cy="17" r="2" />
+  </Base>
+);

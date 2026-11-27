@@ -1,6 +1,6 @@
 services:
   timescaledb:
-    image: timescale/timescaledb:2.13-pg14
+    image: timescale/timescaledb:2.13.1-pg14
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${DB_USER}
@@ -48,7 +48,47 @@ services:
       - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
       # Destino do proxy /ws/ do nginx (WebSocket de telemetria).
       - WS_BACKEND_URL=${WS_BACKEND_URL:-http://telemetry_consumer:8000}
+    # Sem publicação direta: o dashboard só é alcançado pela borda TLS.
+    expose:
+      - "80"
+
+  # Borda HTTPS (issue #73): termina o TLS em 443, redireciona 80 -> 443 e
+  # encaminha para o nginx interno do serviço `frontend`.
+  frontend-tls:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./frontend/nginx-tls.conf:/etc/nginx/conf.d/default.conf:ro
+      # fullchain.pem + privkey.pem, gravados por scripts/frontend-cert.sh.
+      - ./certs:/etc/nginx/certs:ro
+      # Webroot do desafio HTTP-01 do Certbot (somente leitura no nginx).
+      - ./certbot/www:/var/www/certbot:ro
     ports:
-      - "8080:80"
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+    healthcheck:
+      # wget do BusyBox (nginx:1.27-alpine): --spider só testa a resposta e
+      # --no-check-certificate evita depender do cert publicado, que pode ser
+      # bootstrap/autoassinado na primeira subida. -T/-t limitam espera/tentativa.
+      test:
+        - CMD-SHELL
+        - "wget -q --spider --no-check-certificate -T 3 -t 1 https://127.0.0.1/ || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # One-shot usado por scripts/frontend-cert.sh (issue/renew). Fora do profile
+  # padrão para não subir junto com a stack.
+  certbot:
+    image: certbot/certbot:v3.1.0
+    profiles: ["tools"]
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    command: ["certbot", "renew", "--webroot", "-w", "/var/www/certbot"]
+
 volumes:
   timescaledb_data:

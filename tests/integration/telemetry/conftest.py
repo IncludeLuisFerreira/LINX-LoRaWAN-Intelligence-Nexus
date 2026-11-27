@@ -1,14 +1,12 @@
 """Fixtures dos testes de integração de telemetria ponta-a-ponta.
 
-NÃO define uma stack própria: sobe o Mosquitto real de `infra/docker-compose.yml`
-e a stack de `deploy/docker-compose.yml` em
-`tests/integration/telemetry/docker-compose.override.yml` (apenas portas de
-teste, APP_ID e credencial administrativa do broker), com um `--env-file` de
-teste. Sobe só os serviços do caminho da telemetria:
+Monta a stack de teste com os serviços reais:
 
-    mosquitto (infra) -> routing (deploy) -> rabbitmq -> telemetry_consumer
-    -> timescaledb
+    mosquitto (infra) -> routing (tests/integration/telemetry) -> rabbitmq
+    (infra/docker-compose.base.yml) -> telemetry_consumer -> timescaledb
 
+O compose da montagem é `docker-compose.stack.yml`; ele usa os Dockerfiles
+reais de `middleware/services/routing` e `client/services/telemetry_consumer`.
 Valida que os containers estão no ar antes dos testes e derruba tudo no fim.
 Em falha de subida, imprime o estado de cada serviço e a dica de logs.
 """
@@ -18,7 +16,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import shutil
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -31,20 +28,17 @@ from websockets.sync.client import connect as ws_connect
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-BASE_COMPOSE = os.path.join(ROOT, "deploy", "docker-compose.yml")
-OVERRIDE_COMPOSE = os.path.join(HERE, "docker-compose.override.yml")
+INFRA_BASE_COMPOSE = os.path.join(
+    ROOT, "infra", "docker-compose.base.yml"
+)
+STACK_COMPOSE = os.path.join(HERE, "docker-compose.stack.yml")
 INFRA_COMPOSE = os.path.join(ROOT, "infra", "docker-compose.yml")
-INFRA_OVERRIDE_COMPOSE = os.path.join(
-    HERE, "docker-compose.infra-override.yml"
-)
 TEST_ENV_FILE = os.path.join(HERE, "test.env")
-BOOTSTRAP_NETWORK = os.path.join(
-    ROOT, "deploy", "scripts", "bootstrap-network.sh"
-)
+BOOTSTRAP_NETWORK = os.path.join(ROOT, "scripts", "bootstrap-network.sh")
 
 PROJECT = "lynx-integration"
 INFRA_PROJECT = "lynx-integration-infra"
-NETWORK = "linx-network"
+NETWORK = os.environ.get("LINX_NETWORK", "lynx-it-network")
 SERVICES = (
     "rabbitmq",
     "timescaledb",
@@ -76,18 +70,22 @@ SERVICE_TOKEN = os.environ.get("IT_SERVICE_TOKEN") or _ENV.get(
 )
 
 APP_ID = _ENV.get("APP_ID", "integration-app")
+AMQP_PORT = _ENV.get("RABBITMQ_AMQP_PORT", "5673")
+MGMT_PORT = _ENV.get("RABBITMQ_MGMT_PORT", "15673")
 AMQP_URL = os.environ.get("IT_AMQP_URL") or (
-    f"amqp://{_ENV.get('RABBITMQ_DEFAULT_USER', 'linx')}:"
-    f"{_ENV.get('RABBITMQ_DEFAULT_PASS', 'changeme')}@127.0.0.1:5673/%2f"
+    f"amqp://{_ENV.get('RABBITMQ_ADMIN_USER', 'linx')}:"
+    f"{_ENV.get('RABBITMQ_ADMIN_PASSWORD', 'changeme')}@127.0.0.1:{AMQP_PORT}/%2f"
 )
 DB_USER = _ENV.get("DB_USER", "tenant")
 DB_NAME = _ENV.get("DB_NAME", "tenantdb")
 
 UP_TIMEOUT = os.environ.get("IT_UP_TIMEOUT", "300")
 
-RABBIT_MGMT = os.environ.get("IT_RABBIT_MGMT", "http://127.0.0.1:15673")
-MGMT_USER = _ENV.get("RABBITMQ_DEFAULT_USER", "linx")
-MGMT_PASS = _ENV.get("RABBITMQ_DEFAULT_PASS", "changeme")
+RABBIT_MGMT = os.environ.get(
+    "IT_RABBIT_MGMT", f"http://127.0.0.1:{MGMT_PORT}"
+)
+MGMT_USER = _ENV.get("RABBITMQ_ADMIN_USER", "linx")
+MGMT_PASS = _ENV.get("RABBITMQ_ADMIN_PASSWORD", "changeme")
 DLQ_NAME = f"linx.telemetry.{APP_ID}.dlq"
 
 # Auth no broker (#208, allow_anonymous false): o probe publica via docker exec
@@ -101,23 +99,10 @@ MQTT_READ_USER = _ENV.get("MQTT_ROUTING_USER", "routing")
 MQTT_READ_PASS = _ENV.get("MQTT_ROUTING_PASSWORD", "")
 
 
-def _ensure_deploy_env() -> None:
-    """Garante `deploy/.env` (exigido por `env_file` do compose base).
-
-    O arquivo é gitignored; no CI ele não existe. Criamos a partir do
-    `.env.example` apenas quando ausente — a interpolação real vem do
-    `--env-file` de teste, então o conteúdo não afeta as credenciais do teste.
-    """
-    deploy_env = os.path.join(ROOT, "deploy", ".env")
-    if not os.path.exists(deploy_env):
-        example = os.path.join(ROOT, "deploy", ".env.example")
-        shutil.copyfile(example, deploy_env)
-
-
 def compose(
     *args: str, check: bool = True, input: str | None = None
 ) -> subprocess.CompletedProcess:
-    """Executa `docker compose` sobre a stack real (deploy + override)."""
+    """Executa `docker compose` sobre a montagem de teste."""
     return subprocess.run(
         [
             "docker",
@@ -127,15 +112,16 @@ def compose(
             "--env-file",
             TEST_ENV_FILE,
             "-f",
-            BASE_COMPOSE,
+            STACK_COMPOSE,
             "-f",
-            OVERRIDE_COMPOSE,
+            INFRA_BASE_COMPOSE,
             *args,
         ],
         input=input,
         capture_output=True,
         text=True,
         check=check,
+        env={**os.environ, "LINX_NETWORK": NETWORK},
     )
 
 
@@ -153,24 +139,24 @@ def compose_infra(
             TEST_ENV_FILE,
             "-f",
             INFRA_COMPOSE,
-            "-f",
-            INFRA_OVERRIDE_COMPOSE,
             *args,
         ],
         input=input,
         capture_output=True,
         text=True,
         check=check,
+        env={**os.environ, "LINX_NETWORK": NETWORK},
     )
 
 
 def _ensure_network() -> None:
-    """Garante a rede compartilhada usada por infra e deploy."""
+    """Garante a rede compartilhada usada por infra e pela montagem de teste."""
     subprocess.run(
         ["bash", BOOTSTRAP_NETWORK, NETWORK],
         check=True,
         capture_output=True,
         text=True,
+        env={**os.environ, "LINX_NETWORK": NETWORK},
     )
 
 
@@ -227,8 +213,8 @@ def _preflight() -> None:
     lines.append("")
     lines.append(
         "Veja os logs: docker compose -p lynx-integration "
-        f"--env-file {TEST_ENV_FILE} -f {BASE_COMPOSE} -f {OVERRIDE_COMPOSE} "
-        "logs <serviço>"
+        f"--env-file {TEST_ENV_FILE} -f {STACK_COMPOSE} "
+        f"-f {INFRA_BASE_COMPOSE} logs <serviço>"
     )
     lines.append("")
     raise RuntimeError("\n".join(lines))
@@ -249,8 +235,7 @@ def _dump_infra_logs() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def stack() -> Iterator[None]:
-    """Sobe Mosquitto do infra + stack de deploy, valida e derruba no fim."""
-    _ensure_deploy_env()
+    """Sobe Mosquitto do infra + montagem de teste, valida e derruba no fim."""
     _ensure_network()
 
     infra_up = compose_infra(

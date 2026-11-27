@@ -127,3 +127,88 @@ def test_check_connectivity_false_on_timeout():
     ):
         client = SaasGrpcClient("localhost:50051", timeout=1.0)
         assert client.check_connectivity() is False
+
+
+def _fake_mtls_files(tmp_path):
+    ca = tmp_path / "ca.crt"
+    cert = tmp_path / "client.crt"
+    key = tmp_path / "client.key"
+    ca.write_bytes(b"ca")
+    cert.write_bytes(b"cert")
+    key.write_bytes(b"key")
+    return ca, cert, key
+
+
+def test_channel_uses_mtls_credentials(tmp_path):
+    ca, cert, key = _fake_mtls_files(tmp_path)
+
+    with (
+        patch(
+            "agent.grpc_client.grpc.ssl_channel_credentials",
+            return_value="creds",
+        ) as credentials,
+        patch("agent.grpc_client.grpc.secure_channel") as secure_channel,
+        patch("agent.grpc_client.linx_agent_pb2_grpc.AgentBridgeStub"),
+    ):
+        SaasGrpcClient(
+            "saas:50051",
+            ca_cert_path=str(ca),
+            client_cert_path=str(cert),
+            client_key_path=str(key),
+        )
+
+    credentials.assert_called_once_with(
+        root_certificates=b"ca",
+        certificate_chain=b"cert",
+        private_key=b"key",
+    )
+    secure_channel.assert_called_once_with("saas:50051", "creds")
+
+
+def test_channel_reads_mtls_paths_from_env(monkeypatch, tmp_path):
+    ca, cert, key = _fake_mtls_files(tmp_path)
+    monkeypatch.setenv("GRPC_CA_CERT_PATH", str(ca))
+    monkeypatch.setenv("GRPC_CLIENT_CERT_PATH", str(cert))
+    monkeypatch.setenv("GRPC_CLIENT_KEY_PATH", str(key))
+
+    with (
+        patch(
+            "agent.grpc_client.grpc.ssl_channel_credentials",
+            return_value="creds",
+        ) as credentials,
+        patch("agent.grpc_client.grpc.secure_channel"),
+        patch("agent.grpc_client.linx_agent_pb2_grpc.AgentBridgeStub"),
+    ):
+        SaasGrpcClient("saas:50051")
+
+    credentials.assert_called_once_with(
+        root_certificates=b"ca",
+        certificate_chain=b"cert",
+        private_key=b"key",
+    )
+
+
+def test_channel_rejects_partial_mtls_config(tmp_path):
+    ca, cert, key = _fake_mtls_files(tmp_path)
+
+    with pytest.raises(RuntimeError, match="GRPC_CA_CERT_PATH"):
+        SaasGrpcClient(
+            "saas:50051",
+            client_cert_path=str(cert),
+            client_key_path=str(key),
+        )
+
+    with pytest.raises(RuntimeError, match="GRPC_CLIENT_CERT_PATH"):
+        SaasGrpcClient("saas:50051", ca_cert_path=str(ca))
+
+
+def test_channel_rejects_unreadable_ca(tmp_path):
+    _, cert, key = _fake_mtls_files(tmp_path)
+
+    with pytest.raises(RuntimeError, match="CA do gRPC"):
+        SaasGrpcClient(
+            "saas:50051",
+            ca_cert_path=str(tmp_path / "missing.crt"),
+            client_cert_path=str(cert),
+            client_key_path=str(key),
+        )

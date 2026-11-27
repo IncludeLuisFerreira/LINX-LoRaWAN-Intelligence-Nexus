@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, services/identity_api, services/agent_bridge, services/docker_provisioner, services/jobs_worker]
+        package: [shared, services/identity_api, services/agent_bridge, services/docker_provisioner, services/jobs_worker, services/jobs_status_worker]
     defaults:
       run:
         working-directory: linx_core
@@ -70,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [shared, services/identity_api, services/agent_bridge, services/docker_provisioner, services/jobs_worker]
+        package: [shared, services/identity_api, services/agent_bridge, services/docker_provisioner, services/jobs_worker, services/jobs_status_worker]
     services:
       postgres:
         image: postgres:15-alpine
@@ -109,6 +109,7 @@ jobs:
           poetry -C services/agent_bridge install
           poetry -C services/docker_provisioner install
           poetry -C services/jobs_worker install
+          poetry -C services/jobs_status_worker install
 
       - name: Apply migrations
         run: poetry -C services/identity_api run alembic -c ../../alembic.ini upgrade head

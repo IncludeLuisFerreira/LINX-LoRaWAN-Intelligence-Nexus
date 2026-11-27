@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from 'react';
 import { act, cleanup, renderHook } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from './AuthContext';
 import { clearAccessToken, getAccessToken } from '../services/api';
@@ -10,7 +11,11 @@ const authService = vi.hoisted(() => ({ login: vi.fn() }));
 vi.mock('../services/auth', () => ({ login: authService.login }));
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <AuthProvider>{children}</AuthProvider>;
+  return (
+    <MemoryRouter>
+      <AuthProvider>{children}</AuthProvider>
+    </MemoryRouter>
+  );
 }
 
 function makeAccessToken(): string {
