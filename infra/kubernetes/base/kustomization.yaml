@@ -8,3 +8,4 @@ resources:
   - agent-bridge.yaml
   - identity-api.yaml
   - jobs-worker.yaml
+  - jobs-status-worker.yaml

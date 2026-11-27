@@ -1,0 +1,40 @@
+# Consumidor de eventos de status (#232). Não precisa de ServiceAccount,
+# Lease ou Service: não recebe tráfego e escala horizontalmente com segurança
+# porque apply_status_event é idempotente.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobs-status-worker
+  namespace: linx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: jobs-status-worker
+  template:
+    metadata:
+      labels:
+        app: jobs-status-worker
+    spec:
+      initContainers:
+        - name: wait-for-db
+          image: includeluisferreira/jobs-status-worker:dev
+          imagePullPolicy: Always
+          command:
+            - python
+            - -m
+            - linx_shared.db.wait
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets
+      containers:
+        - name: jobs-status-worker
+          image: includeluisferreira/jobs-status-worker:dev
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: linx-config
+            - secretRef:
+                name: linx-secrets

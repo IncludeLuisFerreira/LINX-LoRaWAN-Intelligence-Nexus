@@ -36,6 +36,9 @@ jobs:
           # jobs-worker entra com 3 réplicas e RBAC de leader election.
           echo "$out" | grep -q "replicas: 3"
           echo "$out" | grep -q "name: jobs-worker-leader-election"
+          # Status worker roda isolado, sem leader election (#232).
+          echo "$out" | grep -q "name: jobs-status-worker"
+          echo "$out" | grep -q "replicas: 2"
 
       - name: Render dockerhub overlay
         run: |
