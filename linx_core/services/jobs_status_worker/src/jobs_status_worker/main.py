@@ -8,13 +8,13 @@ from typing import Any
 
 import pika
 from linx_shared.db.base import SessionLocal, engine
-from linx_shared.jobs.broker import declare_topology
+from linx_shared.jobs.broker import declare_status_topology
 from linx_shared.jobs.consumer import InvalidMessageError, run_consumer
 from linx_shared.jobs.envelope import JobStatusEvent
 from pydantic import ValidationError
 from sqlalchemy import text
 
-from jobs_status_worker.config import StatusWorkerSettings
+from jobs_status_worker.config import StatusWorkerSettings, settings
 from jobs_status_worker.health import check
 from jobs_status_worker.status import StatusProcessor
 
@@ -49,7 +49,7 @@ def _wait_for_dependencies() -> None:
 def _declare_topology(url: str) -> None:
     connection = pika.BlockingConnection(pika.URLParameters(url))
     try:
-        declare_topology(connection.channel())
+        declare_status_topology(connection.channel(), settings.status_queue)
     finally:
         connection.close()
 
@@ -76,9 +76,10 @@ def build_consumer_threads(
     stop_event: threading.Event,
 ) -> list[threading.Thread]:
     callback = build_status_callback(processor)
+    queue = settings.status_queue
 
     def declare(channel: Any) -> None:
-        declare_topology(channel)
+        declare_status_topology(channel, queue)
 
     return [
         threading.Thread(

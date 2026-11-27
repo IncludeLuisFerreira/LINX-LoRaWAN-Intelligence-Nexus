@@ -16,6 +16,7 @@ spec:
       labels:
         app: jobs-status-worker
     spec:
+      automountServiceAccountToken: false
       initContainers:
         - name: wait-for-db
           image: includeluisferreira/jobs-status-worker:dev
@@ -24,17 +25,24 @@ spec:
             - python
             - -m
             - linx_shared.db.wait
-          envFrom:
-            - configMapRef:
-                name: linx-config
-            - secretRef:
-                name: linx-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: linx-secrets
+                  key: DATABASE_URL
       containers:
         - name: jobs-status-worker
           image: includeluisferreira/jobs-status-worker:dev
           imagePullPolicy: Always
-          envFrom:
-            - configMapRef:
-                name: linx-config
-            - secretRef:
-                name: linx-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: linx-secrets
+                  key: DATABASE_URL
+            - name: RABBITMQ_AMQP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: linx-secrets
+                  key: RABBITMQ_AMQP_URL

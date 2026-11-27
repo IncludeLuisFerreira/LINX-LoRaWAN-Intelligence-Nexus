@@ -84,10 +84,10 @@ def test_build_consumer_threads_uses_status_queue_and_concurrency(
         assert set(getattr(thread, "_kwargs")) == {"declare"}
 
 
-def test_consumer_threads_declare_topology_without_extra_queue(monkeypatch):
+def test_consumer_threads_declare_status_topology(monkeypatch):
     settings = _valid_settings(monkeypatch)
     declare_calls = MagicMock()
-    monkeypatch.setattr(main_module, "declare_topology", declare_calls)
+    monkeypatch.setattr(main_module, "declare_status_topology", declare_calls)
     threads = main_module.build_consumer_threads(
         settings, MagicMock(), main_module.threading.Event()
     )
@@ -95,7 +95,75 @@ def test_consumer_threads_declare_topology_without_extra_queue(monkeypatch):
 
     getattr(threads[0], "_kwargs")["declare"](channel)
 
-    declare_calls.assert_called_once_with(channel)
+    declare_calls.assert_called_once_with(channel, settings.status_queue)
+
+
+def test_consumer_threads_declare_status_topology_with_custom_queue(
+    monkeypatch,
+):
+    settings = _valid_settings(
+        monkeypatch, STATUS_QUEUE="linx.jobs.status.custom"
+    )
+    declare_calls = MagicMock()
+    monkeypatch.setattr(main_module, "declare_status_topology", declare_calls)
+    threads = main_module.build_consumer_threads(
+        settings, MagicMock(), main_module.threading.Event()
+    )
+    channel = object()
+
+    getattr(threads[0], "_kwargs")["declare"](channel)
+
+    declare_calls.assert_called_once_with(channel, "linx.jobs.status.custom")
+
+
+def test_declare_topology_uses_status_queue_and_closes(monkeypatch):
+    settings = _valid_settings(
+        monkeypatch, STATUS_QUEUE="linx.jobs.status.custom"
+    )
+    monkeypatch.setattr(main_module, "settings", settings)
+    channel = object()
+    connection = MagicMock()
+    connection.channel.return_value = channel
+    monkeypatch.setattr(
+        main_module.pika,
+        "BlockingConnection",
+        MagicMock(return_value=connection),
+    )
+    declarer = MagicMock()
+    monkeypatch.setattr(main_module, "declare_status_topology", declarer)
+
+    main_module._declare_topology(
+        "amqp://linx:real-rabbit-pass@localhost:5672/"
+    )
+
+    declarer.assert_called_once_with(channel, "linx.jobs.status.custom")
+    connection.close.assert_called_once_with()
+
+
+def test_declare_topology_closes_connection_on_declarer_error(monkeypatch):
+    monkeypatch.setattr(
+        main_module,
+        "settings",
+        SimpleNamespace(status_queue=PROVISIONING_STATUS_QUEUE),
+    )
+    connection = MagicMock()
+    monkeypatch.setattr(
+        main_module.pika,
+        "BlockingConnection",
+        MagicMock(return_value=connection),
+    )
+    monkeypatch.setattr(
+        main_module,
+        "declare_status_topology",
+        MagicMock(side_effect=RuntimeError("declare failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="declare failed"):
+        main_module._declare_topology(
+            "amqp://linx:real-rabbit-pass@localhost:5672/"
+        )
+
+    connection.close.assert_called_once_with()
 
 
 def test_wait_for_dependencies_retries_then_succeeds(monkeypatch):

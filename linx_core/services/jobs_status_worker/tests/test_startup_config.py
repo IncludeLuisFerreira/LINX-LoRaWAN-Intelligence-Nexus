@@ -23,6 +23,15 @@ def test_defaults(monkeypatch):
     assert settings.status_prefetch == 4
 
 
+def test_accepts_custom_status_queue(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("STATUS_QUEUE", "linx.jobs.status.custom")
+
+    settings = StatusWorkerSettings(_env_file=None)
+
+    assert settings.status_queue == "linx.jobs.status.custom"
+
+
 def test_does_not_require_service_token_or_provisioner_host(monkeypatch):
     _valid_env(monkeypatch)
     monkeypatch.delenv("SERVICE_TOKEN", raising=False)
