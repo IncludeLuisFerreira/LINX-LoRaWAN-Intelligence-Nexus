@@ -24,7 +24,7 @@ describe('userService', () => {
     expect(result).toEqual([{ id: 'u1' }]);
   });
 
-  it('convida usuário com POST /orgs/{orgId}/invite', async () => {
+  it('convida usuário com POST /tenant/{tenantId}/invite', async () => {
     mocked.post.mockResolvedValue({ data: { invite_token: 'token-123' } });
 
     const result = await userService.invite('org-1', {
@@ -32,7 +32,7 @@ describe('userService', () => {
       role: 'admin',
     });
 
-    expect(mocked.post).toHaveBeenCalledWith('/orgs/org-1/invite', {
+    expect(mocked.post).toHaveBeenCalledWith('/tenant/org-1/invite', {
       email: 'user@example.com',
       role: 'admin',
     });

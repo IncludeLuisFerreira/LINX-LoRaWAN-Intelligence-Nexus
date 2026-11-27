@@ -34,6 +34,15 @@ vi.mock('../../services/user', async () => {
   };
 });
 
+const auth = vi.hoisted(() => ({
+  permissions: [] as string[],
+  userId: null as string | null,
+}));
+
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => ({ permissions: auth.permissions, userId: auth.userId }),
+}));
+
 const mocked = userService as unknown as Record<
   'list' | 'invite' | 'updateRole' | 'deactivate',
   Mock
@@ -62,11 +71,14 @@ const users: UserOutput[] = [
   },
 ];
 
-function renderUsers() {
+function renderUsers(
+  path = '/tenants/org-1/users',
+  pattern = '/tenants/:tenantId/users',
+) {
   return render(
-    <MemoryRouter initialEntries={['/tenants/org-1/users']}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/tenants/:tenantId/users" element={<Users />} />
+        <Route path={pattern} element={<Users />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -75,6 +87,13 @@ function renderUsers() {
 describe('Users', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    auth.permissions = [
+      'user:read',
+      'user:create',
+      'user:update',
+      'user:delete',
+    ];
+    auth.userId = 'u1';
     mocked.list.mockResolvedValue(users);
     mocked.invite.mockResolvedValue({ invite_token: 'token-123' });
     mocked.updateRole.mockResolvedValue({ ...users[1], is_admin: true });
@@ -114,6 +133,21 @@ describe('Users', () => {
     );
   });
 
+  it('não convida sem tenant na rota', async () => {
+    const user = userEvent.setup();
+    renderUsers('/sem-tenant', '/sem-tenant');
+    await screen.findByText('admin@example.com');
+
+    await user.click(screen.getByRole('button', { name: /convidar usuário/i }));
+    await user.type(await screen.findByLabelText('E-mail'), 'new@example.com');
+    await user.click(screen.getByRole('button', { name: 'Gerar convite' }));
+
+    expect(
+      await screen.findByText('Tenant inválido para o convite.'),
+    ).toBeTruthy();
+    expect(mocked.invite).not.toHaveBeenCalled();
+  });
+
   it('altera o papel de um usuário', async () => {
     const user = userEvent.setup();
     renderUsers();
@@ -147,5 +181,116 @@ describe('Users', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Desativar' }));
 
     await waitFor(() => expect(mocked.deactivate).toHaveBeenCalledWith('u2'));
+  });
+
+  it('oculta as ações quando o usuário não tem permissões user:*', async () => {
+    auth.permissions = [];
+    renderUsers();
+
+    expect(await screen.findByText('admin@example.com')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: /convidar usuário/i }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Alterar papel de member@example.com',
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Desativar member@example.com' }),
+    ).toBeNull();
+  });
+
+  it('impede que o usuário desative a própria conta', async () => {
+    const user = userEvent.setup();
+    renderUsers();
+    await screen.findByText('admin@example.com');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Desativar admin@example.com' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Desativar' }));
+
+    expect(
+      await screen.findByText('Você não pode desativar a própria conta.'),
+    ).toBeTruthy();
+    expect(mocked.deactivate).not.toHaveBeenCalled();
+  });
+
+  it('impede que o usuário rebaixe a própria conta', async () => {
+    const user = userEvent.setup();
+    mocked.list.mockResolvedValue([
+      ...users,
+      {
+        ...users[1],
+        id: 'u3',
+        email: 'other-admin@example.com',
+        is_admin: true,
+      },
+    ]);
+    renderUsers();
+    await screen.findByText('admin@example.com');
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Alterar papel de admin@example.com',
+      }),
+    );
+    await user.selectOptions(
+      await screen.findByLabelText('Novo papel'),
+      'member',
+    );
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect(
+      await screen.findByText('Você não pode rebaixar a própria conta.'),
+    ).toBeTruthy();
+    expect(mocked.updateRole).not.toHaveBeenCalled();
+  });
+
+  it('impede rebaixar o último administrador ativo', async () => {
+    const user = userEvent.setup();
+    auth.userId = 'u2';
+    renderUsers();
+    await screen.findByText('admin@example.com');
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Alterar papel de admin@example.com',
+      }),
+    );
+    await user.selectOptions(
+      await screen.findByLabelText('Novo papel'),
+      'member',
+    );
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect(
+      await screen.findByText(
+        'Não é possível rebaixar o último administrador do tenant.',
+      ),
+    ).toBeTruthy();
+    expect(mocked.updateRole).not.toHaveBeenCalled();
+  });
+
+  it('impede desativar o último administrador ativo', async () => {
+    const user = userEvent.setup();
+    auth.userId = 'u2';
+    renderUsers();
+    await screen.findByText('admin@example.com');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Desativar admin@example.com' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Desativar' }));
+
+    expect(
+      await screen.findByText(
+        'Não é possível desativar o último administrador do tenant.',
+      ),
+    ).toBeTruthy();
+    expect(mocked.deactivate).not.toHaveBeenCalled();
   });
 });

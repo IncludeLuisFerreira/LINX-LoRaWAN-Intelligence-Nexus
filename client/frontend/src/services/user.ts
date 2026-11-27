@@ -40,9 +40,12 @@ export const userService = {
     return response.data;
   },
 
-  invite: async (orgId: string, data: InviteInput): Promise<InviteOutput> => {
+  invite: async (
+    tenantId: string,
+    data: InviteInput,
+  ): Promise<InviteOutput> => {
     const response = await api.post<InviteOutput>(
-      `/orgs/${orgId}/invite`,
+      `/tenant/${tenantId}/invite`,
       data,
     );
     return response.data;

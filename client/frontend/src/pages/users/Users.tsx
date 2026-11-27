@@ -9,6 +9,8 @@ import {
 } from '../../services/user';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { getErrorMessage } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { Can } from '../../components/Can';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
 import { Table, type Column } from '../../components/ui/Table';
@@ -30,6 +32,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 
 export default function Users() {
   const { tenantId = '' } = useParams();
+  const { userId } = useAuth();
   const { data, error, loading, reload } = useAsyncData(userService.list, []);
 
   const [inviting, setInviting] = useState(false);
@@ -44,6 +47,9 @@ export default function Users() {
   const [actionError, setActionError] = useState('');
 
   const users = data ?? [];
+  const activeAdmins = users.filter(
+    (user) => user.is_admin && user.is_active,
+  ).length;
 
   function openInvite() {
     setInviteEmail('');
@@ -61,6 +67,10 @@ export default function Users() {
 
   async function handleInvite() {
     setFormError('');
+    if (!tenantId) {
+      setFormError('Tenant inválido para o convite.');
+      return;
+    }
     setBusy(true);
     try {
       setInviteResult(
@@ -79,6 +89,14 @@ export default function Users() {
   async function handleRoleChange() {
     if (!editingRole) return;
     setFormError('');
+    if (editingRole.id === userId && editRole !== 'admin') {
+      setFormError('Você não pode rebaixar a própria conta.');
+      return;
+    }
+    if (editingRole.is_admin && editRole !== 'admin' && activeAdmins <= 1) {
+      setFormError('Não é possível rebaixar o último administrador do tenant.');
+      return;
+    }
     setBusy(true);
     try {
       await userService.updateRole(editingRole.id, editRole);
@@ -94,6 +112,16 @@ export default function Users() {
   async function handleDeactivate() {
     if (!deactivating) return;
     setActionError('');
+    if (deactivating.id === userId) {
+      setActionError('Você não pode desativar a própria conta.');
+      return;
+    }
+    if (deactivating.is_admin && activeAdmins <= 1) {
+      setActionError(
+        'Não é possível desativar o último administrador do tenant.',
+      );
+      return;
+    }
     setBusy(true);
     try {
       await userService.deactivate(deactivating.id);
@@ -137,21 +165,25 @@ export default function Users() {
       header: 'Ações',
       render: (user) => (
         <div className="flex flex-wrap gap-1">
-          <Button
-            variant="ghost"
-            aria-label={`Alterar papel de ${user.email}`}
-            onClick={() => openRoleModal(user)}
-          >
-            Alterar papel
-          </Button>
-          <Button
-            variant="ghost"
-            aria-label={`Desativar ${user.email}`}
-            disabled={!user.is_active}
-            onClick={() => setDeactivating(user)}
-          >
-            Desativar
-          </Button>
+          <Can permission="user:update">
+            <Button
+              variant="ghost"
+              aria-label={`Alterar papel de ${user.email}`}
+              onClick={() => openRoleModal(user)}
+            >
+              Alterar papel
+            </Button>
+          </Can>
+          <Can permission="user:delete">
+            <Button
+              variant="ghost"
+              aria-label={`Desativar ${user.email}`}
+              disabled={!user.is_active}
+              onClick={() => setDeactivating(user)}
+            >
+              Desativar
+            </Button>
+          </Can>
         </div>
       ),
     },
@@ -174,10 +206,12 @@ export default function Users() {
           />
         }
         actions={
-          <Button onClick={openInvite}>
-            <Plus className="h-4 w-4" />
-            Convidar usuário
-          </Button>
+          <Can permission="user:create">
+            <Button onClick={openInvite}>
+              <Plus className="h-4 w-4" />
+              Convidar usuário
+            </Button>
+          </Can>
         }
       />
 
@@ -204,10 +238,12 @@ export default function Users() {
           title="Nenhum usuário encontrado"
           description="Convide um usuário para começar a gerenciar o acesso à organização."
           action={
-            <Button onClick={openInvite}>
-              <Plus className="h-4 w-4" />
-              Convidar usuário
-            </Button>
+            <Can permission="user:create">
+              <Button onClick={openInvite}>
+                <Plus className="h-4 w-4" />
+                Convidar usuário
+              </Button>
+            </Can>
           }
         />
       )}

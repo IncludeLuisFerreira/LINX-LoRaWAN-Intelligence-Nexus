@@ -312,12 +312,12 @@ paths:
         '422':
           description: Dados inválidos
 
-  /orgs/{org_id}/invite:
+  /tenant/{tenant_id}/invite:
     parameters:
-      - $ref: '#/components/parameters/OrgId'
+      - $ref: '#/components/parameters/TenantId'
     post:
-      summary: Convidar usuário para a organização
-      operationId: inviteOrgUser
+      summary: Convidar usuário para o tenant
+      operationId: inviteTenantUser
       description: >
         Gera um token/link de convite com o papel escolhido. Contrato previsto
         para o backend (issue #80); o frontend consome este formato.
@@ -397,15 +397,6 @@ components:
       in: path
       required: true
       description: Identificador do tenant
-      schema:
-        type: string
-        format: uuid
-
-    OrgId:
-      name: org_id
-      in: path
-      required: true
-      description: Identificador da organização (tenant)
       schema:
         type: string
         format: uuid

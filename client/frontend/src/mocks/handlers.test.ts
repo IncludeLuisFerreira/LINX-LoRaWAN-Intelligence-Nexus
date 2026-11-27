@@ -202,9 +202,7 @@ describe('provisioning status handler', () => {
     const readStatus = async () =>
       (
         (await (
-          await fetch(
-            `${base}/tenant/${tenantId}/applications/${appId}/status`,
-          )
+          await fetch(`${base}/tenant/${tenantId}/applications/${appId}/status`)
         ).json()) as { status: string }
       ).status;
 

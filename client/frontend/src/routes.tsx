@@ -3,6 +3,7 @@ import { Navigate, Routes, Route } from 'react-router-dom';
 import { Spinner } from './components/ui/Spinner';
 import { AppShell } from './components/layout/AppShell';
 import { AuthGuard } from './components/AuthGuard';
+import { Can } from './components/Can';
 
 const TenantListPage = lazy(() => import('./pages/tenants/TenantListPage'));
 const TenantDetailPage = lazy(() => import('./pages/tenants/TenantDetailPage'));
@@ -45,7 +46,14 @@ export function AppRoutes() {
           {/* Alias do critério de aceite do login: /orgs é a rota real de tenants */}
           <Route path="/orgs" element={<Navigate to="/tenants" replace />} />
           <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
-          <Route path="/tenants/:tenantId/users" element={<Users />} />
+          <Route
+            path="/tenants/:tenantId/users"
+            element={
+              <Can permission="user:read">
+                <Users />
+              </Can>
+            }
+          />
           <Route
             path="/tenants/:tenantId/applications/:appId"
             element={<ApplicationDetailPage />}
