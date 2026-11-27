@@ -83,7 +83,7 @@ class _FakeRabbit:
 @pytest.fixture
 def fake_rabbit(monkeypatch):
     fake = _FakeRabbit()
-    monkeypatch.setattr(publisher_module, "rabbitpy", fake)
+    monkeypatch.setattr(publisher_module, "amqp", fake)
     return fake
 
 

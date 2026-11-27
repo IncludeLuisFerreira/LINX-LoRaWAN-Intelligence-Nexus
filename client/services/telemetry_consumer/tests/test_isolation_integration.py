@@ -22,7 +22,8 @@ import urllib.request
 import uuid
 
 import pytest
-import rabbitpy
+
+from telemetry_consumer import pika_compat as amqp
 
 AMQP_HOST = os.environ.get("RABBITMQ_ISOLATION_AMQP_HOST")
 MANAGEMENT = os.environ.get("RABBITMQ_ISOLATION_MANAGEMENT")
@@ -115,9 +116,9 @@ def _admin_channel(connection):
 
 def test_tenant_cannot_declare_other_tenant_exchange(two_apps):
     app_a, app_b = two_apps
-    connection = rabbitpy.Connection(_tenant_url(app_b))
+    connection = amqp.Connection(_tenant_url(app_b))
     channel = connection.channel()
-    exchange = rabbitpy.Exchange(
+    exchange = amqp.Exchange(
         channel, f"linx.telemetry.{app_a}", exchange_type="topic", durable=True
     )
     with pytest.raises(Exception):
@@ -126,9 +127,9 @@ def test_tenant_cannot_declare_other_tenant_exchange(two_apps):
 
 
 def test_tenant_cannot_read_audit_queue(two_apps):
-    connection = rabbitpy.Connection(_tenant_url(two_apps[0]))
+    connection = amqp.Connection(_tenant_url(two_apps[0]))
     channel = connection.channel()
-    queue = rabbitpy.Queue(
+    queue = amqp.Queue(
         channel, "linx.telemetry.audit", durable=True, auto_delete=False
     )
     with pytest.raises(Exception):
@@ -140,25 +141,25 @@ def test_tenant_b_cannot_access_tenant_a_queue(two_apps):
     """Isola o cenário crítico: A publica na própria fila; B não a alcança."""
     app_a, app_b = two_apps
 
-    conn_a = rabbitpy.Connection(_tenant_url(app_a))
+    conn_a = amqp.Connection(_tenant_url(app_a))
     ch_a = conn_a.channel()
     ch_a.enable_publisher_confirms()
-    exchange = rabbitpy.Exchange(
+    exchange = amqp.Exchange(
         ch_a, f"linx.telemetry.{app_a}", exchange_type="topic", durable=True
     )
     exchange.declare()
-    queue = rabbitpy.Queue(
+    queue = amqp.Queue(
         ch_a, f"linx.telemetry.{app_a}", durable=True, auto_delete=False
     )
     queue.declare()
     queue.bind(exchange, routing_key=f"application.{app_a}.#")
-    message = rabbitpy.Message(ch_a, json.dumps({"app_id": app_a}).encode())
+    message = amqp.Message(ch_a, json.dumps({"app_id": app_a}).encode())
     assert message.publish(exchange, f"application.{app_a}.device.dev1.up")
     conn_a.close()
 
-    conn_b = rabbitpy.Connection(_tenant_url(app_b))
+    conn_b = amqp.Connection(_tenant_url(app_b))
     ch_b = conn_b.channel()
-    foreign_queue = rabbitpy.Queue(
+    foreign_queue = amqp.Queue(
         ch_b, f"linx.telemetry.{app_a}", durable=True, auto_delete=False
     )
     with pytest.raises(Exception):
@@ -168,36 +169,36 @@ def test_tenant_b_cannot_access_tenant_a_queue(two_apps):
 
 def test_tenant_publishes_and_consumes_own_namespace(two_apps):
     app_a, _ = two_apps
-    connection = rabbitpy.Connection(_tenant_url(app_a))
+    connection = amqp.Connection(_tenant_url(app_a))
     channel = connection.channel()
     channel.enable_publisher_confirms()
-    exchange = rabbitpy.Exchange(
+    exchange = amqp.Exchange(
         channel, f"linx.telemetry.{app_a}", exchange_type="topic", durable=True
     )
     exchange.declare()
-    queue = rabbitpy.Queue(
+    queue = amqp.Queue(
         channel, f"linx.telemetry.{app_a}", durable=True, auto_delete=False
     )
     queue.declare()
     queue.bind(exchange, routing_key=f"application.{app_a}.#")
-    message = rabbitpy.Message(channel, json.dumps({"app_id": app_a}).encode())
+    message = amqp.Message(channel, json.dumps({"app_id": app_a}).encode())
     assert message.publish(exchange, f"application.{app_a}.device.dev1.up")
     connection.close()
 
 
 def test_tenant_dead_letters_via_named_dlx(two_apps):
     app_a, _ = two_apps
-    connection = rabbitpy.Connection(_tenant_url(app_a))
+    connection = amqp.Connection(_tenant_url(app_a))
     channel = connection.channel()
     channel.enable_publisher_confirms()
-    dlx = rabbitpy.Exchange(
+    dlx = amqp.Exchange(
         channel,
         f"linx.telemetry.{app_a}.dlx",
         exchange_type="direct",
         durable=True,
     )
     dlx.declare()
-    dlq = rabbitpy.Queue(
+    dlq = amqp.Queue(
         channel,
         f"linx.telemetry.{app_a}.dlq",
         durable=True,
@@ -205,7 +206,7 @@ def test_tenant_dead_letters_via_named_dlx(two_apps):
     )
     dlq.declare()
     dlq.bind(dlx, routing_key=f"linx.telemetry.{app_a}.dlq")
-    message = rabbitpy.Message(channel, b"dead-letter-body")
+    message = amqp.Message(channel, b"dead-letter-body")
     assert message.publish(dlx, f"linx.telemetry.{app_a}.dlq")
     received = next(iter(dlq.consume(no_ack=True)), None)
     assert received is not None
@@ -218,10 +219,10 @@ def test_tenant_cannot_publish_via_default_exchange(two_apps):
     # tenant. Prova que o caminho antigo da DLQ (exchange "") quebra por
     # permissao e motivou a DLX nomeada do tenant.
     app_b, _ = two_apps
-    connection = rabbitpy.Connection(_tenant_url(app_b))
+    connection = amqp.Connection(_tenant_url(app_b))
     channel = connection.channel()
     channel.enable_publisher_confirms()
-    message = rabbitpy.Message(channel, b"x")
+    message = amqp.Message(channel, b"x")
     with pytest.raises(Exception):
         message.publish("", f"linx.telemetry.{app_b}.dlq")
     connection.close()

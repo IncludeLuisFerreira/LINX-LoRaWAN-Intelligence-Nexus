@@ -38,6 +38,8 @@ class FakeConsumer:
             "rabbitmq_connected": self.connected,
             "processed": 2,
             "failed": 0,
+            "dead_lettered": 1,
+            "reconnects": 1,
             "last_processed_at": "2026-10-08T12:00:00Z",
             "last_error": None,
         }
@@ -97,6 +99,8 @@ def test_health_reports_consumer_state():
     assert body["rabbitmq_connected"] == body["mqtt"]
     assert body["processed"] == 2
     assert body["failed"] == 0
+    assert body["dead_lettered"] == 1
+    assert body["reconnects"] == 1
     assert body["last_processed_at"] == "2026-10-08T12:00:00Z"
     assert body["ws_connections"] == 0
 

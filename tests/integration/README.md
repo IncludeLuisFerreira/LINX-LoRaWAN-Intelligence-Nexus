@@ -7,7 +7,7 @@ Cada **tipo** de teste de integração vive em sua própria subpasta, com o
 
 ```
 tests/integration/
-├── pyproject.toml      # dependências compartilhadas (pytest, rabbitpy, ...)
+├── pyproject.toml      # dependências compartilhadas (pytest, pika, ...)
 ├── poetry.lock
 ├── run.sh              # wrapper: instala deps e roda o pytest
 ├── README.md

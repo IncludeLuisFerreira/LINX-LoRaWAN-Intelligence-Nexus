@@ -10,8 +10,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
-import rabbitpy
-
+from telemetry_consumer import pika_compat as amqp
 from telemetry_consumer.config import ConsumerSettings
 
 logger = logging.getLogger(__name__)
@@ -64,6 +63,8 @@ class RabbitConsumer:
         self._state_lock = threading.Lock()
         self._processed = 0
         self._failed = 0
+        self._dead_lettered = 0
+        self._reconnects = 0
         self._last_processed_at: str | None = None
         self._last_error: str | None = None
 
@@ -73,6 +74,8 @@ class RabbitConsumer:
                 "rabbitmq_connected": self._is_connected(),
                 "processed": self._processed,
                 "failed": self._failed,
+                "dead_lettered": self._dead_lettered,
+                "reconnects": self._reconnects,
                 "last_processed_at": self._last_processed_at,
                 "last_error": self._last_error,
             }
@@ -100,16 +103,16 @@ class RabbitConsumer:
             self._thread.join(timeout=5)
 
     def _open(self) -> None:
-        self._connection = rabbitpy.Connection(self._settings.rabbit_url)
+        self._connection = amqp.Connection(self._settings.rabbit_url)
         self._channel = self._connection.channel()
-        self._exchange = rabbitpy.Exchange(
+        self._exchange = amqp.Exchange(
             self._channel,
             self._settings.rabbit_exchange,
             exchange_type="topic",
             durable=True,
         )
         self._exchange.declare()
-        self._queue = rabbitpy.Queue(
+        self._queue = amqp.Queue(
             self._channel,
             self._settings.queue_name,
             durable=True,
@@ -119,14 +122,14 @@ class RabbitConsumer:
         self._queue.bind(
             self._exchange, routing_key=self._settings.binding_key
         )
-        self._dlx = rabbitpy.Exchange(
+        self._dlx = amqp.Exchange(
             self._channel,
             self._settings.dead_letter_exchange_name,
             exchange_type="direct",
             durable=True,
         )
         self._dlx.declare()
-        self._dlq = rabbitpy.Queue(
+        self._dlq = amqp.Queue(
             self._channel,
             self._settings.dead_letter_queue_name,
             durable=True,
@@ -209,6 +212,7 @@ class RabbitConsumer:
                 if not self._is_connected():
                     self.close()
                     if not self.connect():
+                        self._record_reconnect("falha ao conectar")
                         continue
                 if self._queue is None:
                     continue
@@ -220,11 +224,11 @@ class RabbitConsumer:
                         break
                     self._handle_message(message)
             except Exception as exc:  # noqa: BLE001
-                logger.warning("conexão com RabbitMQ perdida: %s", exc)
-                self._set_error(str(exc))
-                self.close()
                 if self._stop_event.is_set():
                     break
+                logger.warning("conexão com RabbitMQ perdida: %s", exc)
+                self._record_reconnect(str(exc))
+                self.close()
                 self._stop_event.wait(
                     self._settings.rabbit_connect_backoff_seconds
                 )
@@ -235,7 +239,7 @@ class RabbitConsumer:
         if envelope is None:
             logger.warning("payload inválido; enviando para a DLQ")
             if self._dead_letter(raw_body, "payload inválido"):
-                self._record_failure("payload inválido")
+                self._record_dead_letter("payload inválido")
                 message.ack()
             return
         try:
@@ -243,7 +247,7 @@ class RabbitConsumer:
         except Exception as exc:  # noqa: BLE001
             logger.error("processamento esgotou retries: %s", exc)
             if self._dead_letter(raw_body, str(exc)):
-                self._record_failure(str(exc))
+                self._record_dead_letter(str(exc))
                 message.ack()
             return
         self._record_processed()
@@ -320,7 +324,7 @@ class RabbitConsumer:
             if hasattr(channel, "basic_publish"):
                 result = channel.basic_publish(raw_body, dlx, routing_key)
             else:
-                message = rabbitpy.Message(
+                message = amqp.Message(
                     channel,
                     raw_body,
                     properties={
@@ -345,9 +349,15 @@ class RabbitConsumer:
             self._last_processed_at = datetime.now(timezone.utc).isoformat()
             self._last_error = None
 
-    def _record_failure(self, reason: str) -> None:
+    def _record_dead_letter(self, reason: str) -> None:
         with self._state_lock:
             self._failed += 1
+            self._dead_lettered += 1
+            self._last_error = reason
+
+    def _record_reconnect(self, reason: str) -> None:
+        with self._state_lock:
+            self._reconnects += 1
             self._last_error = reason
 
     def _set_error(self, reason: str) -> None:

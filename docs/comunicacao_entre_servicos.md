@@ -33,7 +33,7 @@ Quatro protocolos sustentam a comunicação:
 | `agent_bridge`    | gRPC (`grpcio`)       | `50051`         | **Servidor** do contrato `AgentBridge` — responde `GetAppConfig`.                   |
 | `docker_provisioner` | gRPC (`grpcio`)    | `50052` (interna) | **Servidor** do contrato `DockerProvisioner` — cria/reaproveita containers por aplicação. Único com acesso ao socket Docker. |
 | `client_agent`    | FastAPI               | `8001`          | Agente por tenant: cliente gRPC (`GetAppConfig`) e `GET /health`.                  |
-| `routing`         | Python (paho-mqtt + rabbitpy) | —        | Ingestão: consome uplinks MQTT, valida e publica envelopes no RabbitMQ.            |
+| `routing`         | Python (paho-mqtt + pika) | —        | Ingestão: consome uplinks MQTT, valida e publica envelopes no RabbitMQ.            |
 | `rabbitmq`        | RabbitMQ 3 (AMQP)     | `5672`/`15672`  | Exchange `topic` durável por tenant `linx.telemetry.{app_id}`; usuário e permissões isoladas por aplicação. |
 | `telemetry_consumer` | FastAPI            | `8000` (interna, não publicada) | Ambiente isolado por aplicação: consome a fila `linx.telemetry.{app_id}` com credencial do tenant, persiste no TimescaleDB e serve `GET /telemetry`/WebSocket. Acessível apenas pela rede do Compose. |
 | `db`              | PostgreSQL 15         | `5432` (interna) | Banco do plano de controle (tenants/applications).                                 |
