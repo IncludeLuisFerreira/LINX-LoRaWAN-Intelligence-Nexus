@@ -296,9 +296,12 @@ describe('Users', () => {
 
   it('exibe erro da API dentro do diálogo de desativação', async () => {
     const user = userEvent.setup();
-    mocked.deactivate.mockRejectedValue({
-      response: { status: 500, data: { detail: 'Erro interno.' } },
-    });
+    mocked.deactivate.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 500'), {
+        isAxiosError: true,
+        response: { status: 500, data: { detail: 'Erro interno.' } },
+      }),
+    );
     renderUsers();
     await screen.findByText('member@example.com');
 
