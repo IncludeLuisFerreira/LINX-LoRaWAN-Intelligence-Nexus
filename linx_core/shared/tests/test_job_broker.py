@@ -6,6 +6,7 @@ import pytest
 from linx_shared.jobs import broker
 from linx_shared.jobs.broker import (
     RabbitMQPublisher,
+    declare_status_topology,
     declare_topology,
 )
 from linx_shared.jobs.constants import (
@@ -97,6 +98,52 @@ def test_declare_topology_declares_exchanges_queues_and_bindings():
             "provisioning.application.#",
         ),
     }
+
+
+def _assert_only_status_topology(channel, queue):
+    assert [item["exchange"] for item in channel.exchanges] == [
+        JOB_EVENTS_EXCHANGE
+    ]
+    assert channel.exchanges[0]["exchange_type"] == "topic"
+    assert channel.exchanges[0]["durable"] is True
+
+    assert [item["queue"] for item in channel.queues] == [queue]
+    assert channel.queues[0]["durable"] is True
+    assert not any(
+        key.startswith("x-dead-letter-")
+        for key in channel.queues[0].get("arguments", {})
+    )
+
+    assert [
+        (
+            item["queue"],
+            item["exchange"],
+            item["routing_key"],
+        )
+        for item in channel.bindings
+    ] == [
+        (
+            queue,
+            JOB_EVENTS_EXCHANGE,
+            "provisioning.application.#",
+        )
+    ]
+
+
+def test_declare_status_topology_declares_only_status_queue():
+    channel = FakeChannel()
+
+    declare_status_topology(channel)
+
+    _assert_only_status_topology(channel, PROVISIONING_STATUS_QUEUE)
+
+
+def test_declare_status_topology_uses_custom_queue():
+    channel = FakeChannel()
+
+    declare_status_topology(channel, "linx.jobs.status.custom")
+
+    _assert_only_status_topology(channel, "linx.jobs.status.custom")
 
 
 def test_declare_topology_configures_main_queue_dlx():
