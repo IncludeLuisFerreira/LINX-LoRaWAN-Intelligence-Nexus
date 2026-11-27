@@ -642,8 +642,12 @@ def _wait_for_dependencies() -> None:
     # "dependencies did not become ready".
 
 
-def _declare_topology(url: str, queue: str) -> None:
-    # BlockingConnection + declare_topology(channel, queue), fechando sempre
+def _declare_topology(url: str) -> None:
+    # BlockingConnection + declare_topology(channel) com o argumento default
+    # (PROVISIONING_QUEUE): a própria função já declara e vincula
+    # PROVISIONING_STATUS_QUEUE à JOB_EVENTS_EXCHANGE. Passar status_queue aqui
+    # redeclararia a mesma fila com argumentos conflitantes (406) e a
+    # vincularia à exchange errada. Fechar sempre.
 
 
 def _parse_status_event(body: bytes) -> JobStatusEvent:
@@ -667,8 +671,8 @@ def build_consumer_threads(
     #       stop_event),
     # kwargs={"declare": declare},
     # name=f"status-consumer-{index}", daemon=True)
-    # onde declare(channel) chama declare_topology(channel,
-    # settings.status_queue)
+    # onde declare(channel) chama declare_topology(channel) — sem passar
+    # status_queue (a função já declara/vincula a fila de status).
 
 
 def main() -> None:
