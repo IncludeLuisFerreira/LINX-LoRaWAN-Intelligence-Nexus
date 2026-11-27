@@ -20,6 +20,9 @@ async def lifespan(app: FastAPI):
         server=settings.saas_grpc_host,
         timeout=settings.grpc_timeout_seconds,
         cache_ttl_seconds=settings.config_cache_ttl_seconds,
+        ca_cert_path=settings.grpc_ca_cert_path,
+        client_cert_path=settings.grpc_client_cert_path,
+        client_key_path=settings.grpc_client_key_path,
     )
     connected = await asyncio.to_thread(client.check_connectivity)
     if connected:

@@ -466,9 +466,14 @@ Resposta esperada (`200`):
 | `PROVISION_NETWORK_PREFIX` | Prefixo da rede Docker por aplicação.                      | `linx-app`                      |
 | `PROVISION_CONTAINER_PORT` | Porta interna do container do tenant.                      | `8000`                          |
 
-> **Atenção (P0):** o gRPC ainda não tem autenticação e `GetAppConfig` devolve
-> usuário/senha do Postgres. Restrinja a porta `50051` no Security Group ao IP
-> do Client Agent até o mTLS (Sprint 5). Nunca exponha a `0.0.0.0/0`.
+> **Segurança (mTLS, #82):** o gRPC entre `client_agent` e `agent_bridge` exige
+> certificado de cliente assinado pela CA configurada em `GRPC_CA_CERT_PATH`
+> (`require_client_auth=True`). Gere os arquivos com
+> `bash scripts/gen-grpc-certs.sh` e configure também
+> `GRPC_CERT_CHAIN_PATH` e `GRPC_PRIVATE_KEY_PATH` no servidor. `GetAppConfig`
+> devolve usuário/senha do Postgres: mantenha a porta `50051` restrita no
+> Security Group ao IP do Client Agent (defesa em profundidade) — nunca
+> `0.0.0.0/0`.
 
 ### Runbook — EC2 `t3.small`
 

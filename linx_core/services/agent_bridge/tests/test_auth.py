@@ -248,7 +248,58 @@ def test_report_violation_over_grpc_without_token_is_unauthenticated(
 # --- TLS: create_server escolhe credenciais conforme config ---
 
 
-def test_create_server_uses_secure_port_when_certs_present(monkeypatch):
+def test_create_server_uses_secure_port_when_certs_present(
+    monkeypatch, tmp_path
+):
+    from unittest.mock import MagicMock
+
+    cert = tmp_path / "server.crt"
+    key = tmp_path / "server.key"
+    ca = tmp_path / "ca.crt"
+    cert.write_bytes(b"cert")
+    key.write_bytes(b"key")
+    ca.write_bytes(b"ca")
+    captured = {}
+
+    fake_server = MagicMock()
+    fake_server.add_secure_port.return_value = 1
+    monkeypatch.setattr(
+        "agent_bridge.server.grpc.server",
+        lambda *args, **kwargs: fake_server,
+    )
+    monkeypatch.setattr(
+        "agent_bridge.server.linx_agent_pb2_grpc"
+        ".add_AgentBridgeServicer_to_server",
+        lambda *args, **kwargs: None,
+    )
+
+    def fake_credentials(
+        chain, root_certificates=None, require_client_auth=False
+    ):
+        captured["chain"] = chain
+        captured["root_certificates"] = root_certificates
+        captured["require_client_auth"] = require_client_auth
+        return object()
+
+    monkeypatch.setattr(
+        "agent_bridge.server.grpc.ssl_server_credentials", fake_credentials
+    )
+    monkeypatch.setattr(settings, "grpc_host", "127.0.0.1")
+    monkeypatch.setattr(settings, "grpc_port", 50051)
+    monkeypatch.setattr(settings, "grpc_cert_chain_path", str(cert))
+    monkeypatch.setattr(settings, "grpc_private_key_path", str(key))
+    monkeypatch.setattr(settings, "grpc_ca_cert_path", str(ca))
+
+    create_server()
+
+    fake_server.add_secure_port.assert_called_once()
+    fake_server.add_insecure_port.assert_not_called()
+    assert captured["chain"] == [(b"key", b"cert")]
+    assert captured["root_certificates"] == b"ca"
+    assert captured["require_client_auth"] is True
+
+
+def test_create_server_rejects_partial_tls_config(monkeypatch, tmp_path):
     from unittest.mock import MagicMock
 
     fake_server = MagicMock()
@@ -262,19 +313,20 @@ def test_create_server_uses_secure_port_when_certs_present(monkeypatch):
         ".add_AgentBridgeServicer_to_server",
         lambda *args, **kwargs: None,
     )
-    monkeypatch.setattr(
-        "agent_bridge.server.grpc.ssl_server_credentials",
-        lambda *args, **kwargs: object(),
-    )
     monkeypatch.setattr(settings, "grpc_host", "127.0.0.1")
     monkeypatch.setattr(settings, "grpc_port", 50051)
-    monkeypatch.setattr(settings, "grpc_cert_chain_path", "/certs/s.crt")
-    monkeypatch.setattr(settings, "grpc_private_key_path", "/certs/s.key")
+    monkeypatch.setattr(
+        settings, "grpc_cert_chain_path", str(tmp_path / "server.crt")
+    )
+    monkeypatch.setattr(
+        settings, "grpc_private_key_path", str(tmp_path / "server.key")
+    )
     monkeypatch.setattr(settings, "grpc_ca_cert_path", "")
 
-    create_server()
+    with pytest.raises(RuntimeError, match="GRPC_CA_CERT_PATH"):
+        create_server()
 
-    fake_server.add_secure_port.assert_called_once()
+    fake_server.add_secure_port.assert_not_called()
     fake_server.add_insecure_port.assert_not_called()
 
 

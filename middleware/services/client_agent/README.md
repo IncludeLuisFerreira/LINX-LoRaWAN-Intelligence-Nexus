@@ -206,3 +206,21 @@ docker run --rm -p 8001:8001 --env-file middleware/services/client_agent/.env cl
 Em produção use o compose unificado `deploy/docker-compose.yml` (serviço
 `client_agent`), com o `SAAS_GRPC_HOST` apontando para o endereço acessível do
 Linx Core.
+
+### mTLS no canal gRPC (#82)
+
+O cliente apresenta certificado ao `agent_bridge` e valida o servidor pela CA:
+
+```bash
+bash scripts/gen-grpc-certs.sh
+# Gera certs/grpc/{ca,server,client}. O .env.example aponta para esses caminhos.
+SAAS_GRPC_HOST=agent_bridge:50051
+GRPC_CA_CERT_PATH=../../../certs/grpc/ca/ca.crt
+GRPC_CLIENT_CERT_PATH=../../../certs/grpc/client/client.crt
+GRPC_CLIENT_KEY_PATH=../../../certs/grpc/client/client.key
+```
+
+Os três caminhos devem ser configurados juntos. Com nenhum deles o canal cai
+para `insecure_channel` (apenas dev); com apenas parte deles o startup falha.
+O log do `agent_bridge` registra `Handshake mTLS confirmado: peer=linx-client-agent`
+a cada chamada autenticada.

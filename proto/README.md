@@ -30,8 +30,12 @@ A geração dos stubs Python é feita na issue #20.
 > O RPC `IngestTelemetry` cobre o caminho de roteamento do SaaS (Sprint 3), a
 > confirmar na implementação.
 
-> **Segurança:** `AppConfig.db_password` trafega em texto plano no gRPC. O
-> canal deve usar TLS/mTLS (Sprint 5) antes de qualquer deploy fora de dev.
+> **Segurança:** `AppConfig.db_password` trafega em texto plano no gRPC, por
+> isso o canal `client_agent ↔ agent_bridge` usa mTLS obrigatório (#82): CA
+> compartilhada, certificado do servidor e certificado do cliente validados no
+> handshake. Configuração em `linx_core/.env.example` e
+> `middleware/services/client_agent/.env.example`; geração em
+> `scripts/gen-grpc-certs.sh`.
 
 ## Mensagens
 

@@ -245,12 +245,38 @@ INFO agent.main Linx Core acessível em agent_bridge:50051
 Em todos os casos o serviço **não** deixa de subir — a configuração vinda por env é
 mantida como fallback.
 
-### 4.6 Segurança
+### 4.6 Segurança — mTLS obrigatório (#82)
 
-O canal gRPC é **inseguro** (`grpc.insecure_channel`) e o `AppConfig` trafega
-`db_password` em texto plano. O endpoint `50051` do `agent_bridge` deve ser restrito no
-Security Group ao IP do `client_agent` — **nunca** `0.0.0.0/0`. TLS/mTLS
-entre os serviços ainda não está implementado.
+O canal `client_agent → agent_bridge` usa **mTLS**: as duas pontas apresentam
+certificado assinado pela mesma CA. O servidor chama
+`grpc.ssl_server_credentials(..., root_certificates=ca, require_client_auth=True)` e
+o cliente `grpc.ssl_channel_credentials(root_certificates=ca,
+certificate_chain=client.crt, private_key=client.key)`. Um cliente sem
+certificado válido é rejeitado no handshake — antes mesmo da validação do
+`AGENT_SERVICE_TOKEN`, que continua como segunda camada.
+
+Os certificados são gerados por `scripts/gen-grpc-certs.sh` e ficam em
+`certs/grpc/` (ignorados pelo Git). A chave da CA (`certs/grpc/ca/ca.key`) fica
+no host e **nunca** é montada em container — apenas a CA pública e o par de cada
+ponta são distribuídos. Configure os cinco caminhos apontando para `certs/grpc/`;
+configuração parcial aborta o startup.
+
+```bash
+bash scripts/gen-grpc-certs.sh   # gera CA + certificado do servidor + par cliente
+# Dev local: configure linx_core/.env e o client_agent; a cada chamada
+# autenticada o servidor emite:
+#   Handshake mTLS confirmado: peer=linx-client-agent transport=ssl
+```
+
+Sem nenhum caminho de certificado configurado o canal volta a `insecure_channel`
+(com warning no log) — comportamento restrito a desenvolvimento local.
+Mesmo com mTLS, a porta `50051` não é publicada no host e o Security Group deve
+continuar restrito ao IP do `client_agent` — **nunca** `0.0.0.0/0`.
+
+> **Pendência:** a montagem dos certificados em container/Kubernetes
+> (`infra/kubernetes/base/agent-bridge.yaml`, que ainda não tem contraparte
+> `client_agent`) fica como follow-up; o `deploy/docker-compose.yml` legado foi
+> removido no #300.
 
 ---
 
@@ -439,6 +465,11 @@ os `.env` dos stacks `linx_core`, `client` e `infra`):
 | :----------------------- | :------------------------- | :----------------------------------------- | :--------------------------------------------------------------- |
 | `SAAS_GRPC_HOST`         | `client_agent`             | `agent_bridge:50051`                       | Endereço do servidor gRPC do SaaS.                               |
 | `GRPC_PORT`              | `agent_bridge`             | `50051`                                    | Porta de bind do servidor gRPC.                                  |
+| `GRPC_CA_CERT_PATH`      | `agent_bridge`, `client_agent` | `../certs/grpc/ca/ca.crt` (core) / `../../../certs/grpc/ca/ca.crt` (client_agent) | CA pública que assina os certificados mTLS.                      |
+| `GRPC_CERT_CHAIN_PATH`   | `agent_bridge`             | `../certs/grpc/server/server.crt`          | Certificado do servidor gRPC.                                    |
+| `GRPC_PRIVATE_KEY_PATH`  | `agent_bridge`             | `../certs/grpc/server/server.key`          | Chave privada do servidor gRPC.                                  |
+| `GRPC_CLIENT_CERT_PATH`  | `client_agent`             | `../../../certs/grpc/client/client.crt`    | Certificado do cliente gRPC.                                     |
+| `GRPC_CLIENT_KEY_PATH`   | `client_agent`             | `../../../certs/grpc/client/client.key`    | Chave privada do cliente gRPC.                                   |
 | `GRPC_TIMEOUT_SECONDS`   | `client_agent`             | `5`                                        | Timeout das chamadas gRPC.                                       |
 | `CONFIG_CACHE_TTL_SECONDS` | `client_agent`           | `60`                                       | TTL do cache de `GetAppConfig`.                                  |
 | `MQTT_BROKER_HOST`       | `routing`                  | `mosquitto`                                | Host do broker MQTT (ChirpStack).                                |
@@ -483,9 +514,12 @@ make up-base
 make up-core
 docker compose -f linx_core/docker-compose.yml ps   # serviços do plano de controle "Up"
 
-# 2. Prova do gRPC: conectividade do agent_bridge
+# 2. Prova do gRPC mTLS: handshake com certificado do cliente
 docker compose -f linx_core/docker-compose.yml logs agent_bridge \
   | grep -i "grpc"
+docker compose -f linx_core/docker-compose.yml logs agent_bridge \
+  | grep "Handshake mTLS confirmado"
+# Sem certificado válido, o handshake é recusado (UNAVAILABLE no cliente).
 
 # 3. Prova do REST: criar um tenant no banco do plano de controle
 curl -i -X POST localhost:8000/api/v1/tenant/ \
