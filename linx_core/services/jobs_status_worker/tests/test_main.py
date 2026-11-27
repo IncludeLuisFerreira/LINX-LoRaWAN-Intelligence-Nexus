@@ -117,10 +117,6 @@ def test_consumer_threads_declare_status_topology_with_custom_queue(
 
 
 def test_declare_topology_uses_status_queue_and_closes(monkeypatch):
-    settings = _valid_settings(
-        monkeypatch, STATUS_QUEUE="linx.jobs.status.custom"
-    )
-    monkeypatch.setattr(main_module, "settings", settings)
     channel = object()
     connection = MagicMock()
     connection.channel.return_value = channel
@@ -133,7 +129,8 @@ def test_declare_topology_uses_status_queue_and_closes(monkeypatch):
     monkeypatch.setattr(main_module, "declare_status_topology", declarer)
 
     main_module._declare_topology(
-        "amqp://linx:real-rabbit-pass@localhost:5672/"
+        "amqp://linx:real-rabbit-pass@localhost:5672/",
+        "linx.jobs.status.custom",
     )
 
     declarer.assert_called_once_with(channel, "linx.jobs.status.custom")
@@ -141,28 +138,24 @@ def test_declare_topology_uses_status_queue_and_closes(monkeypatch):
 
 
 def test_declare_topology_closes_connection_on_declarer_error(monkeypatch):
-    monkeypatch.setattr(
-        main_module,
-        "settings",
-        SimpleNamespace(status_queue=PROVISIONING_STATUS_QUEUE),
-    )
+    channel = object()
     connection = MagicMock()
+    connection.channel.return_value = channel
     monkeypatch.setattr(
         main_module.pika,
         "BlockingConnection",
         MagicMock(return_value=connection),
     )
-    monkeypatch.setattr(
-        main_module,
-        "declare_status_topology",
-        MagicMock(side_effect=RuntimeError("declare failed")),
-    )
+    declarer = MagicMock(side_effect=RuntimeError("declare failed"))
+    monkeypatch.setattr(main_module, "declare_status_topology", declarer)
 
     with pytest.raises(RuntimeError, match="declare failed"):
         main_module._declare_topology(
-            "amqp://linx:real-rabbit-pass@localhost:5672/"
+            "amqp://linx:real-rabbit-pass@localhost:5672/",
+            "linx.jobs.status.custom",
         )
 
+    declarer.assert_called_once_with(channel, "linx.jobs.status.custom")
     connection.close.assert_called_once_with()
 
 
@@ -241,7 +234,10 @@ def test_main_starts_threads_and_stops(monkeypatch):
     assert created[0].started is True
     assert created[0].joined is True
     wait_for_dependencies.assert_called_once_with()
-    declare_topology.assert_called_once_with(settings.rabbitmq_amqp_url)
+    declare_topology.assert_called_once_with(
+        settings.rabbitmq_amqp_url,
+        settings.status_queue,
+    )
     signalled = {call.args[0] for call in signal_handler.call_args_list}
     assert signalled == {
         main_module.signal.SIGTERM,

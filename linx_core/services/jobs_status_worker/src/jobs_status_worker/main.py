@@ -14,7 +14,7 @@ from linx_shared.jobs.envelope import JobStatusEvent
 from pydantic import ValidationError
 from sqlalchemy import text
 
-from jobs_status_worker.config import StatusWorkerSettings, settings
+from jobs_status_worker.config import StatusWorkerSettings
 from jobs_status_worker.health import check
 from jobs_status_worker.status import StatusProcessor
 
@@ -46,10 +46,10 @@ def _wait_for_dependencies() -> None:
     raise RuntimeError("dependencies did not become ready") from last_error
 
 
-def _declare_topology(url: str) -> None:
+def _declare_topology(url: str, queue: str) -> None:
     connection = pika.BlockingConnection(pika.URLParameters(url))
     try:
-        declare_status_topology(connection.channel(), settings.status_queue)
+        declare_status_topology(connection.channel(), queue)
     finally:
         connection.close()
 
@@ -107,7 +107,10 @@ def main() -> None:
     settings = StatusWorkerSettings()
     processor = StatusProcessor(SessionLocal)
     _wait_for_dependencies()
-    _declare_topology(settings.rabbitmq_amqp_url)
+    _declare_topology(
+        settings.rabbitmq_amqp_url,
+        settings.status_queue,
+    )
 
     stop_event = threading.Event()
     threads = build_consumer_threads(settings, processor, stop_event)
