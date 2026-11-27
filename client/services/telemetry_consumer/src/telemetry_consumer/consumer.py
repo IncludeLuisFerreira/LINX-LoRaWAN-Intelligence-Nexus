@@ -63,6 +63,8 @@ class RabbitConsumer:
         self._state_lock = threading.Lock()
         self._processed = 0
         self._failed = 0
+        self._dead_lettered = 0
+        self._reconnects = 0
         self._last_processed_at: str | None = None
         self._last_error: str | None = None
 
@@ -72,6 +74,8 @@ class RabbitConsumer:
                 "rabbitmq_connected": self._is_connected(),
                 "processed": self._processed,
                 "failed": self._failed,
+                "dead_lettered": self._dead_lettered,
+                "reconnects": self._reconnects,
                 "last_processed_at": self._last_processed_at,
                 "last_error": self._last_error,
             }
@@ -220,7 +224,7 @@ class RabbitConsumer:
                     self._handle_message(message)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("conexão com RabbitMQ perdida: %s", exc)
-                self._set_error(str(exc))
+                self._record_reconnect(str(exc))
                 self.close()
                 if self._stop_event.is_set():
                     break
@@ -234,7 +238,7 @@ class RabbitConsumer:
         if envelope is None:
             logger.warning("payload inválido; enviando para a DLQ")
             if self._dead_letter(raw_body, "payload inválido"):
-                self._record_failure("payload inválido")
+                self._record_dead_letter("payload inválido")
                 message.ack()
             return
         try:
@@ -242,7 +246,7 @@ class RabbitConsumer:
         except Exception as exc:  # noqa: BLE001
             logger.error("processamento esgotou retries: %s", exc)
             if self._dead_letter(raw_body, str(exc)):
-                self._record_failure(str(exc))
+                self._record_dead_letter(str(exc))
                 message.ack()
             return
         self._record_processed()
@@ -347,6 +351,17 @@ class RabbitConsumer:
     def _record_failure(self, reason: str) -> None:
         with self._state_lock:
             self._failed += 1
+            self._last_error = reason
+
+    def _record_dead_letter(self, reason: str) -> None:
+        with self._state_lock:
+            self._failed += 1
+            self._dead_lettered += 1
+            self._last_error = reason
+
+    def _record_reconnect(self, reason: str) -> None:
+        with self._state_lock:
+            self._reconnects += 1
             self._last_error = reason
 
     def _set_error(self, reason: str) -> None:
