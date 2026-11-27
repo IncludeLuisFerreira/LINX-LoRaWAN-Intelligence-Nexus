@@ -32,13 +32,7 @@ INFRA_BASE_COMPOSE = os.path.join(
     ROOT, "infra", "docker-compose.base.yml"
 )
 STACK_COMPOSE = os.path.join(HERE, "docker-compose.stack.yml")
-BROKER_OVERRIDE_COMPOSE = os.path.join(
-    HERE, "docker-compose.broker-override.yml"
-)
 INFRA_COMPOSE = os.path.join(ROOT, "infra", "docker-compose.yml")
-INFRA_OVERRIDE_COMPOSE = os.path.join(
-    HERE, "docker-compose.infra-override.yml"
-)
 TEST_ENV_FILE = os.path.join(HERE, "test.env")
 BOOTSTRAP_NETWORK = os.path.join(ROOT, "scripts", "bootstrap-network.sh")
 
@@ -76,16 +70,20 @@ SERVICE_TOKEN = os.environ.get("IT_SERVICE_TOKEN") or _ENV.get(
 )
 
 APP_ID = _ENV.get("APP_ID", "integration-app")
+AMQP_PORT = _ENV.get("RABBITMQ_AMQP_PORT", "5673")
+MGMT_PORT = _ENV.get("RABBITMQ_MGMT_PORT", "15673")
 AMQP_URL = os.environ.get("IT_AMQP_URL") or (
     f"amqp://{_ENV.get('RABBITMQ_ADMIN_USER', 'linx')}:"
-    f"{_ENV.get('RABBITMQ_ADMIN_PASSWORD', 'changeme')}@127.0.0.1:5673/%2f"
+    f"{_ENV.get('RABBITMQ_ADMIN_PASSWORD', 'changeme')}@127.0.0.1:{AMQP_PORT}/%2f"
 )
 DB_USER = _ENV.get("DB_USER", "tenant")
 DB_NAME = _ENV.get("DB_NAME", "tenantdb")
 
 UP_TIMEOUT = os.environ.get("IT_UP_TIMEOUT", "300")
 
-RABBIT_MGMT = os.environ.get("IT_RABBIT_MGMT", "http://127.0.0.1:15673")
+RABBIT_MGMT = os.environ.get(
+    "IT_RABBIT_MGMT", f"http://127.0.0.1:{MGMT_PORT}"
+)
 MGMT_USER = _ENV.get("RABBITMQ_ADMIN_USER", "linx")
 MGMT_PASS = _ENV.get("RABBITMQ_ADMIN_PASSWORD", "changeme")
 DLQ_NAME = f"linx.telemetry.{APP_ID}.dlq"
@@ -117,8 +115,6 @@ def compose(
             STACK_COMPOSE,
             "-f",
             INFRA_BASE_COMPOSE,
-            "-f",
-            BROKER_OVERRIDE_COMPOSE,
             *args,
         ],
         input=input,
@@ -143,8 +139,6 @@ def compose_infra(
             TEST_ENV_FILE,
             "-f",
             INFRA_COMPOSE,
-            "-f",
-            INFRA_OVERRIDE_COMPOSE,
             *args,
         ],
         input=input,
@@ -220,8 +214,7 @@ def _preflight() -> None:
     lines.append(
         "Veja os logs: docker compose -p lynx-integration "
         f"--env-file {TEST_ENV_FILE} -f {STACK_COMPOSE} "
-        f"-f {INFRA_BASE_COMPOSE} -f {BROKER_OVERRIDE_COMPOSE} "
-        "logs <serviço>"
+        f"-f {INFRA_BASE_COMPOSE} logs <serviço>"
     )
     lines.append("")
     raise RuntimeError("\n".join(lines))

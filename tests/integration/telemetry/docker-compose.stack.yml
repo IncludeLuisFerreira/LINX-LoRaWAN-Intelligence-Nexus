@@ -7,9 +7,8 @@
 # Uso (via conftest.py):
 #   LINX_NETWORK=lynx-it-network docker compose -p lynx-integration \
 #     --env-file test.env \
-#     -f ../../../infra/docker-compose.base.yml \
 #     -f docker-compose.stack.yml \
-#     -f docker-compose.broker-override.yml \
+#     -f ../../../infra/docker-compose.base.yml \
 #     up -d --wait rabbitmq timescaledb telemetry_consumer routing
 
 services:

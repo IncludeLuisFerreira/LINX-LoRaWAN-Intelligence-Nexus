@@ -14,7 +14,7 @@ tests/integration/
 └── telemetry/          # telemetria ponta-a-ponta (issue #43)
     ├── README.md
     ├── conftest.py
-    ├── docker-compose.override.yml
+    ├── docker-compose.stack.yml
     ├── test.env
     └── test_telemetry_pipeline.py
 ```

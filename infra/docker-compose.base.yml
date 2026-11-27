@@ -23,7 +23,7 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      - "127.0.0.1:${MQTT_HOST_PORT:-1883}:1883"
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
 
@@ -32,8 +32,8 @@ services:
     hostname: rabbitmq
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5672:5672"   # AMQP
-      - "127.0.0.1:15672:15672" # Painel de gerenciamento
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672"   # AMQP
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672" # Painel de gerenciamento
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_ADMIN_USER:-linx}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}

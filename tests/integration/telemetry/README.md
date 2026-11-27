@@ -29,8 +29,15 @@ os composes de aplicação: apenas declara o conjunto que a suíte sobe, com
 portas em offsets de teste e rede isolada.
 
 A stack roda na rede `lynx-it-network` (parametrizada por `LINX_NETWORK`),
-separada do ambiente de desenvolvimento. O `rabbitmq` usa as portas de teste
-`5673`/`15673` via `docker-compose.broker-override.yml`.
+separada do ambiente de desenvolvimento. As portas publicadas no host vêm do
+`test.env`:
+
+- `RABBITMQ_AMQP_PORT=5673`
+- `RABBITMQ_MGMT_PORT=15673`
+- `MQTT_HOST_PORT=11883`
+
+O compose base lê essas variáveis; não há mais override de portas com
+`!override`.
 
 ## Casos de teste
 
@@ -56,13 +63,11 @@ LINX_NETWORK=lynx-it-network docker compose -p lynx-integration \
   --env-file tests/integration/telemetry/test.env \
   -f tests/integration/telemetry/docker-compose.stack.yml \
   -f infra/docker-compose.base.yml \
-  -f tests/integration/telemetry/docker-compose.broker-override.yml \
   up -d --build --wait rabbitmq timescaledb telemetry_consumer routing
 LINX_NETWORK=lynx-it-network docker compose -p lynx-integration ... ps
 LINX_NETWORK=lynx-it-network docker compose -p lynx-integration ... down -v
 ```
 
 O Mosquitto é gerenciado separadamente pelo projeto `lynx-integration-infra`,
-usando `infra/docker-compose.yml` e
-`tests/integration/telemetry/docker-compose.infra-override.yml`. Ele sobe na
-mesma rede isolada.
+usando `infra/docker-compose.yml` (a porta de teste vem de `MQTT_HOST_PORT` no
+`test.env`). Ele sobe na mesma rede isolada.
