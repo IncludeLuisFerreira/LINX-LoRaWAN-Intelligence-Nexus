@@ -168,20 +168,20 @@ aparece na tela até essa integração.
 ## Status de provisionamento
 
 O componente `ProvisioningStatus` (`src/components/ProvisioningStatus.tsx`) é um
-badge de apresentação puro para os estados `PENDING`, `PROVISIONING`, `RUNNING`
-e `ERROR`, com os rótulos "Pendente", "Provisionando", "Em execução" e "Erro".
-O estado `PROVISIONING` usa `animate-pulse`; todos os estados exibem o rótulo
+badge de apresentação puro para os estados `pending`, `provisioning`, `running`
+e `error`, com os rótulos "Pendente", "Provisionando", "Em execução" e "Erro".
+O estado `provisioning` usa `animate-pulse`; todos os estados exibem o rótulo
 textual, além da cor. O componente anuncia mudanças com `role="status"` e
 `aria-live="polite"`.
 
 O endpoint do backend ainda depende da issue #61 e o hook de polling
 (`useProvisioningStatus`, issue #55) ainda não está integrado à tela. Com o MSW
 habilitado (`VITE_ENABLE_MOCKS=true`), o handler simula a sequência
-`PENDING -> PROVISIONING -> RUNNING`. Para forçar um estado no desenvolvimento,
+`pending -> provisioning -> running`. Para forçar um estado no desenvolvimento,
 defina no console do navegador:
 
 ```js
-localStorage.setItem('linx:mock-provisioning-status', 'ERROR');
+localStorage.setItem('linx:mock-provisioning-status', 'error');
 ```
 
 Recarregue a página para aplicar. Remova a chave para voltar à sequência:
@@ -194,13 +194,13 @@ localStorage.removeItem('linx:mock-provisioning-status');
 
 O hook `useProvisioningStatus` (`src/hooks/useProvisioningStatus.ts`) consulta
 `GET /api/v1/applications/{app_id}/status` a cada 3s (a primeira consulta é
-imediata, no mount). O polling continua enquanto o status for `PENDING` ou
-`PROVISIONING` e para ao atingir `RUNNING` ou `ERROR`. O intervalo é limpo ao
+imediata, no mount). O polling continua enquanto o status for `pending` ou
+`provisioning` e para ao atingir `running` ou `error`. O intervalo é limpo ao
 desmontar o componente e ao trocar de aplicação.
 
 O serviço `applicationService.getStatus` valida o valor contra o contrato
-(`PROVISIONING_STATUS_VALUES`): valores fora de `PENDING`/`PROVISIONING`/
-`RUNNING`/`ERROR` são rejeitados, e o hook trata a rejeição como erro
+(`PROVISIONING_STATUS_VALUES`): valores fora de `pending`/`provisioning`/
+`running`/`error` são rejeitados, e o hook trata a rejeição como erro
 transiente, mantendo o polling. Após falhas consecutivas (404, 500, rede ou
 valor fora do contrato), o hook para, limpa o intervalo e expõe `error` para a UI.
 

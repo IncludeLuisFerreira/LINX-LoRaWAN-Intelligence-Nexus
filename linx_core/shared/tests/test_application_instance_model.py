@@ -86,13 +86,13 @@ def test_application_instances_app_id_is_unique():
 def test_application_instances_status_defaults_to_pending():
     column = _table().c.status
     assert column.nullable is False
-    assert column.default.arg == "PENDING"
+    assert column.default.arg == "pending"
 
 
 def test_application_instances_status_has_server_default():
     column = _table().c.status
     assert column.server_default is not None
-    assert str(column.server_default.arg) == "PENDING"
+    assert str(column.server_default.arg) == "pending"
 
 
 def test_application_instances_status_check_constraint():
@@ -101,6 +101,14 @@ def test_application_instances_status_check_constraint():
     sqltext = str(check.sqltext)
     for status in APPLICATION_INSTANCE_STATUSES:
         assert f"'{status}'" in sqltext
+
+
+def test_application_instances_port_check_constraint():
+    check = _constraints_by_name(_table())["ck_application_instances_port"]
+    assert isinstance(check, CheckConstraint)
+    sqltext = str(check.sqltext)
+    assert "port IS NULL OR" in sqltext
+    assert "BETWEEN 1 AND 65535" in sqltext
 
 
 def test_application_instances_optional_columns_are_nullable():
@@ -140,7 +148,7 @@ def test_application_instances_status_default_is_applied_on_insert(db_session):
     db_session.add(instance)
     db_session.flush()
 
-    assert instance.status == "PENDING"
+    assert instance.status == "pending"
     assert instance.provisioned_at is None
 
 
@@ -164,6 +172,23 @@ def test_application_instances_rejects_invalid_status(db_session):
                 ApplicationInstance(app_id=application.id, status="UNKNOWN")
             )
             db_session.flush()
+
+
+@pytest.mark.parametrize("bad_port", [0, -1, 65536])
+def test_application_instances_rejects_invalid_port(db_session, bad_port):
+    application = _application(db_session)
+    with pytest.raises(IntegrityError):
+        with db_session.begin_nested():
+            db_session.add(
+                ApplicationInstance(app_id=application.id, port=bad_port)
+            )
+            db_session.flush()
+
+
+def test_application_instances_allows_null_port(db_session):
+    application = _application(db_session)
+    db_session.add(ApplicationInstance(app_id=application.id, port=None))
+    db_session.flush()
 
 
 def test_application_instances_cascade_delete_on_application_removal(

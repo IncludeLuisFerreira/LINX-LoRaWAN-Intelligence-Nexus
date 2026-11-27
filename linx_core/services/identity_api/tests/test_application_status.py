@@ -73,20 +73,20 @@ def test_status_returns_pending_for_new_instance():
     assert response.status_code == 200
     body = response.json()
     assert body["app_id"] == app_id
-    assert body["status"] == "PENDING"
+    assert body["status"] == "pending"
 
 
 def test_status_returns_provisioning(db_session):
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)
-    _set_instance(db_session, app_id, status="PROVISIONING")
+    _set_instance(db_session, app_id, status="provisioning")
 
     response = client.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 200
     body = response.json()
     assert body["app_id"] == app_id
-    assert body["status"] == "PROVISIONING"
+    assert body["status"] == "provisioning"
 
 
 def test_status_returns_running_with_metadata(db_session):
@@ -96,7 +96,7 @@ def test_status_returns_running_with_metadata(db_session):
     _set_instance(
         db_session,
         app_id,
-        status="RUNNING",
+        status="running",
         container_id="abc123def456",
         port=8080,
         provisioned_at=provisioned_at,
@@ -107,7 +107,7 @@ def test_status_returns_running_with_metadata(db_session):
     assert response.status_code == 200
     body = response.json()
     assert body["app_id"] == app_id
-    assert body["status"] == "RUNNING"
+    assert body["status"] == "running"
     assert body["container_id"] == "abc123def456"
     assert body["port"] == 8080
     assert body["provisioned_at"].startswith("2026-01-02T03:04:05")
@@ -116,12 +116,12 @@ def test_status_returns_running_with_metadata(db_session):
 def test_status_returns_error(db_session):
     tenant_id = _create_tenant()
     app_id = _create_application(tenant_id)
-    _set_instance(db_session, app_id, status="ERROR")
+    _set_instance(db_session, app_id, status="error")
 
     response = client.get(_status_url(tenant_id, app_id))
 
     assert response.status_code == 200
-    assert response.json()["status"] == "ERROR"
+    assert response.json()["status"] == "error"
 
 
 def test_status_unknown_application_returns_404():
@@ -162,7 +162,7 @@ def test_status_cross_tenant_returns_404(db_session):
     _set_instance(
         db_session,
         app_a,
-        status="RUNNING",
+        status="running",
         container_id="segredo-container-A",
         port=9999,
         provisioned_at=datetime(2026, 1, 1, tzinfo=timezone.utc),

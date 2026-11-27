@@ -7,10 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from linx_shared.core.uuid4 import UUID4
 
 ApplicationStatusValue = Literal[
-    "PENDING",
-    "PROVISIONING",
-    "RUNNING",
-    "ERROR",
+    "pending",
+    "provisioning",
+    "running",
+    "error",
 ]
 
 

@@ -14,11 +14,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from linx_shared.db.base_class import Base
 
+# Política de casing (#247): valores de status são minúsculos em todo o
+# sistema, alinhados a jobs.status ("pending", "queued", ...). Nunca use
+# maiúsculas em status persistido, schema ou payload de API.
 APPLICATION_INSTANCE_STATUSES = (
-    "PENDING",
-    "PROVISIONING",
-    "RUNNING",
-    "ERROR",
+    "pending",
+    "provisioning",
+    "running",
+    "error",
 )
 
 
@@ -56,8 +59,8 @@ class ApplicationInstance(Base):
 
     status: Mapped[str] = mapped_column(
         String(20),
-        default="PENDING",
-        server_default="PENDING",
+        default="pending",
+        server_default="pending",
         nullable=False,
     )
 
@@ -72,7 +75,11 @@ class ApplicationInstance(Base):
             name="uq_application_instances_app_id",
         ),
         CheckConstraint(
-            "status IN ('PENDING','PROVISIONING','RUNNING','ERROR')",
+            "status IN ('pending','provisioning','running','error')",
             name="ck_application_instances_status",
+        ),
+        CheckConstraint(
+            "port IS NULL OR port BETWEEN 1 AND 65535",
+            name="ck_application_instances_port",
         ),
     )

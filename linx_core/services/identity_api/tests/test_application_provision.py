@@ -86,7 +86,7 @@ def test_create_application_creates_pending_instance(db_session):
         .filter(ApplicationInstance.app_id == UUID(app_id))
         .one()
     )
-    assert instance.status == "PENDING"
+    assert instance.status == "pending"
     assert instance.container_id is None
     assert instance.port is None
     assert instance.provisioned_at is None
