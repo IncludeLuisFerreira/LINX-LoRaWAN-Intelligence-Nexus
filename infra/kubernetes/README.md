@@ -305,7 +305,7 @@ são construídas para `linux/amd64` e o manifesto publicado é validado com
 Configure em **Settings → Secrets and variables → Actions** do repositório:
 
 - `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN` — token com permissão de escrita nos dois repositórios do
+- `DOCKERHUB_TOKEN` — token com permissão de escrita nos repositórios do
   Docker Hub (os mesmos secrets já usados pelo workflow do tenant app).
 
 O workflow usa `permissions: contents: read` e `concurrency` por serviço para

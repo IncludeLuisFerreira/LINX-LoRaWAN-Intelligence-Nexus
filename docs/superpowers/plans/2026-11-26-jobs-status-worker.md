@@ -441,7 +441,7 @@ git commit -m "feat(jobs_status_worker): move StatusProcessor para o serviço (#
   - `jobs_status_worker.status.StatusProcessor`
   - `linx_shared.jobs.consumer.InvalidMessageError`
   - `linx_shared.jobs.consumer.run_consumer`
-  - `linx_shared.jobs.broker.declare_topology`
+  - `linx_shared.jobs.broker.declare_status_topology`
   - `linx_shared.db.base.SessionLocal`, `engine`
 - Produces:
   - `jobs_status_worker.health.check() -> None`
@@ -643,11 +643,11 @@ def _wait_for_dependencies() -> None:
 
 
 def _declare_topology(url: str) -> None:
-    # BlockingConnection + declare_topology(channel) com o argumento default
-    # (PROVISIONING_QUEUE): a própria função já declara e vincula
-    # PROVISIONING_STATUS_QUEUE à JOB_EVENTS_EXCHANGE. Passar status_queue aqui
-    # redeclararia a mesma fila com argumentos conflitantes (406) e a
-    # vincularia à exchange errada. Fechar sempre.
+    # BlockingConnection + declare_status_topology(channel, status_queue):
+    # declara apenas a exchange JOB_EVENTS_EXCHANGE, a fila STATUS_QUEUE
+    # (durable, sem DLX) e o binding com provisioning.application.#. Não
+    # declara a exchange de comandos, a DLX nem a fila de provisionamento.
+    # Fechar sempre.
 
 
 def _parse_status_event(body: bytes) -> JobStatusEvent:
@@ -671,8 +671,8 @@ def build_consumer_threads(
     #       stop_event),
     # kwargs={"declare": declare},
     # name=f"status-consumer-{index}", daemon=True)
-    # onde declare(channel) chama declare_topology(channel) — sem passar
-    # status_queue (a função já declara/vincula a fila de status).
+    # onde declare(channel) chama declare_status_topology(channel, queue),
+    # com queue capturada de settings.status_queue no fechamento.
 
 
 def main() -> None:

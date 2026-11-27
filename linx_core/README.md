@@ -62,15 +62,16 @@ identity_api ──(job + outbox)──> Postgres
       │                                                        │
       │                                                        └── jobs_worker ──> gRPC ──> docker_provisioner ──> Docker
       │                                                                │
-      │                                                                └── status events ──> RabbitMQ (linx.jobs.status)
+      │                                                                └── status events ──> RabbitMQ (linx.jobs.events → linx.jobs.status)
       │                                                                                      │
       └── GET /jobs/{id} <── Postgres <── estado final <── jobs_status_worker <──────────────┘
 ```
 
 O `identity_api` responde `202 Accepted` sem esperar o container. O
 `jobs_worker` consome a fila de comandos, executa o handler e publica eventos
-de status em `linx.jobs.status`. O `jobs_status_worker` consome essa fila e
-persiste o estado final no Postgres. Mensagens carregam apenas IDs e payload
+de status na exchange `linx.jobs.events`, que os roteia para a fila
+`linx.jobs.status`. O `jobs_status_worker` consome essa fila e persiste o
+estado final no Postgres. Mensagens carregam apenas IDs e payload
 mínimo — nunca senhas ou tokens.
 
 > O código que antes ficava em `src/linx/` foi redistribuído: o que era comum

@@ -130,7 +130,12 @@ disponíveis na base com default vazio, mas não são exigidos.
 
 1. Configura logging e carrega `StatusWorkerSettings`.
 2. Aguarda Postgres (`SELECT 1 FROM jobs LIMIT 1`) e RabbitMQ, com retry.
-3. Declara a topologia (`declare_topology(channel, status_queue)`).
+3. Declara a topologia (`declare_status_topology(channel, status_queue)`) —
+   apenas a exchange `linx.jobs.events`, a fila `STATUS_QUEUE` e seu binding.
+   Não declara a exchange de comandos, a DLX nem a fila de provisionamento:
+   declará-las criaria uma fila `linx.jobs.provisioning` órfã quando
+   `WORKER_QUEUE` fosse customizada e poderia causar 406 ao redeclarar
+   `STATUS_QUEUE` com argumentos de DLX conflitantes.
 4. Sobe `STATUS_CONCURRENCY` threads `run_consumer` na `status_queue`, com
    `STATUS_PREFETCH`, ack após commit e nack sem requeue para mensagem
    inválida.
