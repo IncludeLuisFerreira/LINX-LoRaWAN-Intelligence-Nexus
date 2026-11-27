@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 from linx_shared.jobs.constants import (
     JOB_TYPE_PROVISION_APPLICATION,
+    PROVISIONING_STATUS_DEAD,
     PROVISIONING_STATUS_QUEUE,
     JobStatus,
 )
@@ -81,7 +82,9 @@ def test_build_consumer_threads_uses_status_queue_and_concurrency(
         assert args[2] == settings.rabbitmq_amqp_url
         assert args[3] == settings.status_prefetch
         assert args[4] is stop_event
-        assert set(getattr(thread, "_kwargs")) == {"declare"}
+        kwargs = getattr(thread, "_kwargs")
+        assert set(kwargs) == {"declare", "dead_letter_routing_key"}
+        assert kwargs["dead_letter_routing_key"] == PROVISIONING_STATUS_DEAD
 
 
 def test_consumer_threads_declare_status_topology(monkeypatch):

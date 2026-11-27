@@ -1,6 +1,11 @@
 import threading
 
 from linx_shared.jobs import consumer
+from linx_shared.jobs.constants import (
+    JOB_DLX,
+    PROVISIONING_STATUS_DEAD,
+)
+from linx_shared.messaging.policy import FailurePolicy
 
 
 class FakeMethod:
@@ -39,6 +44,25 @@ class FakeChannel:
 
     def basic_nack(self, delivery_tag: int, requeue: bool) -> None:
         self.nacks.append((delivery_tag, requeue))
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakePublisher:
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+        self.closed = False
+
+    def publish_raw(
+        self,
+        exchange,
+        routing_key,
+        body,
+        *,
+        message_id=None,
+    ) -> None:
+        self.calls.append((exchange, routing_key, body, message_id))
 
     def close(self) -> None:
         self.closed = True
@@ -96,11 +120,12 @@ def test_run_consumer_does_not_redeclare_queue(monkeypatch):
     assert connection.closed is True
 
 
-def test_run_consumer_acks_success_and_nacks_failure(monkeypatch):
+def test_run_consumer_acks_success_and_dead_letters_failure(monkeypatch):
     stop = threading.Event()
     channel = FakeChannel()
     connection = StoppingConnection(channel, stop)
     _patch_connection(monkeypatch, [connection])
+    publisher = FakePublisher()
 
     def callback(body: bytes) -> None:
         if body == b"bad":
@@ -112,13 +137,19 @@ def test_run_consumer_acks_success_and_nacks_failure(monkeypatch):
         "amqp://127.0.0.1:5672/",
         1,
         stop,
+        policy=FailurePolicy(max_attempts=1, delays=()),
+        publisher_factory=lambda url: publisher,
     )
 
     channel.consumer_callback(channel, FakeMethod(1), None, b"good")
     channel.consumer_callback(channel, FakeMethod(2), None, b"bad")
 
-    assert channel.acks == [1]
-    assert channel.nacks == [(2, True)]
+    assert channel.acks == [1, 2]
+    assert channel.nacks == []
+    assert publisher.calls == [
+        (JOB_DLX, PROVISIONING_STATUS_DEAD, b"bad", None)
+    ]
+    assert publisher.closed is True
 
 
 def test_run_consumer_reconnects_after_connection_failure(monkeypatch):
@@ -143,11 +174,12 @@ def test_run_consumer_reconnects_after_connection_failure(monkeypatch):
     assert len(second_channel.consumes) == 1
 
 
-def test_invalid_message_is_nacked_without_requeue(monkeypatch):
+def test_invalid_message_is_dead_lettered_and_acked(monkeypatch):
     stop = threading.Event()
     channel = FakeChannel()
     connection = StoppingConnection(channel, stop)
     _patch_connection(monkeypatch, [connection])
+    publisher = FakePublisher()
 
     def callback(body: bytes) -> None:
         raise consumer.InvalidMessageError("bad envelope")
@@ -158,12 +190,77 @@ def test_invalid_message_is_nacked_without_requeue(monkeypatch):
         "amqp://127.0.0.1:5672/",
         1,
         stop,
+        publisher_factory=lambda url: publisher,
     )
 
     channel.consumer_callback(channel, FakeMethod(7), None, b"{not-json")
 
-    assert channel.acks == []
-    assert channel.nacks == [(7, False)]
+    assert channel.acks == [7]
+    assert channel.nacks == []
+    assert publisher.calls == [
+        (JOB_DLX, PROVISIONING_STATUS_DEAD, b"{not-json", None)
+    ]
+
+
+def test_transient_failure_retries_then_acks(monkeypatch):
+    stop = threading.Event()
+    channel = FakeChannel()
+    connection = StoppingConnection(channel, stop)
+    _patch_connection(monkeypatch, [connection])
+    publisher = FakePublisher()
+    attempts = {"count": 0}
+
+    def callback(body: bytes) -> None:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("db indisponível")
+
+    consumer.run_consumer(
+        "linx.jobs.provisioning",
+        callback,
+        "amqp://127.0.0.1:5672/",
+        1,
+        stop,
+        policy=FailurePolicy(max_attempts=3, delays=(0.0, 0.0)),
+        publisher_factory=lambda url: publisher,
+    )
+
+    channel.consumer_callback(channel, FakeMethod(1), None, b"job")
+
+    assert attempts["count"] == 2
+    assert channel.acks == [1]
+    assert publisher.calls == []
+
+
+def test_retry_exhausted_is_dead_lettered(monkeypatch):
+    stop = threading.Event()
+    channel = FakeChannel()
+    connection = StoppingConnection(channel, stop)
+    _patch_connection(monkeypatch, [connection])
+    publisher = FakePublisher()
+    attempts = {"count": 0}
+
+    def callback(body: bytes) -> None:
+        attempts["count"] += 1
+        raise RuntimeError("db indisponível")
+
+    consumer.run_consumer(
+        "linx.jobs.provisioning",
+        callback,
+        "amqp://127.0.0.1:5672/",
+        1,
+        stop,
+        policy=FailurePolicy(max_attempts=2, delays=(0.0,)),
+        publisher_factory=lambda url: publisher,
+    )
+
+    channel.consumer_callback(channel, FakeMethod(1), None, b"job")
+
+    assert attempts["count"] == 2
+    assert channel.acks == [1]
+    assert publisher.calls == [
+        (JOB_DLX, PROVISIONING_STATUS_DEAD, b"job", None)
+    ]
 
 
 def test_consumer_declares_topology_on_each_reconnect(monkeypatch):
@@ -191,4 +288,5 @@ def test_consumer_declares_topology_on_each_reconnect(monkeypatch):
             "linx.jobs.custom",
             "linx.jobs.provisioning.dlq",
             "linx.jobs.status",
+            "linx.jobs.status.dlq",
         }

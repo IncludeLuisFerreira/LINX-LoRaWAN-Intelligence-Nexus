@@ -12,6 +12,8 @@ from linx_shared.jobs.constants import (
     JOB_EXCHANGE,
     JOB_TYPE_PROVISION_APPLICATION,
     PROVISIONING_QUEUE,
+    PROVISIONING_STATUS_DEAD,
+    PROVISIONING_STATUS_DLQ,
     PROVISIONING_STATUS_QUEUE,
 )
 from linx_shared.messaging.topology import (
@@ -85,6 +87,19 @@ def declare_status_topology(
     channel.queue_declare(
         queue=queue,
         durable=True,
+        arguments={
+            "x-dead-letter-exchange": JOB_DLX,
+            "x-dead-letter-routing-key": PROVISIONING_STATUS_DEAD,
+        },
+    )
+    channel.queue_declare(
+        queue=PROVISIONING_STATUS_DLQ,
+        durable=True,
+    )
+    channel.queue_bind(
+        queue=PROVISIONING_STATUS_DLQ,
+        exchange=JOB_DLX,
+        routing_key=PROVISIONING_STATUS_DEAD,
     )
     for topology in topologies:
         channel.queue_bind(
@@ -201,20 +216,15 @@ class RabbitMQPublisher:
             mandatory=True,
         )
 
-    def publish(
+    def _publish_confirmed(
         self,
         exchange: str,
         routing_key: str,
-        payload: dict[str, Any],
+        body: bytes,
+        properties: Any,
         *,
-        message_id: str | None = None,
+        message_id: str | None,
     ) -> None:
-        body = json.dumps(payload).encode("utf-8")
-        properties = pika.BasicProperties(
-            delivery_mode=2,
-            content_type="application/json",
-            message_id=message_id,
-        )
         try:
             self._publish_once(exchange, routing_key, body, properties)
         except (
@@ -235,6 +245,50 @@ class RabbitMQPublisher:
         ):
             self._reset()
             self._publish_once(exchange, routing_key, body, properties)
+
+    def publish(
+        self,
+        exchange: str,
+        routing_key: str,
+        payload: dict[str, Any],
+        *,
+        message_id: str | None = None,
+    ) -> None:
+        body = json.dumps(payload).encode("utf-8")
+        properties = pika.BasicProperties(
+            delivery_mode=2,
+            content_type="application/json",
+            message_id=message_id,
+        )
+        self._publish_confirmed(
+            exchange,
+            routing_key,
+            body,
+            properties,
+            message_id=message_id,
+        )
+
+    def publish_raw(
+        self,
+        exchange: str,
+        routing_key: str,
+        body: bytes,
+        *,
+        message_id: str | None = None,
+    ) -> None:
+        """Publica bytes sem reencodar (usado para DLQ de payload inválido)."""
+        properties = pika.BasicProperties(
+            delivery_mode=2,
+            content_type="application/octet-stream",
+            message_id=message_id,
+        )
+        self._publish_confirmed(
+            exchange,
+            routing_key,
+            body,
+            properties,
+            message_id=message_id,
+        )
 
     def close(self) -> None:
         self._reset()
