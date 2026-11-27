@@ -110,6 +110,23 @@ def test_authorize_rejects_service_token():
     assert context.aborted[0] == grpc.StatusCode.UNAUTHENTICATED
 
 
+def test_authorize_strips_whitespace_from_configured_token(monkeypatch):
+    # Env files/docker secrets podem entregar o token com \n ou espaços;
+    # o startup valida o valor stripado, então authorize deve comparar o mesmo.
+    monkeypatch.setattr(
+        settings,
+        "provisioner_service_token",
+        f"  {PROVISIONER_TOKEN}\n",
+    )
+    context = FakeContext(
+        metadata=[("authorization", f"Bearer {PROVISIONER_TOKEN}")]
+    )
+
+    authorize(context)
+
+    assert context.aborted is None
+
+
 def test_authorize_rejects_when_token_not_configured(monkeypatch):
     monkeypatch.setattr(settings, "provisioner_service_token", "")
     context = FakeContext()

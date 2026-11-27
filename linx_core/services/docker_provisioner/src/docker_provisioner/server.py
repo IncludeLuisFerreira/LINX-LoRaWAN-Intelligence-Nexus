@@ -83,7 +83,7 @@ def authorize(context) -> None:
     Falha fechada e em tempo constante: qualquer chamada sem o metadado
     correto é recusada como UNAUTHENTICATED, sem vazar o segredo esperado.
     """
-    expected = settings.provisioner_service_token
+    expected = (settings.provisioner_service_token or "").strip()
     if not expected:
         logger.error(
             "PROVISIONER_SERVICE_TOKEN não configurado; "
