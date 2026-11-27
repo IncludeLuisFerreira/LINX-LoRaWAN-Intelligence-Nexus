@@ -260,6 +260,50 @@ describe('telemetry handlers', () => {
   });
 });
 
+function decodeJwtPayload(token: string): {
+  exp: number;
+  permissions: string[];
+} {
+  const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  return JSON.parse(atob(padded)) as { exp: number; permissions: string[] };
+}
+
+describe('auth handlers', () => {
+  it('accepts POST /auth/login and returns a usable access token', async () => {
+    const res = await post(`${base}/auth/login`, {
+      email: 'demo@linx.local',
+      password: 'demo',
+    });
+    const body = (await res.json()) as {
+      access_token: string;
+      token_type: string;
+      expires_in: number;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.token_type).toBe('bearer');
+    expect(body.expires_in).toBe(3600);
+
+    const payload = decodeJwtPayload(body.access_token);
+    expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(payload.permissions).toEqual(
+      expect.arrayContaining([
+        'user:read',
+        'user:create',
+        'user:update',
+        'user:delete',
+      ]),
+    );
+  });
+
+  it('rejects POST /auth/login without credentials', async () => {
+    const res = await post(`${base}/auth/login`, {});
+
+    expect(res.status).toBe(422);
+  });
+});
+
 describe('user handlers', () => {
   it('serves GET /user with role and status', async () => {
     const res = await fetch(`${base}/user`);
@@ -297,8 +341,8 @@ describe('user handlers', () => {
     expect(updated.is_active).toBe(false);
   });
 
-  it('generates an invite token via POST /orgs/:org_id/invite', async () => {
-    const res = await post(`${base}/orgs/org-1/invite`, {
+  it('generates an invite token via POST /tenant/:tenant_id/invite', async () => {
+    const res = await post(`${base}/tenant/tenant-1/invite`, {
       email: 'new@example.com',
       role: 'member',
     });
