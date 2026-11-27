@@ -5,8 +5,10 @@ from pydantic import field_validator, model_validator
 class DockerProvisionerSettings(Settings):
     """Configuração do serviço de provisionamento Docker.
 
-    O `service_token` vem da classe base (`SERVICE_TOKEN`) e é validado no
-    startup do servidor gRPC, não na importação do módulo.
+    `service_token` (herdado de `Settings`) é injetado no container do tenant;
+    `provisioner_service_token` autentica o gRPC. Ambos são validados por
+    `ensure_service_token()` no startup do servidor, incluindo o guard que
+    rejeita valores iguais.
     """
 
     grpc_host: str = "0.0.0.0"

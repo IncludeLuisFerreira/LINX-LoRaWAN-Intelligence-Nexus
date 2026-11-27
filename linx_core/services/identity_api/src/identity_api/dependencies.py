@@ -51,7 +51,7 @@ def get_docker_provisioner_client() -> (
 
     client = DockerProvisionerClient(
         target=settings.provisioner_grpc_host,
-        service_token=settings.provisioner_service_token,
+        provisioner_service_token=settings.provisioner_service_token,
         timeout=settings.provisioner_grpc_timeout_seconds,
     )
     try:

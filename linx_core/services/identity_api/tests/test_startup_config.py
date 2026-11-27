@@ -133,6 +133,17 @@ def test_startup_rejects_short_provisioner_token_when_host_set(monkeypatch):
         IdentitySettings(_env_file=None)
 
 
+def test_startup_rejects_placeholder_provisioner_token_when_host_set(
+    monkeypatch,
+):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    monkeypatch.setenv("PROVISIONER_SERVICE_TOKEN", "changeme")
+
+    with pytest.raises(ValidationError, match="placeholder"):
+        IdentitySettings(_env_file=None)
+
+
 def test_startup_strips_provisioner_token_when_host_set(monkeypatch):
     _valid_env(monkeypatch)
     monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
@@ -178,7 +189,7 @@ def test_docker_provisioner_client_uses_provisioner_service_token(monkeypatch):
         client = next(dependency)
         assert isinstance(client, RecordingClient)
         assert captured["target"] == "provisioner:50052"
-        assert captured["service_token"] == "p" * 40
+        assert captured["provisioner_service_token"] == "p" * 40
     finally:
         dependency.close()
 

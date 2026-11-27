@@ -290,11 +290,11 @@ stat -c '%g' /var/run/docker.sock
 
 Preencha `DOCKER_GID` no `.env` do `linx_core/`. O `identity_api` **não** monta
 o socket. O `jobs_worker` também **não** monta o socket: ele só fala com o
-provisioner via gRPC autenticado por `SERVICE_TOKEN`.
+provisioner via gRPC autenticado por `PROVISIONER_SERVICE_TOKEN`.
 
 As mensagens do RabbitMQ carregam apenas IDs, tipo de job e payload mínimo.
-Nunca incluem senhas, tokens ou credenciais de banco. O `SERVICE_TOKEN` é lido
-do ambiente do worker, não da mensagem.
+Nunca incluem senhas, tokens ou credenciais de banco. O
+`PROVISIONER_SERVICE_TOKEN` é lido do ambiente do worker, não da mensagem.
 
 ## Desenvolvimento local
 

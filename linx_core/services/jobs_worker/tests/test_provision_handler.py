@@ -82,7 +82,7 @@ def test_create_client_uses_provisioner_service_token(monkeypatch):
     assert isinstance(client, RecordingClient)
     assert captured == {
         "target": "provisioner:50052",
-        "service_token": "p" * 40,
+        "provisioner_service_token": "p" * 40,
         "timeout": 7.5,
     }
 

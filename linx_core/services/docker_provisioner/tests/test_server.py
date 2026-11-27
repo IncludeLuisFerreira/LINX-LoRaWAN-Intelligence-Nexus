@@ -206,6 +206,17 @@ def test_ensure_service_token_rejects_identical_tokens(monkeypatch):
         ensure_service_token()
 
 
+def test_ensure_service_token_rejects_identical_tokens_after_strip(
+    monkeypatch,
+):
+    shared = "shared-token-0123456789abcdef0123456789ab"
+    monkeypatch.setattr(settings, "service_token", f"  {shared}\n")
+    monkeypatch.setattr(settings, "provisioner_service_token", shared)
+
+    with pytest.raises(RuntimeError, match="must be different"):
+        ensure_service_token()
+
+
 def test_provision_application_rejects_invalid_uuid():
     servicer, _ = _servicer()
     context = FakeContext()
