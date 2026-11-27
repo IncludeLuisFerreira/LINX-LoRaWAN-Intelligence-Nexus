@@ -33,8 +33,9 @@ A geração dos stubs Python é feita na issue #20.
 > **Segurança:** `AppConfig.db_password` trafega em texto plano no gRPC, por
 > isso o canal `client_agent ↔ agent_bridge` usa mTLS obrigatório (#82): CA
 > compartilhada, certificado do servidor e certificado do cliente validados no
-> handshake. Configuração em `deploy/.env.example` e geração em
-> `deploy/scripts/gen-grpc-certs.sh`.
+> handshake. Configuração em `linx_core/.env.example` e
+> `middleware/services/client_agent/.env.example`; geração em
+> `scripts/gen-grpc-certs.sh`.
 
 ## Mensagens
 

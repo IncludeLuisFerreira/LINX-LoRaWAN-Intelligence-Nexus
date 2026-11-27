@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Gera CA, certificado do agent_bridge e par cliente para o mTLS gRPC (#82).
-# Artefatos ficam em deploy/certs/grpc/ (ignorados pelo git). As chaves da CA
-# nunca são montadas nos containers — apenas a CA pública e os pares de cada
-# lado do canal.
+# Artefatos ficam em certs/grpc/ (ignorados pelo git). As chaves da CA nunca
+# são montadas nos containers — apenas a CA pública e os pares de cada lado
+# do canal.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -89,10 +89,10 @@ openssl x509 -req -in "$CLIENT_DIR/client.csr" \
 chmod 700 "$CA_DIR" "$SERVER_DIR" "$CLIENT_DIR"
 chmod 600 "$CA_KEY" "$SERVER_DIR/server.key" "$CLIENT_DIR/client.key"
 chmod 644 "$CA_CERT" "$SERVER_DIR/server.crt" "$CLIENT_DIR/client.crt"
-# Garante que o container (appuser, UID 1000) consiga ler as chaves 0600 e
-# atravessar os diretórios 0700 montados em /etc/linx/grpc. Ignora falha
-# (ex.: sem privilégio para chown): nesse caso gere com sudo ou ajuste a
-# propriedade manualmente (`sudo chown -R 1000:1000 deploy/certs/grpc`).
+# Garante que um container rodando como appuser (UID 1000) consiga ler as
+# chaves 0600 e atravessar os diretórios 0700 quando os arquivos forem montados.
+# Ignora falha (ex.: sem privilégio para chown): nesse caso gere com sudo ou
+# ajuste a propriedade manualmente (`sudo chown -R 1000:1000 certs/grpc`).
 chown -R "$CERT_UID":"$CERT_UID" "$CERT_DIR" 2>/dev/null || true
 
 openssl verify -CAfile "$CA_CERT" \

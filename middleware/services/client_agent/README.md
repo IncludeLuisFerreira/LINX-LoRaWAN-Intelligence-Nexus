@@ -212,12 +212,12 @@ Linx Core.
 O cliente apresenta certificado ao `agent_bridge` e valida o servidor pela CA:
 
 ```bash
-bash deploy/scripts/gen-grpc-certs.sh
-# deploy/.env (compose) já aponta para /etc/linx/grpc/{ca.crt,client/*}
+bash scripts/gen-grpc-certs.sh
+# Gera certs/grpc/{ca,server,client}. O .env.example aponta para esses caminhos.
 SAAS_GRPC_HOST=agent_bridge:50051
-GRPC_CA_CERT_PATH=/etc/linx/grpc/ca.crt
-GRPC_CLIENT_CERT_PATH=/etc/linx/grpc/client/client.crt
-GRPC_CLIENT_KEY_PATH=/etc/linx/grpc/client/client.key
+GRPC_CA_CERT_PATH=../../../certs/grpc/ca/ca.crt
+GRPC_CLIENT_CERT_PATH=../../../certs/grpc/client/client.crt
+GRPC_CLIENT_KEY_PATH=../../../certs/grpc/client/client.key
 ```
 
 Os três caminhos devem ser configurados juntos. Com nenhum deles o canal cai

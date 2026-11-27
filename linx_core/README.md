@@ -469,7 +469,7 @@ Resposta esperada (`200`):
 > **Segurança (mTLS, #82):** o gRPC entre `client_agent` e `agent_bridge` exige
 > certificado de cliente assinado pela CA configurada em `GRPC_CA_CERT_PATH`
 > (`require_client_auth=True`). Gere os arquivos com
-> `bash deploy/scripts/gen-grpc-certs.sh` e configure também
+> `bash scripts/gen-grpc-certs.sh` e configure também
 > `GRPC_CERT_CHAIN_PATH` e `GRPC_PRIVATE_KEY_PATH` no servidor. `GetAppConfig`
 > devolve usuário/senha do Postgres: mantenha a porta `50051` restrita no
 > Security Group ao IP do Client Agent (defesa em profundidade) — nunca
