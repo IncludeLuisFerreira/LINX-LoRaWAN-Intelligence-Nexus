@@ -293,4 +293,24 @@ describe('Users', () => {
     ).toBeTruthy();
     expect(mocked.deactivate).not.toHaveBeenCalled();
   });
+
+  it('exibe erro da API dentro do diálogo de desativação', async () => {
+    const user = userEvent.setup();
+    mocked.deactivate.mockRejectedValue({
+      response: { status: 500, data: { detail: 'Erro interno.' } },
+    });
+    renderUsers();
+    await screen.findByText('member@example.com');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Desativar member@example.com' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Desativar' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Erro interno.',
+    );
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
 });

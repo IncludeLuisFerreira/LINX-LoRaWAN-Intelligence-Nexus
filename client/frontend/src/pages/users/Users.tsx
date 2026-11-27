@@ -44,7 +44,7 @@ export default function Users() {
   const [deactivating, setDeactivating] = useState<UserOutput | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
-  const [actionError, setActionError] = useState('');
+  const [deactivateError, setDeactivateError] = useState('');
 
   const users = data ?? [];
   const activeAdmins = users.filter(
@@ -109,15 +109,20 @@ export default function Users() {
     }
   }
 
+  function openDeactivate(user: UserOutput) {
+    setDeactivateError('');
+    setDeactivating(user);
+  }
+
   async function handleDeactivate() {
     if (!deactivating) return;
-    setActionError('');
+    setDeactivateError('');
     if (deactivating.id === userId) {
-      setActionError('Você não pode desativar a própria conta.');
+      setDeactivateError('Você não pode desativar a própria conta.');
       return;
     }
     if (deactivating.is_admin && activeAdmins <= 1) {
-      setActionError(
+      setDeactivateError(
         'Não é possível desativar o último administrador do tenant.',
       );
       return;
@@ -128,7 +133,7 @@ export default function Users() {
       setDeactivating(null);
       reload();
     } catch (err) {
-      setActionError(getErrorMessage(err));
+      setDeactivateError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -164,10 +169,11 @@ export default function Users() {
       key: 'actions',
       header: 'Ações',
       render: (user) => (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-2">
           <Can permission="user:update">
             <Button
-              variant="ghost"
+              variant="secondary"
+              className="px-3 py-1.5 text-xs"
               aria-label={`Alterar papel de ${user.email}`}
               onClick={() => openRoleModal(user)}
             >
@@ -176,10 +182,11 @@ export default function Users() {
           </Can>
           <Can permission="user:delete">
             <Button
-              variant="ghost"
+              variant="danger"
+              className="px-3 py-1.5 text-xs"
               aria-label={`Desativar ${user.email}`}
               disabled={!user.is_active}
-              onClick={() => setDeactivating(user)}
+              onClick={() => openDeactivate(user)}
             >
               Desativar
             </Button>
@@ -215,11 +222,7 @@ export default function Users() {
         }
       />
 
-      {actionError && (
-        <Alert variant="error" className="mb-4">
-          {actionError}
-        </Alert>
-      )}
+
 
       {loading && (
         <div className="flex justify-center py-16">
@@ -368,8 +371,12 @@ export default function Users() {
         message={`Desativar "${deactivating?.email}"? O usuário perderá o acesso à organização.`}
         confirmLabel="Desativar"
         loading={busy}
+        error={deactivateError}
         onConfirm={handleDeactivate}
-        onCancel={() => setDeactivating(null)}
+        onCancel={() => {
+          setDeactivating(null);
+          setDeactivateError('');
+        }}
       />
     </div>
   );
