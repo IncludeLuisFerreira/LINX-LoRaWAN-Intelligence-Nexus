@@ -35,6 +35,7 @@ kubectl config current-context   # deve mostrar k3d-linx
 | `identity-api` | `includeluisferreira/identity-api:dev` |
 | `agent-bridge` | `includeluisferreira/agent-bridge:dev` |
 | `jobs-worker` | `includeluisferreira/jobs-worker:dev` |
+| `jobs-status-worker` | `includeluisferreira/jobs-status-worker:dev` |
 
 Os repositórios são públicos e a base usa `imagePullPolicy: Always`, porque a tag
 `dev` é mutável. O cluster puxa as imagens no primeiro agendamento; **não há
@@ -75,6 +76,7 @@ espera, direto no containerd do nó:
 # ImagePullBackOff):
 for node in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do
   docker save includeluisferreira/identity-api:dev includeluisferreira/agent-bridge:dev \
+    includeluisferreira/jobs-worker:dev includeluisferreira/jobs-status-worker:dev \
     | docker exec -i "$node" ctr -n k8s.io images import -
 done
 ```
@@ -82,6 +84,7 @@ done
 ```bash
 # sandbox AWS (sem registry)
 docker save includeluisferreira/identity-api:dev includeluisferreira/agent-bridge:dev \
+  includeluisferreira/jobs-worker:dev includeluisferreira/jobs-status-worker:dev \
   | ssh <host> 'sudo k3s ctr images import -'
 ```
 
@@ -145,7 +148,8 @@ atualiza, sem falhar em execuções repetidas. As chaves mínimas são as do
 template: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`,
 `POSTGRES_REPLICATION_PASSWORD`, `SERVICE_TOKEN`, `AGENT_SERVICE_TOKEN`, `CHIRPSTACK_API_TOKEN`,
 `RABBITMQ_ADMIN_USER`, `RABBITMQ_ADMIN_PASSWORD`, `RABBITMQ_TENANT_SECRET` e
-`RABBITMQ_AMQP_URL` (usada pelo `jobs_worker`; aponte para um broker real).
+`RABBITMQ_AMQP_URL` (usada pelo `jobs_worker` e pelo `jobs_status_worker`;
+aponte para um broker real).
 
 `infra/kubernetes/linx-secrets.env` está no `.gitignore` — nunca versionar.
 
@@ -248,7 +252,7 @@ descomente o patch de `imagePullSecrets` no `kustomization.yaml` e crie o Secret
 
 ## Publicação das imagens (GitHub Actions)
 
-Três workflows publicam as imagens a partir de `develop` e `main`, além de
+Quatro workflows publicam as imagens a partir de `develop` e `main`, além de
 `workflow_dispatch` manual:
 
 | Workflow | Publica |
@@ -256,24 +260,27 @@ Três workflows publicam as imagens a partir de `develop` e `main`, além de
 | `.github/workflows/publish-identity-api-image.yml` | `includeluisferreira/identity-api` |
 | `.github/workflows/publish-agent-bridge-image.yml` | `includeluisferreira/agent-bridge` |
 | `.github/workflows/publish-jobs-worker-image.yml` | `includeluisferreira/jobs-worker` |
+| `.github/workflows/publish-jobs-status-worker-image.yml` | `includeluisferreira/jobs-status-worker` |
 
 Todos chamam o workflow reutilizável
 `.github/workflows/publish-linx-core-image.yml`.
 
 ### Matriz de paths
 
-| Caminho alterado | `identity-api` | `agent-bridge` | `jobs-worker` |
-| --- | --- | --- | --- |
-| `linx_core/services/identity_api/**` | sim | não | não |
-| `linx_core/services/agent_bridge/**` | não | sim | não |
-| `linx_core/services/jobs_worker/**` | não | não | sim |
-| `linx_core/shared/**` | sim | sim | sim |
-| `linx_core/alembic.ini` | sim | não | não |
-| `.github/workflows/publish-identity-api-image.yml` | sim | não | não |
-| `.github/workflows/publish-agent-bridge-image.yml` | não | sim | não |
-| `.github/workflows/publish-jobs-worker-image.yml` | não | não | sim |
-| `.github/workflows/publish-linx-core-image.yml` | sim | sim | sim |
-| Demais paths (frontend, docs, routing, middleware etc.) | não | não | não |
+| Caminho alterado | `identity-api` | `agent-bridge` | `jobs-worker` | `jobs-status-worker` |
+| --- | --- | --- | --- | --- |
+| `linx_core/services/identity_api/**` | sim | não | não | não |
+| `linx_core/services/agent_bridge/**` | não | sim | não | não |
+| `linx_core/services/jobs_worker/**` | não | não | sim | não |
+| `linx_core/services/jobs_status_worker/**` | não | não | não | sim |
+| `linx_core/shared/**` | sim | sim | sim | sim |
+| `linx_core/alembic.ini` | sim | não | não | não |
+| `.github/workflows/publish-identity-api-image.yml` | sim | não | não | não |
+| `.github/workflows/publish-agent-bridge-image.yml` | não | sim | não | não |
+| `.github/workflows/publish-jobs-worker-image.yml` | não | não | sim | não |
+| `.github/workflows/publish-jobs-status-worker-image.yml` | não | não | não | sim |
+| `.github/workflows/publish-linx-core-image.yml` | sim | sim | sim | sim |
+| Demais paths (frontend, docs, routing, middleware etc.) | não | não | não | não |
 
 Os filtros `paths` só valem para `push` em branches; pushes de tag não os
 avaliam. Por isso os workflows ficam restritos a `develop`/`main` e execução
@@ -373,8 +380,8 @@ kubectl -n linx logs deploy/jobs-worker -c jobs-worker | grep "leader election"
 
 ```bash
 kubectl -n linx get pods -o wide
-# 2x agent-bridge, 2x identity-api, 3x jobs-worker, 1x rabbitmq,
-# postgres-0 + postgres-1, todos Running (initContainers concluídos)
+# 2x agent-bridge, 2x identity-api, 3x jobs-worker, 2x jobs-status-worker,
+# 1x rabbitmq, postgres-0 + postgres-1, todos Running (initContainers concluídos)
 
 kubectl -n linx get endpoints agent-bridge identity-api
 # endpoints não vazios (selector OK)
@@ -450,7 +457,8 @@ rm -f infra/kubernetes/linx-secrets.env
 k3d cluster delete linx
 docker rmi includeluisferreira/identity-api:dev \
   includeluisferreira/agent-bridge:dev \
-  includeluisferreira/jobs-worker:dev
+  includeluisferreira/jobs-worker:dev \
+  includeluisferreira/jobs-status-worker:dev
 ```
 
 Se o namespace ficar preso em `Terminating` (finalizer não concluído porque o

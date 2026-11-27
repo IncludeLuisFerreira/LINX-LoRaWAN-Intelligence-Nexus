@@ -27,10 +27,15 @@ linx_core/
 │   │   ├── Dockerfile
 │   │   ├── src/docker_provisioner/  # server.py + docker_service.py
 │   │   └── tests/
-│   └── jobs_worker/           # worker assíncrono (RabbitMQ) — sem porta HTTP
+│   ├── jobs_worker/           # worker assíncrono (RabbitMQ) — sem porta HTTP
+│   │   ├── pyproject.toml
+│   │   ├── Dockerfile
+│   │   ├── src/jobs_worker/   # main.py + processor.py + handlers/
+│   │   └── tests/
+│   └── jobs_status_worker/    # consumidor de status (RabbitMQ) — sem porta HTTP
 │       ├── pyproject.toml
 │       ├── Dockerfile
-│       ├── src/jobs_worker/   # main.py + processor.py + handlers/
+│       ├── src/jobs_status_worker/  # main.py + status.py
 │       └── tests/
 │
 ├── shared/                    # biblioteca compartilhada (linx_shared)
@@ -43,7 +48,7 @@ linx_core/
 │       └── grpc/              # stubs dos contratos AgentBridge/DockerProvisioner
 │
 ├── alembic.ini
-├── docker-compose.yml         # db + rabbitmq + identity_api + agent_bridge + docker_provisioner + jobs_worker
+├── docker-compose.yml         # db + rabbitmq + identity_api + agent_bridge + docker_provisioner + jobs_worker + jobs_status_worker
 ├── scripts/deploy.sh
 └── .env.example
 ```
@@ -55,14 +60,17 @@ identity_api ──(job + outbox)──> Postgres
       │                              │
       │                              └── outbox relay ──> RabbitMQ (linx.jobs.provisioning)
       │                                                        │
-      └── GET /jobs/{id} <── Postgres <── status events <── jobs_worker
-                                                                 │
-                                                                 └── gRPC ──> docker_provisioner ──> Docker
+      │                                                        └── jobs_worker ──> gRPC ──> docker_provisioner ──> Docker
+      │                                                                │
+      │                                                                └── status events ──> RabbitMQ (linx.jobs.status)
+      │                                                                                      │
+      └── GET /jobs/{id} <── Postgres <── estado final <── jobs_status_worker <──────────────┘
 ```
 
 O `identity_api` responde `202 Accepted` sem esperar o container. O
-`jobs_worker` consome a fila, executa o handler e publica eventos de status,
-que ele mesmo persiste no Postgres. Mensagens carregam apenas IDs e payload
+`jobs_worker` consome a fila de comandos, executa o handler e publica eventos
+de status em `linx.jobs.status`. O `jobs_status_worker` consome essa fila e
+persiste o estado final no Postgres. Mensagens carregam apenas IDs e payload
 mínimo — nunca senhas ou tokens.
 
 > O código que antes ficava em `src/linx/` foi redistribuído: o que era comum
@@ -142,8 +150,8 @@ Fluxo:
 3. O relay da outbox publica o comando em `linx.jobs.provisioning` no RabbitMQ.
 4. O `jobs_worker` faz o claim do job com lease, chama o
    `docker_provisioner` por gRPC e grava eventos de status na outbox.
-5. O mesmo worker consome `linx.jobs.status` e persiste o estado final no
-   Postgres. O cliente consulta `GET /api/v1/tenant/{id}/jobs/{job_id}`.
+5. O `jobs_status_worker` consome `linx.jobs.status` e persiste o estado final
+   no Postgres. O cliente consulta `GET /api/v1/tenant/{id}/jobs/{job_id}`.
 
 Máquina de estados:
 
@@ -280,14 +288,15 @@ poetry -C services/identity_api install
 poetry -C services/agent_bridge install
 poetry -C services/docker_provisioner install
 poetry -C services/jobs_worker install
+poetry -C services/jobs_status_worker install
 ```
 
-Antes de subir o worker em modo host, inicie um RabbitMQ acessível em
+Antes de subir os workers em modo host, inicie um RabbitMQ acessível em
 `RABBITMQ_AMQP_URL` (por exemplo, `docker compose up -d rabbitmq`; a UI de
 gestão fica em `http://localhost:15672`).
 
-Subir os quatro serviços de uma vez (carrega o `.env` da raiz e sobe REST, os
-dois servidores gRPC e o worker; `Ctrl+C` encerra todos):
+Subir os cinco serviços de uma vez (carrega o `.env` da raiz e sobe REST, os
+dois servidores gRPC e os dois workers; `Ctrl+C` encerra todos):
 
 ```bash
 poetry run task run
@@ -300,6 +309,7 @@ poetry -C services/identity_api run uvicorn identity_api.main:app --reload
 poetry -C services/agent_bridge run python -m agent_bridge.server
 poetry -C services/docker_provisioner run python -m docker_provisioner.server
 poetry -C services/jobs_worker run python -m jobs_worker.main
+poetry -C services/jobs_status_worker run python -m jobs_status_worker.main
 ```
 
 > `poetry -C <serviço>` executa o comando com o diretório de trabalho do
@@ -310,13 +320,13 @@ poetry -C services/jobs_worker run python -m jobs_worker.main
 
 | Task         | Ação                                                          |
 | ------------ | ------------------------------------------------------------- |
-| `run`        | Sobe `identity_api` + `agent_bridge` + `docker_provisioner` + `jobs_worker`. |
+| `run`        | Sobe `identity_api` + `agent_bridge` + `docker_provisioner` + `jobs_worker` + `jobs_status_worker`. |
 | `run-docker` | `docker compose up --build` (foreground).                     |
 | `up`         | `docker compose up -d --build`.                               |
 | `down`       | `docker compose down`.                                        |
 | `migrate`    | Aplica as migrations do Alembic (`upgrade head`).             |
 | `migration`  | Gera nova migration (`revision --autogenerate -m "<msg>"`).   |
-| `test`       | Roda os testes dos cinco pacotes.                             |
+| `test`       | Roda os testes dos pacotes de `shared` e dos serviços.        |
 
 ### Testes
 
@@ -329,6 +339,7 @@ poetry -C services/identity_api run pytest   # exige Postgres em localhost:5432
 poetry -C services/agent_bridge run pytest   # exige Postgres em localhost:5432
 poetry -C services/docker_provisioner run pytest  # não exige Docker real
 poetry -C services/jobs_worker run pytest    # exige Postgres; RabbitMQ é fake nos testes
+poetry -C services/jobs_status_worker run pytest  # exige Postgres; RabbitMQ é fake nos testes
 ```
 
 ## Banco de dados e migrações
@@ -390,9 +401,11 @@ bash scripts/gen_proto.sh
 
 ## Docker / Deploy
 
-O `docker-compose.yml` sobe seis serviços: `db` (Postgres), `rabbitmq`,
-`identity_api`, `agent_bridge`, `docker_provisioner` e `jobs_worker`. O worker
-depende do Postgres saudável, do RabbitMQ saudável e do provisioner iniciado.
+O `docker-compose.yml` sobe sete serviços: `db` (Postgres), `rabbitmq`,
+`identity_api`, `agent_bridge`, `docker_provisioner`, `jobs_worker` e
+`jobs_status_worker`. O `jobs_worker` depende do Postgres saudável, do RabbitMQ
+saudável e do provisioner iniciado; o `jobs_status_worker` depende do Postgres e
+do RabbitMQ saudáveis.
 
 ```bash
 # a partir da raiz: builda a imagem mínima usada no provisionamento
@@ -432,10 +445,13 @@ Resposta esperada (`200`):
 | `DOCKER_GID`         | GID do grupo dono de `/var/run/docker.sock`.                     | `990`                           |
 | `RABBITMQ_ADMIN_USER` | Usuário admin do broker (Compose).                              | `linx`                          |
 | `RABBITMQ_ADMIN_PASSWORD` | Senha admin do broker (obrigatória no Compose).             | `change-me-in-production`       |
-| `RABBITMQ_AMQP_URL`  | URL AMQP consumida pelo `jobs_worker`.                           | `amqp://linx:...@localhost:5672/` |
+| `RABBITMQ_AMQP_URL`  | URL AMQP consumida pelo `jobs_worker` e pelo `jobs_status_worker`. | `amqp://linx:...@localhost:5672/` |
 | `WORKER_QUEUE`       | Fila de comandos de provisionamento.                             | `linx.jobs.provisioning`        |
 | `WORKER_CONCURRENCY` | Threads de consumo do worker.                                    | `4`                             |
 | `WORKER_PREFETCH`    | Prefetch QoS por consumidor.                                     | `4`                             |
+| `STATUS_QUEUE`       | Fila de eventos de status consumida pelo `jobs_status_worker`.    | `linx.jobs.status`              |
+| `STATUS_CONCURRENCY` | Threads de consumo do `jobs_status_worker`.                       | `2`                             |
+| `STATUS_PREFETCH`    | Prefetch QoS por consumidor do `jobs_status_worker`.              | `4`                             |
 | `JOB_MAX_ATTEMPTS`   | Tentativas máximas gravadas no job pelo `identity_api`.          | `3`                             |
 | `OUTBOX_MAX_ATTEMPTS` | Tentativas de publicação antes da quarentena da outbox.         | `10`                            |
 | `JOB_LOCK_SECONDS`   | Duração do lease de um job em execução.                          | `60`                            |
