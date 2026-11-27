@@ -172,19 +172,23 @@ permanente e o `DELETE` de aplicação responde `502`. Procedimento:
 
 2. atualize o provisioner externo com o `PROVISIONER_SERVICE_TOKEN` novo
    (mín. 32 caracteres, diferente de `SERVICE_TOKEN`);
-3. recrie o Secret com a chave nova e reinicie os clientes:
+3. recrie o Secret com a chave nova e reinicie o `identity-api`:
 
    ```bash
    kubectl create secret generic linx-secrets -n linx \
      --from-env-file=infra/kubernetes/linx-secrets.env \
      --dry-run=client -o yaml | kubectl apply -f -
-   kubectl -n linx rollout restart deployment/identity-api deployment/jobs-worker
+   kubectl -n linx rollout restart deployment/identity-api
    kubectl -n linx rollout status deployment/identity-api
-   kubectl -n linx rollout status deployment/jobs-worker
    ```
 
-4. restaure o `jobs-worker` e reprocesse os jobs de provisionamento que
-   falharam na janela.
+4. restaure o `jobs-worker` (ele sobe já com o Secret novo) e reprocesse os
+   jobs de provisionamento que falharam na janela:
+
+   ```bash
+   kubectl -n linx scale deployment/jobs-worker --replicas=3
+   kubectl -n linx rollout status deployment/jobs-worker
+   ```
 
 ### Banco externo (RDS, Cloud SQL etc.)
 

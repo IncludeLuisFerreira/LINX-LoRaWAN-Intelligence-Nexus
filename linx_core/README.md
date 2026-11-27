@@ -217,8 +217,9 @@ container/rede da aplicação ficam órfãos até o provisioner ser atualizado.
 
 O provisioner novo aceita apenas `PROVISIONER_SERVICE_TOKEN` no gRPC; clientes
 antigos ainda enviam `SERVICE_TOKEN`. Durante o rollout, qualquer combinação
-antigo/novo falha com `UNAUTHENTICATED`: o `jobs_worker` marca o job como falha
-permanente e o `DELETE` de aplicação responde `502`.
+mista (cliente antigo × provisioner novo, ou vice-versa) falha com
+`UNAUTHENTICATED`: o `jobs_worker` marca o job como falha permanente e o
+`DELETE` de aplicação responde `502`.
 
 Antes de subir a nova versão:
 
@@ -227,7 +228,7 @@ Antes de subir a nova versão:
 2. drene o `jobs_worker` (pare o consumo) para não perder jobs em voo;
 3. suba `docker_provisioner`, `identity_api` e `jobs_worker` juntos com o mesmo
    token; o Compose falha no startup se a chave nova faltar (`:?`);
-4. reinicie o `jobs_worker` e reprocesse os jobs que falharam durante a janela.
+4. reprocesse os jobs que falharam durante a janela.
 
 Em Kubernetes, o `docker_provisioner` não roda no cluster: atualize também o
 provisioner externo com o token novo na mesma janela. Um Secret existente não
