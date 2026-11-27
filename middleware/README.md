@@ -62,7 +62,9 @@ idempotentes.
 | Variável                         | Default                                 | Descrição                                 |
 | :------------------------------- | :-------------------------------------- | :---------------------------------------- |
 | `MQTT_BROKER_HOST`               | `localhost`                             | Host do broker MQTT (ChirpStack).         |
-| `MQTT_BROKER_PORT`               | `1883`                                  | Porta do broker MQTT.                     |
+| `MQTT_BROKER_PORT`               | `8883`                                  | Porta TLS do broker MQTT (#81).           |
+| `MQTT_TLS_ENABLED`               | `true`                                  | Habilita TLS de servidor no cliente MQTT. |
+| `MQTT_CA_CERT`                   | `` (CAs do sistema)                     | Caminho da CA self-signed do broker.      |
 | `MQTT_TOPIC`                     | `application/+/device/+/event/up`       | Tópico de uplink assinado.                |
 | `MQTT_QOS`                       | `1`                                     | QoS da inscrição.                         |
 | `RABBIT_URL`                     | `amqp://guest:guest@localhost:5672/%2f` | Conexão AMQP com o RabbitMQ.              |

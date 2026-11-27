@@ -36,6 +36,9 @@ STACK_COMPOSE = os.path.join(HERE, "docker-compose.stack.yml")
 INFRA_COMPOSE = os.path.join(ROOT, "infra", "docker-compose.yml")
 TEST_ENV_FILE = os.path.join(HERE, "test.env")
 BOOTSTRAP_NETWORK = os.path.join(ROOT, "scripts", "bootstrap-network.sh")
+GEN_MOSQUITTO_CERTS = os.path.join(
+    ROOT, "infra", "scripts", "gen-mosquitto-certs.sh"
+)
 
 PROJECT = "lynx-integration"
 INFRA_PROJECT = "lynx-integration-infra"
@@ -92,12 +95,34 @@ DLQ_NAME = f"linx.telemetry.{APP_ID}.dlq"
 # Auth no broker (#208, allow_anonymous false): o probe publica via docker exec
 # dentro do proprio container mosquitto, entao -h localhost; usa a identidade
 # `chirpstack` (ACL readwrite application/#), que e quem publica no fluxo real.
+# TLS (#81): unico listener e 8883; o CA esta montado no container do broker.
 MQTT_PUB_USER = _ENV.get("MQTT_CHIRPSTACK_USER", "chirpstack")
 MQTT_PUB_PASS = _ENV.get("MQTT_CHIRPSTACK_PASSWORD", "")
-MQTT_AUTH_ARGS = ["-u", MQTT_PUB_USER, "-P", MQTT_PUB_PASS]
+MQTT_TLS_ARGS = [
+    "-p",
+    "8883",
+    "--cafile",
+    "/mosquitto/certs/ca.crt",
+]
+MQTT_AUTH_ARGS = [
+    *MQTT_TLS_ARGS,
+    "-u",
+    MQTT_PUB_USER,
+    "-P",
+    MQTT_PUB_PASS,
+]
 # Identidade somente-leitura (routing) para testar que publicar é negado (#208).
 MQTT_READ_USER = _ENV.get("MQTT_ROUTING_USER", "routing")
 MQTT_READ_PASS = _ENV.get("MQTT_ROUTING_PASSWORD", "")
+
+
+def _ensure_mosquitto_certs() -> None:
+    """Garante CA/certificado do broker TLS (#81) antes de subir o compose.
+
+    Os certificados são gitignored, então não existem num checkout limpo (CI).
+    O gerador é idempotente: não regenera certificados já presentes.
+    """
+    subprocess.run(["bash", GEN_MOSQUITTO_CERTS], check=True)
 
 
 def compose(
@@ -238,7 +263,10 @@ def _dump_infra_logs() -> None:
 def stack() -> Iterator[None]:
     """Sobe Mosquitto do infra + montagem de teste, valida e derruba no fim."""
     _ensure_network()
+    _ensure_mosquitto_certs()
 
+    # check=False: deixa o bloco abaixo imprimir stdout/stderr do compose e
+    # os logs do broker em vez de estourar CalledProcessError sem diagnóstico.
     infra_up = compose_infra(
         "up",
         "-d",
@@ -246,6 +274,7 @@ def stack() -> Iterator[None]:
         "--wait-timeout",
         UP_TIMEOUT,
         "mosquitto",
+        check=False,
     )
     if infra_up.returncode != 0:
         print(infra_up.stdout)
@@ -263,6 +292,7 @@ def stack() -> Iterator[None]:
         "--wait-timeout",
         UP_TIMEOUT,
         *SERVICES,
+        check=False,
     )
     if up.returncode != 0:
         print(up.stdout)
@@ -478,12 +508,13 @@ def mqtt_publish_delivered() -> Any:
         # entrega a mensagem ao assinante mesmo se ele conectar depois do
         # PUBLISH. Publicacao negada (anonimo/ACL) nao grava retained,
         # entao continua resultando em MISS.
+        tls = " ".join(MQTT_TLS_ARGS)
         shell = (
-            "mosquitto_sub -h localhost"
+            f"mosquitto_sub -h localhost {tls}"
             f" -u {MQTT_PUB_USER} -P {MQTT_PUB_PASS}"
             f" -t '{topic}' -q 1 -C 1 -W 8 > /tmp/probe.out 2>/dev/null & "
             "sleep 0.5; "
-            f"mosquitto_pub -h localhost {auth} -q 1 -r "
+            f"mosquitto_pub -h localhost {tls} {auth} -q 1 -r "
             f"-t '{topic}' -m '{marker}' > /dev/null 2>&1; "
             "sleep 1.5; "
             f"grep -q '{marker}' /tmp/probe.out && echo GOT || echo MISS"

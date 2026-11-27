@@ -17,8 +17,9 @@ but keep in mind that for production usage it might need modifications.
 ## Configuration
 
 This setup is pre-configured for all regions. You can either connect a ChirpStack Gateway Bridge
-instance (v3.14.0+) to the MQTT broker (port 1883) or connect a Semtech UDP Packet Forwarder.
-Please note that:
+instance (v3.14.0+) to the MQTT broker (port 8883, TLS — issue #81) or connect a
+Semtech UDP Packet Forwarder. The plaintext listener on 1883 was removed:
+non-TLS connections are rejected (connection refused). Please note that:
 
 * You must prefix the MQTT topic with the region.
   Please see the region configuration files in the `configuration/chirpstack` for a list
@@ -62,7 +63,36 @@ PostgreSQL and Redis data is persisted in Docker volumes, see the `docker-compos
 ## Requirements
 
 Before using this `docker-compose.yml` file, make sure you have [Docker](https://www.docker.com/community-edition)
-installed.
+installed and `openssl` available on the host.
+
+### MQTT TLS (issue #81)
+
+Generate the CA and the broker server certificate **before** `docker compose up`:
+
+```bash
+infra/scripts/gen-mosquitto-certs.sh
+# opcional: MQTT_TLS_HOST=<ip-ou-hostname-publico> infra/scripts/gen-mosquitto-certs.sh
+```
+
+This writes `infra/configuration/mosquitto/certs/{ca.crt,server.crt,server.key}`
+and the CA private key in `infra/configuration/mosquitto/private/ca.key`
+(both gitignored). Only `ca.crt` is mounted into the client containers;
+`ca.key` never leaves the host and the broker gets only `ca.crt`, `server.crt`
+and `server.key` (0640, owned by uid 1883). The script is idempotent — use
+`FORCE=1` to regenerate. The broker listens only on `8883` (published on `127.0.0.1`);
+ChirpStack, both gateway bridges and the routing service connect with
+`ssl://mosquitto:8883` and validate the server against `ca.crt`.
+Username/password + ACL from issue #208 remain in force.
+
+Smoke test from the host:
+
+```bash
+# falha: nao ha listener plaintext na 1883
+mosquitto_sub -h 127.0.0.1 -p 1883 -t '#'
+# funciona (use uma identidade do mosquitto.passwd)
+mosquitto_sub -h localhost -p 8883 --cafile infra/configuration/mosquitto/certs/ca.crt \
+  -u chirpstack -P '<senha>' -t '#'
+```
 
 ## Importing device repository
 

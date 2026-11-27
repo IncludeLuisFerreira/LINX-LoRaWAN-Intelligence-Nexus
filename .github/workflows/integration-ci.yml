@@ -6,7 +6,9 @@ on:
       - "tests/integration/**"
       - "client/services/telemetry_consumer/**"
       - "middleware/services/routing/**"
-      - "infra/docker-compose*.yml"
+      # TLS do Mosquitto (#81): qualquer mudanca em infra/ (composes,
+      # mosquitto.conf, script de certificados) deve disparar a suite.
+      - "infra/**"
       - "client/db/**"
       - "scripts/bootstrap-network.sh"
       - ".github/workflows/integration-ci.yml"
@@ -18,7 +20,9 @@ on:
       - "tests/integration/**"
       - "client/services/telemetry_consumer/**"
       - "middleware/services/routing/**"
-      - "infra/docker-compose*.yml"
+      # TLS do Mosquitto (#81): qualquer mudanca em infra/ (composes,
+      # mosquitto.conf, script de certificados) deve disparar a suite.
+      - "infra/**"
       - "client/db/**"
       - "scripts/bootstrap-network.sh"
       - ".github/workflows/integration-ci.yml"

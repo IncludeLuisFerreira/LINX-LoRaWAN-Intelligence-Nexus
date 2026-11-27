@@ -48,6 +48,8 @@ class MqttConsumer:
         client_id: str = "linx-routing",
         username: str = "",
         password: str = "",
+        tls_enabled: bool = False,
+        ca_cert: str = "",
         connect_max_attempts: int = 5,
         connect_backoff_seconds: float = 1.0,
         connect_backoff_max_seconds: float = 30.0,
@@ -62,11 +64,25 @@ class MqttConsumer:
         self.client_id = client_id
         self.username = username
         self.password = password
+        self.tls_enabled = tls_enabled
+        self.ca_cert = ca_cert
         self.connect_max_attempts = connect_max_attempts
         self.connect_backoff_seconds = connect_backoff_seconds
         self.connect_backoff_max_seconds = connect_backoff_max_seconds
         self.stop_event = stop_event
         self.client: Any = None
+        self._connection_failed = threading.Event()
+
+    def _fail_connection(self, client, detail: str) -> None:
+        """Encerra o loop do cliente: sem CONNACK não há uplink consumido."""
+        logger.error("Falha fatal de conexão MQTT: %s", detail)
+        self._connection_failed.set()
+        if self.stop_event is not None:
+            self.stop_event.set()
+        try:
+            client.disconnect()
+        except Exception:
+            logger.exception("Falha ao interromper o cliente MQTT")
 
     def on_connect(
         self, client, userdata, connect_flags, reason_code, properties=None
@@ -80,10 +96,11 @@ class MqttConsumer:
             client.subscribe(self.topic, qos=self.qos)
             logger.info("Inscrito no tópico %s (qos=%d)", self.topic, self.qos)
         else:
-            logger.error(
-                "Falha ao conectar ao broker MQTT: reason_code=%s",
-                reason_code,
-            )
+            self._fail_connection(client, f"CONNACK reason_code={reason_code}")
+
+    def on_connect_fail(self, client, userdata) -> None:
+        """Handshake/TCP falhou (p.ex. CA ou hostname divergentes)."""
+        self._fail_connection(client, "handshake/TCP")
 
     def on_message(self, client, userdata, message) -> None:
         try:
@@ -176,14 +193,21 @@ class MqttConsumer:
             manual_ack=True,
         )
         self.client.on_connect = self.on_connect
+        self.client.on_connect_fail = self.on_connect_fail
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
+        if self.tls_enabled:
+            # TLS de servidor (#81); a CA self-signed do broker é passada pelo
+            # compose. Sem ca_cert, caímos nas CAs do sistema.
+            self.client.tls_set(ca_certs=self.ca_cert or None)
         if self.username:
             self.client.username_pw_set(self.username, self.password)
         if not self._connect():
             return False
         self.client.loop_forever()
-        return True
+        # CONNACK negado / handshake falho precisa derrubar o processo: sem
+        # subscrição ativa o container ficaria "up" consumindo zero uplinks.
+        return not self._connection_failed.is_set()
 
     def stop(self) -> None:
         if self.client is None:

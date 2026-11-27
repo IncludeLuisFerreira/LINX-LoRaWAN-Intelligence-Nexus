@@ -2,9 +2,10 @@
 # configuration example and documentation.
 
 [integration.mqtt.auth.generic]
-servers=["tcp://mosquitto:1883"]
+servers=["ssl://mosquitto:8883"]
 username=""
 password=""
+ca_cert="/mosquitto/certs/ca.crt"
 
 [integration.mqtt]
 event_topic_template="ru864/gateway/{{ .GatewayID }}/event/{{ .EventType }}"

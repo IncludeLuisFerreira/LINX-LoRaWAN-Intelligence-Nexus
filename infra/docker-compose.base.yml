@@ -23,9 +23,14 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${MQTT_HOST_PORT:-1883}:1883"
+      # TLS (#81): listener 8883; a 1883 plaintext foi removida.
+      - "127.0.0.1:${MQTT_HOST_PORT:-8883}:8883"
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
+      # Somente os arquivos necessarios ao broker: a ca.key fica no host (#81).
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
+      - ./configuration/mosquitto/certs/server.crt:/mosquitto/certs/server.crt:ro
+      - ./configuration/mosquitto/certs/server.key:/mosquitto/certs/server.key:ro
 
   rabbitmq:
     image: rabbitmq:3-management-alpine

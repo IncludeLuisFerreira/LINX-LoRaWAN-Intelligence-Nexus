@@ -28,6 +28,12 @@ O arquivo que junta esses serviços é
 os composes de aplicação: apenas declara o conjunto que a suíte sobe, com
 portas em offsets de teste e rede isolada.
 
+O broker não tem listener plaintext na 1883: os probes usam `mosquitto_pub`
+com `-p 8883 --cafile /mosquitto/certs/ca.crt` e o routing sobe com
+`MQTT_TLS_ENABLED=true`. A suíte gera CA/certificado automaticamente (se ainda
+não existirem) via `infra/scripts/gen-mosquitto-certs.sh`. Há também casos
+negativos: 1883 rejeitada, CA não confiável e hostname divergente.
+
 A stack roda na rede `lynx-it-network` (parametrizada por `LINX_NETWORK`),
 separada do ambiente de desenvolvimento. As portas publicadas no host vêm do
 `test.env`:
@@ -46,6 +52,9 @@ O compose base lê essas variáveis; não há mais override de portas com
 3. Deduplicação por `(app_id, dev_eui, time, event_type)`
 4. Payload inválido → não persiste (DLQ)
 5. Regressão: `timestamp` string ISO aceito pelo consumer
+6. TLS: conexão plaintext na 1883 é recusada
+7. TLS: certificado de CA não confiável é recusado na 8883
+8. TLS: hostname fora do SAN do certificado é recusado na 8883
 
 ## Rodar
 

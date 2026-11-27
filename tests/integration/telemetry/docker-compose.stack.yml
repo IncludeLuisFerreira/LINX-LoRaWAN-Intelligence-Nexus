@@ -69,13 +69,18 @@ services:
     restart: unless-stopped
     environment:
       - MQTT_BROKER_HOST=mosquitto
-      - MQTT_BROKER_PORT=1883
+      - MQTT_BROKER_PORT=8883
+      - MQTT_TLS_ENABLED=true
+      - MQTT_CA_CERT=/mosquitto/certs/ca.crt
       - MQTT_TOPIC=${MQTT_TOPIC}
       - MQTT_USERNAME=${MQTT_ROUTING_USER}
       - MQTT_PASSWORD=${MQTT_ROUTING_PASSWORD}
       - RABBIT_URL=amqp://${RABBITMQ_ADMIN_USER}:${RABBITMQ_ADMIN_PASSWORD}@rabbitmq:5672/%2f
       - RABBIT_EXCHANGE_PREFIX=${RABBIT_EXCHANGE_PREFIX:-linx.telemetry}
       - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}
+    volumes:
+      # Somente a CA publica (#81); a chave privada fica fora do container.
+      - ../../../infra/configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
     depends_on:
       rabbitmq:
         condition: service_healthy

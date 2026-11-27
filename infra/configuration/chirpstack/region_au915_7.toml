@@ -38,7 +38,7 @@
         topic_prefix="au915_7"
 
         # MQTT server (e.g. scheme://host:port where scheme is tcp, ssl or ws)
-        server="tcp://$MQTT_BROKER_HOST:1883"
+        server="ssl://$MQTT_BROKER_HOST:8883"
 
         # Connect with the given username (optional)
         username="$MQTT_CHIRPSTACK_USER"
@@ -81,7 +81,7 @@
         # Use this when setting up a secure connection (when server uses ssl://...)
         # but the certificate used by the server is not trusted by any CA certificate
         # on the server (e.g. when self generated).
-        ca_cert=""
+        ca_cert="/mosquitto/certs/ca.crt"  # CA do broker TLS (#81)
 
         # TLS certificate file (optional)
         tls_cert=""

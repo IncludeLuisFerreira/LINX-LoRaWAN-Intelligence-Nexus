@@ -24,7 +24,8 @@ Uso:
   python scripts/test_isolation.py --base-url http://localhost:8000 \\
       --service-token "$SERVICE_TOKEN" \\
       --consumer-a-url http://localhost:8011 --consumer-b-url http://localhost:8012 \\
-      --mosquitto-host localhost --mosquitto-port 1883 \\
+      --mosquitto-host localhost --mosquitto-port 8883 \\
+      --mosquitto-ca-cert infra/configuration/mosquitto/certs/ca.crt \\
       --rabbitmq-host localhost --rabbitmq-port 5672 \\
       --rabbitmq-secret "$RABBITMQ_TENANT_SECRET"
 
@@ -337,11 +338,21 @@ class HttpTelemetryReader:
 
 
 class PahoInjector:
-    def __init__(self, host: str, port: int, username: str, password: str) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        username: str,
+        password: str,
+        ca_cert: str = "",
+    ) -> None:
         import paho.mqtt.client as mqtt
 
         self._mqtt = mqtt
         self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
+        if ca_cert:
+            # TLS do broker (#81): valida o servidor com a CA local.
+            self._client.tls_set(ca_certs=ca_cert)
         if username:
             self._client.username_pw_set(username, password)
         self._client.connect(host, port)
@@ -505,6 +516,7 @@ def run_e2e(args: argparse.Namespace, log: Callable[[str], None]) -> IsolationRe
         args.mosquitto_port,
         args.mosquitto_username,
         args.mosquitto_password,
+        args.mosquitto_ca_cert,
     )
     for ctx in contexts:
         log(f"publicando uplink {ctx.marker} em application/{ctx.app_id}/...")
@@ -733,7 +745,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="token do pod B (default: --service-token)",
     )
     parser.add_argument("--mosquitto-host", default="localhost")
-    parser.add_argument("--mosquitto-port", type=int, default=1883)
+    parser.add_argument("--mosquitto-port", type=int, default=8883)
+    parser.add_argument(
+        "--mosquitto-ca-cert",
+        default="",
+        help="CA do broker TLS (#81); vazia usa as CAs do sistema",
+    )
     parser.add_argument("--mosquitto-username", default="chirpstack")
     parser.add_argument("--mosquitto-password", default="")
     parser.add_argument("--consumer-a-url", default="http://localhost:8011")

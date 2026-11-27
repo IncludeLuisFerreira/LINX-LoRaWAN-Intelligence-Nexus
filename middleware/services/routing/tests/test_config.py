@@ -10,6 +10,8 @@ def test_settings_defaults(monkeypatch):
     for var in (
         "MQTT_BROKER_HOST",
         "MQTT_BROKER_PORT",
+        "MQTT_TLS_ENABLED",
+        "MQTT_CA_CERT",
         "MQTT_TOPIC",
         "MQTT_QOS",
         "MQTT_CLIENT_ID",
@@ -29,7 +31,9 @@ def test_settings_defaults(monkeypatch):
     settings = RoutingSettings(_env_file=None)
 
     assert settings.mqtt_broker_host == "localhost"
-    assert settings.mqtt_broker_port == 1883
+    assert settings.mqtt_broker_port == 8883
+    assert settings.mqtt_tls_enabled is True
+    assert settings.mqtt_ca_cert == ""
     assert settings.mqtt_topic == "application/+/device/+/event/up"
     assert settings.mqtt_qos == 1
     assert settings.mqtt_client_id == "linx-routing"
@@ -55,7 +59,9 @@ def test_settings_override(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
     monkeypatch.setenv("MQTT_BROKER_HOST", "broker.example.com")
-    monkeypatch.setenv("MQTT_BROKER_PORT", "8883")
+    monkeypatch.setenv("MQTT_BROKER_PORT", "8884")
+    monkeypatch.setenv("MQTT_TLS_ENABLED", "false")
+    monkeypatch.setenv("MQTT_CA_CERT", "/certs/ca.crt")
     monkeypatch.setenv("MQTT_QOS", "0")
     monkeypatch.setenv("MQTT_CLIENT_ID", "custom-client")
     monkeypatch.setenv("MQTT_USERNAME", "routing")
@@ -68,7 +74,9 @@ def test_settings_override(monkeypatch):
     settings = RoutingSettings(_env_file=None)
 
     assert settings.mqtt_broker_host == "broker.example.com"
-    assert settings.mqtt_broker_port == 8883
+    assert settings.mqtt_broker_port == 8884
+    assert settings.mqtt_tls_enabled is False
+    assert settings.mqtt_ca_cert == "/certs/ca.crt"
     assert settings.mqtt_qos == 0
     assert settings.mqtt_client_id == "custom-client"
     assert settings.mqtt_username == "routing"
