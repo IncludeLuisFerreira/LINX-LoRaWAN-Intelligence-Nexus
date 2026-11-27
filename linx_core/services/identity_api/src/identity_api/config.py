@@ -3,7 +3,7 @@ from linx_shared.core.config import (
     require_connection_string,
     require_secret,
 )
-from pydantic import ValidationInfo, field_validator
+from pydantic import ValidationInfo, field_validator, model_validator
 
 
 class IdentitySettings(Settings):
@@ -55,6 +55,17 @@ class IdentitySettings(Settings):
                 "PROVISIONER_GRPC_TIMEOUT_SECONDS deve ser maior que zero"
             )
         return value
+
+    @model_validator(mode="after")
+    def _validate_provisioner_service_token(self) -> "IdentitySettings":
+        # Host vazio desabilita o deprovisionamento; nesse caso o token não é
+        # exigido. Com host configurado, o client gRPC precisa de credencial
+        # própria (separada do `service_token` dos containers dos tenants).
+        if self.provisioner_grpc_host:
+            require_secret(
+                "PROVISIONER_SERVICE_TOKEN", self.provisioner_service_token
+            )
+        return self
 
     @field_validator("database_url")
     @classmethod

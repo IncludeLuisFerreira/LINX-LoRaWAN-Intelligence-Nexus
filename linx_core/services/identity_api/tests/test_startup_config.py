@@ -102,3 +102,29 @@ def test_startup_rejects_non_positive_job_max_attempts(monkeypatch):
 
     with pytest.raises(ValidationError, match="JOB_MAX_ATTEMPTS"):
         IdentitySettings(_env_file=None)
+
+
+def test_startup_accepts_provisioner_token_when_host_set(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    monkeypatch.setenv(
+        "PROVISIONER_SERVICE_TOKEN", "test-provisioner-token-0123456789abcdef"
+    )
+    settings = IdentitySettings(_env_file=None)
+    assert (
+        settings.provisioner_service_token
+        == "test-provisioner-token-0123456789abcdef"
+    )
+
+
+def test_startup_rejects_missing_provisioner_token_when_host_set(monkeypatch):
+    _valid_env(monkeypatch)
+    monkeypatch.setenv("PROVISIONER_GRPC_HOST", "docker_provisioner:50052")
+    with pytest.raises(ValidationError, match="PROVISIONER_SERVICE_TOKEN"):
+        IdentitySettings(_env_file=None)
+
+
+def test_startup_allows_empty_provisioner_token_when_host_unset(monkeypatch):
+    _valid_env(monkeypatch)  # provisioner_grpc_host default ""
+    settings = IdentitySettings(_env_file=None)
+    assert settings.provisioner_service_token == ""
