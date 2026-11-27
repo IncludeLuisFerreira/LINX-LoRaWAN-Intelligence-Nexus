@@ -95,7 +95,7 @@ def _application_with_instance(db_session, job_factory):
     )
     db_session.add(application)
     db_session.flush()
-    instance = ApplicationInstance(app_id=application.id, status="PENDING")
+    instance = ApplicationInstance(app_id=application.id, status="pending")
     db_session.add(instance)
     db_session.flush()
     job = job_factory(
@@ -332,7 +332,7 @@ def test_exhausted_lease_fails_without_invoking_handler(
     assert job.attempts == 4
     assert job.locked_until is None
     assert job.status == JobStatus.RUNNING.value
-    assert instance.status == "ERROR"
+    assert instance.status == "error"
 
 
 def test_commit_failure_leaves_no_uncommitted_outbox_row(
@@ -407,7 +407,7 @@ def test_success_marks_instance_running_with_container_data(
     processor.process(_envelope(job))
 
     db_session.expire_all()
-    assert instance.status == "RUNNING"
+    assert instance.status == "running"
     assert instance.container_id == "container-1"
     assert instance.port == 8421
     assert instance.provisioned_at is not None
@@ -427,7 +427,7 @@ def test_transient_failure_keeps_instance_provisioning(
     processor.process(_envelope(job))
 
     db_session.expire_all()
-    assert instance.status == "PROVISIONING"
+    assert instance.status == "provisioning"
 
 
 def test_permanent_failure_marks_instance_error(
@@ -444,7 +444,7 @@ def test_permanent_failure_marks_instance_error(
     processor.process(_envelope(job))
 
     db_session.expire_all()
-    assert instance.status == "ERROR"
+    assert instance.status == "error"
 
 
 def test_exhausted_attempts_marks_instance_error(
@@ -463,7 +463,7 @@ def test_exhausted_attempts_marks_instance_error(
     processor.process(_envelope(job))
 
     db_session.expire_all()
-    assert instance.status == "ERROR"
+    assert instance.status == "error"
 
 
 def test_non_provision_job_does_not_change_instance(
@@ -479,7 +479,7 @@ def test_non_provision_job_does_not_change_instance(
     processor.process(_envelope(job))
 
     db_session.expire_all()
-    assert instance.status == "PENDING"
+    assert instance.status == "pending"
 
 
 def test_retry_after_success_does_not_regress_running_instance(
@@ -490,7 +490,7 @@ def test_retry_after_success_does_not_regress_running_instance(
     job, instance = _application_with_instance(db_session, job_factory)
     job.status = JobStatus.RUNNING.value
     job.attempts = 1
-    instance.status = "RUNNING"
+    instance.status = "running"
     db_session.flush()
     processor = _processor(
         session_factory,
@@ -500,4 +500,4 @@ def test_retry_after_success_does_not_regress_running_instance(
     processor.process(_envelope(job))
 
     db_session.expire_all()
-    assert instance.status == "RUNNING"
+    assert instance.status == "running"

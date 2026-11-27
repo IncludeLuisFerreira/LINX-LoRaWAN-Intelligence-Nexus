@@ -172,9 +172,9 @@ class JobProcessor:
         if instance is None:
             return
         if (
-            status == "PROVISIONING"
+            status == "provisioning"
             and job.attempts > 1
-            and instance.status in ("RUNNING", "ERROR")
+            and instance.status in ("running", "error")
         ):
             return
 
@@ -258,7 +258,7 @@ class JobProcessor:
         envelope: JobEnvelope,
     ) -> None:
         self._event(session, job, JobStatus.RUNNING, suffix="started")
-        self._mark_instance(session, job, status="PROVISIONING")
+        self._mark_instance(session, job, status="provisioning")
 
     def _add_succeeded(
         self,
@@ -281,7 +281,7 @@ class JobProcessor:
         self._mark_instance(
             session,
             job,
-            status="RUNNING",
+            status="running",
             result=result,
             provisioned_at=finished_at,
         )
@@ -354,4 +354,4 @@ class JobProcessor:
             exchange=JOB_DLX,
             routing_key=f"{job.type}.dead",
         )
-        self._mark_instance(session, job, status="ERROR")
+        self._mark_instance(session, job, status="error")
