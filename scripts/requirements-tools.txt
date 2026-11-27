@@ -1,0 +1,4 @@
+# Dependências das ferramentas de CI em scripts/.
+# O runner de testes das ferramentas é `unittest` (stdlib); PyYAML é usado
+# pelo checker de topologia para ler os arquivos docker-compose.
+PyYAML==6.0.3

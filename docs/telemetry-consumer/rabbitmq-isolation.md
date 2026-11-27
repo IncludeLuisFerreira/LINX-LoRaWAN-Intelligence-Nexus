@@ -63,7 +63,8 @@ só declara, publica e consome recursos cujo nome está no seu prefixo.
 - O `Linx Core` deriva a senha, provisiona o usuário/permissões e monta o
   `RABBIT_URL` (`amqp://tenant.{app_id}:{senha}@host:5672/%2f`) para o stack do
   cliente. O cliente **não** recebe o segredo.
-- Helper local: `deploy/scripts/provision-rabbitmq-tenant.sh`.
+- O `identity_api` é a fonte única do provisionamento (criação/exclusão da
+  aplicação). Não há mais helper de linha de comando versionado.
 
 ## Provisionamento
 
