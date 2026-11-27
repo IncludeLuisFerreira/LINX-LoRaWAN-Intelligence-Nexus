@@ -322,6 +322,13 @@ def test_outbox_is_quarantined_after_max_attempts(
     assert row.attempts == 3
     assert row.last_error is not None
 
+    db_session.expire_all()
+    failed_job = db_session.get(Job, job.id)
+    assert failed_job is not None
+    assert failed_job.status == "failed"
+    assert failed_job.error["code"] == "command_publish_failed"
+    assert failed_job.finished_at is not None
+
     retry_session = session_factory()
     healthy = FakePublisher()
     try:

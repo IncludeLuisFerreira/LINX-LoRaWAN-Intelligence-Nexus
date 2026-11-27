@@ -18,6 +18,8 @@ from linx_shared.jobs.constants import (
     PROVISIONING_DLQ,
     PROVISIONING_QUEUE,
     PROVISIONING_REQUESTED,
+    PROVISIONING_STATUS_DEAD,
+    PROVISIONING_STATUS_DLQ,
     PROVISIONING_STATUS_QUEUE,
 )
 
@@ -83,6 +85,7 @@ def test_declare_topology_declares_exchanges_queues_and_bindings():
         PROVISIONING_QUEUE,
         PROVISIONING_DLQ,
         PROVISIONING_STATUS_QUEUE,
+        PROVISIONING_STATUS_DLQ,
     }
     assert all(item["durable"] is True for item in channel.queues)
 
@@ -98,6 +101,11 @@ def test_declare_topology_declares_exchanges_queues_and_bindings():
             JOB_EVENTS_EXCHANGE,
             "provisioning.application.#",
         ),
+        (
+            PROVISIONING_STATUS_DLQ,
+            JOB_DLX,
+            PROVISIONING_STATUS_DEAD,
+        ),
     }
 
 
@@ -108,27 +116,37 @@ def _assert_only_status_topology(channel, queue):
     assert channel.exchanges[0]["exchange_type"] == "topic"
     assert channel.exchanges[0]["durable"] is True
 
-    assert [item["queue"] for item in channel.queues] == [queue]
-    assert channel.queues[0]["durable"] is True
-    assert not any(
-        key.startswith("x-dead-letter-")
-        for key in channel.queues[0].get("arguments", {})
-    )
+    assert [item["queue"] for item in channel.queues] == [
+        queue,
+        PROVISIONING_STATUS_DLQ,
+    ]
+    status_queue = channel.queues[0]
+    assert status_queue["durable"] is True
+    assert status_queue["arguments"] == {
+        "x-dead-letter-exchange": JOB_DLX,
+        "x-dead-letter-routing-key": PROVISIONING_STATUS_DEAD,
+    }
+    assert channel.queues[1]["durable"] is True
 
-    assert [
+    assert {
         (
             item["queue"],
             item["exchange"],
             item["routing_key"],
         )
         for item in channel.bindings
-    ] == [
+    } == {
         (
             queue,
             JOB_EVENTS_EXCHANGE,
             "provisioning.application.#",
-        )
-    ]
+        ),
+        (
+            PROVISIONING_STATUS_DLQ,
+            JOB_DLX,
+            PROVISIONING_STATUS_DEAD,
+        ),
+    }
 
 
 def test_declare_status_topology_declares_only_status_queue():
@@ -341,6 +359,7 @@ def test_declare_topology_declares_second_job_type():
         PROVISIONING_QUEUE,
         PROVISIONING_DLQ,
         PROVISIONING_STATUS_QUEUE,
+        PROVISIONING_STATUS_DLQ,
         f"linx.jobs.{SECOND_JOB_TYPE}",
         f"linx.jobs.{SECOND_JOB_TYPE}.dlq",
     }
@@ -368,6 +387,11 @@ def test_declare_topology_declares_second_job_type():
         JOB_EVENTS_EXCHANGE,
         f"{SECOND_JOB_TYPE}.#",
     ) in bindings
+    assert (
+        PROVISIONING_STATUS_DLQ,
+        JOB_DLX,
+        PROVISIONING_STATUS_DEAD,
+    ) in bindings
 
 
 def test_declare_status_topology_binds_each_job_type():
@@ -379,7 +403,8 @@ def test_declare_status_topology_binds_each_job_type():
     )
 
     assert [item["queue"] for item in channel.queues] == [
-        PROVISIONING_STATUS_QUEUE
+        PROVISIONING_STATUS_QUEUE,
+        PROVISIONING_STATUS_DLQ,
     ]
     assert {
         (item["queue"], item["exchange"], item["routing_key"])
@@ -394,6 +419,11 @@ def test_declare_status_topology_binds_each_job_type():
             PROVISIONING_STATUS_QUEUE,
             JOB_EVENTS_EXCHANGE,
             f"{SECOND_JOB_TYPE}.#",
+        ),
+        (
+            PROVISIONING_STATUS_DLQ,
+            JOB_DLX,
+            PROVISIONING_STATUS_DEAD,
         ),
     }
 

@@ -9,6 +9,7 @@ from typing import Any
 import pika
 from linx_shared.db.base import SessionLocal, engine
 from linx_shared.jobs.broker import declare_status_topology
+from linx_shared.jobs.constants import PROVISIONING_STATUS_DEAD
 from linx_shared.jobs.consumer import InvalidMessageError, run_consumer
 from linx_shared.jobs.envelope import JobStatusEvent
 from pydantic import ValidationError
@@ -91,7 +92,10 @@ def build_consumer_threads(
                 settings.status_prefetch,
                 stop_event,
             ),
-            kwargs={"declare": declare},
+            kwargs={
+                "declare": declare,
+                "dead_letter_routing_key": PROVISIONING_STATUS_DEAD,
+            },
             name=f"status-consumer-{index}",
             daemon=True,
         )
