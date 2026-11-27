@@ -4,16 +4,16 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-import pika
 from pydantic import ValidationError
 
-from linx_shared.jobs.broker import RabbitMQPublisher
 from linx_shared.jobs.constants import (
     JOB_DLX,
     PROVISIONING_STATUS_DEAD,
     PROVISIONING_STATUS_QUEUE,
 )
 from linx_shared.jobs.envelope import JobEnvelope
+from linx_shared.messaging.connection_manager import PikaConnectionManager
+from linx_shared.messaging.pika_adapter import PikaPublisher
 from linx_shared.messaging.policy import (
     FailurePolicy,
     InvalidMessageError,
@@ -25,6 +25,7 @@ __all__ = ["InvalidMessageError", "run_consumer"]
 logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY_SECONDS = 5.0
+POLL_INTERVAL_SECONDS = 0.1
 
 PublisherFactory = Callable[[str], Any]
 
@@ -65,10 +66,11 @@ def run_consumer(
     declare: Callable[[Any], None] | None = None,
     policy: FailurePolicy | None = None,
     dead_letter_routing_key: str | None = None,
-    publisher_factory: PublisherFactory = RabbitMQPublisher,
+    publisher_factory: PublisherFactory = PikaPublisher,
 ) -> None:
     failure_policy = policy or FailurePolicy()
     publisher = publisher_factory(url)
+    manager = PikaConnectionManager(url)
 
     def dead_letter(
         body: bytes,
@@ -91,7 +93,7 @@ def run_consumer(
             connection: Any = None
             channel: Any = None
             try:
-                connection = pika.BlockingConnection(pika.URLParameters(url))
+                connection = manager.connect()
                 channel = connection.channel()
                 if declare is not None:
                     declare(channel)
@@ -162,7 +164,17 @@ def run_consumer(
                 )
 
                 while stop_event is None or not stop_event.is_set():
-                    connection.process_data_events(time_limit=1)
+                    if not getattr(connection, "is_open", True):
+                        raise ConnectionError("RabbitMQ connection closed")
+                    process_events = getattr(
+                        connection, "process_data_events", None
+                    )
+                    if process_events is not None:
+                        process_events(time_limit=1)
+                    elif stop_event is not None:
+                        stop_event.wait(POLL_INTERVAL_SECONDS)
+                    else:
+                        time.sleep(POLL_INTERVAL_SECONDS)
             except Exception:
                 if stop_event is not None and stop_event.is_set():
                     break
@@ -173,6 +185,6 @@ def run_consumer(
                     time.sleep(RECONNECT_DELAY_SECONDS)
             finally:
                 _close_quietly(channel)
-                _close_quietly(connection)
+                manager.close()
     finally:
         _close_quietly(publisher)

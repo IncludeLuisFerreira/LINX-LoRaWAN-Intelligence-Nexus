@@ -91,11 +91,22 @@ class FailingConnection(StoppingConnection):
 
 def _patch_connection(monkeypatch, connections):
     pending = list(connections)
+    opened: list = []
 
-    def factory(parameters):
-        return pending.pop(0)
+    class FakeManager:
+        def __init__(self, url: str) -> None:
+            self.url = url
 
-    monkeypatch.setattr(consumer.pika, "BlockingConnection", factory)
+        def connect(self, attempts: int = 1):
+            connection = pending.pop(0)
+            opened.append(connection)
+            return connection
+
+        def close(self) -> None:
+            if opened:
+                opened.pop().close()
+
+    monkeypatch.setattr(consumer, "PikaConnectionManager", FakeManager)
 
 
 def test_run_consumer_does_not_redeclare_queue(monkeypatch):

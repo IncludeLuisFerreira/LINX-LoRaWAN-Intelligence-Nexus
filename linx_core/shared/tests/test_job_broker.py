@@ -1,9 +1,9 @@
 import json
+from typing import Any
 
 import pika
 import pytest
 
-from linx_shared.jobs import broker
 from linx_shared.jobs.broker import (
     RabbitMQPublisher,
     declare_status_topology,
@@ -22,6 +22,7 @@ from linx_shared.jobs.constants import (
     PROVISIONING_STATUS_DLQ,
     PROVISIONING_STATUS_QUEUE,
 )
+from linx_shared.messaging import pika_adapter
 
 
 class FakeChannel:
@@ -33,7 +34,7 @@ class FakeChannel:
         self.confirm_calls = 0
         self.is_open = True
 
-    def confirm_delivery(self) -> None:
+    def confirm_delivery(self, callback=None) -> None:
         self.confirm_calls += 1
 
     def exchange_declare(self, **kwargs) -> None:
@@ -58,7 +59,7 @@ class FakeConnection:
     def channel(self) -> FakeChannel:
         return self._channel
 
-    def close(self) -> None:
+    def close(self, timeout: float | None = None) -> None:
         if not self.is_open:
             raise pika.exceptions.ConnectionWrongStateError("closed")
         self.is_open = False
@@ -179,14 +180,59 @@ def test_declare_topology_configures_main_queue_dlx():
     }
 
 
+class ConfirmingChannel(FakeChannel):
+    def __init__(self, mode: str = "ack") -> None:
+        super().__init__()
+        self.mode = mode
+        self._tag = 0
+        self._confirm_callback: Any = None
+        self._return_callback: Any = None
+
+    def confirm_delivery(self, callback=None) -> None:
+        self.confirm_calls += 1
+        self._confirm_callback = callback
+
+    def add_on_return_callback(self, callback) -> None:
+        self._return_callback = callback
+
+    def basic_publish(self, **kwargs) -> None:
+        self._tag += 1
+        self.published.append(kwargs)
+        if self.mode == "connection_error":
+            raise pika.exceptions.AMQPConnectionError("connection lost")
+        if self.mode == "return":
+            self._return_callback(
+                None,
+                None,
+                kwargs["properties"],
+                kwargs["body"],
+            )
+        if kwargs.get("on_publish") is not None:
+            kwargs["on_publish"](self._tag)
+        if self.mode == "nack":
+            method: Any = pika.spec.Basic.Nack(
+                delivery_tag=self._tag, multiple=False
+            )
+        else:
+            method = pika.spec.Basic.Ack(
+                delivery_tag=self._tag, multiple=False
+            )
+        self._confirm_callback(type("Frame", (), {"method": method})())
+
+
+def _patch_pika(monkeypatch, connections):
+    pending = list(connections)
+
+    def factory(parameters, **kwargs):
+        return pending.pop(0)
+
+    monkeypatch.setattr(pika_adapter.pika, "Connection", factory)
+
+
 def test_publish_sets_persistent_message_and_message_id(monkeypatch):
-    channel = FakeChannel()
+    channel = ConfirmingChannel()
     connection = FakeConnection(channel)
-    monkeypatch.setattr(
-        broker.pika,
-        "BlockingConnection",
-        lambda parameters: connection,
-    )
+    _patch_pika(monkeypatch, [connection])
     publisher = RabbitMQPublisher("amqp://guest:guest@localhost:5672/")
     payload = {"job_id": "job-1", "attempt": 1}
 
@@ -208,38 +254,12 @@ def test_publish_sets_persistent_message_and_message_id(monkeypatch):
     assert channel.confirm_calls == 1
 
 
-class FailingChannel(FakeChannel):
-    def basic_publish(self, **kwargs) -> None:
-        raise pika.exceptions.AMQPConnectionError("connection lost")
-
-
-class NackChannel(FakeChannel):
-    def basic_publish(self, **kwargs) -> None:
-        raise pika.exceptions.NackError([1])
-
-
-class UnroutableChannel(FakeChannel):
-    def basic_publish(self, **kwargs) -> None:
-        raise pika.exceptions.UnroutableError([1])
-
-
-class CloseRaisesConnection(FakeConnection):
-    def close(self) -> None:
-        self.closed = True
-        raise pika.exceptions.ConnectionWrongStateError("already closed")
-
-
 def test_publish_reconnects_once_on_connection_error(monkeypatch):
-    first_channel = FailingChannel()
-    first_connection = CloseRaisesConnection(first_channel)
-    second_channel = FakeChannel()
+    first_channel = ConfirmingChannel(mode="connection_error")
+    first_connection = FakeConnection(first_channel)
+    second_channel = ConfirmingChannel()
     second_connection = FakeConnection(second_channel)
-    connections = iter([first_connection, second_connection])
-    monkeypatch.setattr(
-        broker.pika,
-        "BlockingConnection",
-        lambda parameters: next(connections),
-    )
+    _patch_pika(monkeypatch, [first_connection, second_connection])
     publisher = RabbitMQPublisher("amqp://guest:guest@localhost:5672/")
 
     publisher.publish(
@@ -251,20 +271,15 @@ def test_publish_reconnects_once_on_connection_error(monkeypatch):
 
     assert len(second_channel.published) == 1
     assert publisher._channel is second_channel
-    assert publisher._connection is second_connection
+    assert publisher._manager._connection is second_connection
 
 
 def test_publish_replaces_closed_cached_connection(monkeypatch):
-    first_channel = FakeChannel()
+    first_channel = ConfirmingChannel()
     first_connection = FakeConnection(first_channel)
-    second_channel = FakeChannel()
+    second_channel = ConfirmingChannel()
     second_connection = FakeConnection(second_channel)
-    connections = iter([first_connection, second_connection])
-    monkeypatch.setattr(
-        broker.pika,
-        "BlockingConnection",
-        lambda parameters: next(connections),
-    )
+    _patch_pika(monkeypatch, [first_connection, second_connection])
     publisher = RabbitMQPublisher("amqp://guest:guest@localhost:5672/")
     publisher.publish(
         JOB_EXCHANGE,
@@ -279,19 +294,14 @@ def test_publish_replaces_closed_cached_connection(monkeypatch):
         {"job_id": "job-2"},
     )
 
-    assert first_connection.closed is False
     assert len(second_channel.published) == 1
     assert publisher._channel is second_channel
 
 
 def test_publish_propagates_nack_without_marking_success(monkeypatch):
-    channel = NackChannel()
+    channel = ConfirmingChannel(mode="nack")
     connection = FakeConnection(channel)
-    monkeypatch.setattr(
-        broker.pika,
-        "BlockingConnection",
-        lambda parameters: connection,
-    )
+    _patch_pika(monkeypatch, [connection])
     publisher = RabbitMQPublisher("amqp://guest:guest@localhost:5672/")
 
     with pytest.raises(pika.exceptions.NackError):
@@ -299,19 +309,13 @@ def test_publish_propagates_nack_without_marking_success(monkeypatch):
             JOB_EXCHANGE, PROVISIONING_REQUESTED, {"job_id": "x"}
         )
 
-    assert channel.published == []
     assert channel.confirm_calls == 1
 
 
 def test_publish_propagates_unroutable_without_reconnecting(monkeypatch):
-    channel = UnroutableChannel()
+    channel = ConfirmingChannel(mode="return")
     connection = FakeConnection(channel)
-    connections = [connection]
-    monkeypatch.setattr(
-        broker.pika,
-        "BlockingConnection",
-        lambda parameters: connections.pop(0),
-    )
+    _patch_pika(monkeypatch, [connection])
     publisher = RabbitMQPublisher("amqp://guest:guest@localhost:5672/")
 
     with pytest.raises(pika.exceptions.UnroutableError):

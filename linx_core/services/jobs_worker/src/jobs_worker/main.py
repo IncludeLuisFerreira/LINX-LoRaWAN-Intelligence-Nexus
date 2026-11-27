@@ -5,7 +5,6 @@ import time
 from types import FrameType
 from typing import Any
 
-import pika
 from linx_shared.coordination.leader import (
     InClusterLeaseClient,
     K8sLeaderElector,
@@ -23,6 +22,7 @@ from linx_shared.jobs.constants import (
 )
 from linx_shared.jobs.consumer import InvalidMessageError, run_consumer
 from linx_shared.jobs.envelope import JobEnvelope
+from linx_shared.messaging.pika_adapter import open_channel
 from pydantic import ValidationError
 from sqlalchemy import text
 
@@ -94,11 +94,8 @@ def _wait_for_dependencies_background(
 
 
 def _declare_topology(url: str, queue: str) -> None:
-    connection = pika.BlockingConnection(pika.URLParameters(url))
-    try:
-        declare_topology(connection.channel(), queue)
-    finally:
-        connection.close()
+    with open_channel(url) as channel:
+        declare_topology(channel, queue)
 
 
 def _parse_envelope(body: bytes) -> JobEnvelope:
