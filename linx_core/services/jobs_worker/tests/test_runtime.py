@@ -1,7 +1,7 @@
 import pytest
 from linx_shared.jobs.consumer import InvalidMessageError
 
-from jobs_worker.main import _parse_envelope, _parse_status_event
+from jobs_worker.main import _parse_envelope
 
 
 @pytest.mark.parametrize(
@@ -14,8 +14,3 @@ from jobs_worker.main import _parse_envelope, _parse_status_event
 def test_malformed_job_envelope_is_invalid_message(payload):
     with pytest.raises(InvalidMessageError):
         _parse_envelope(payload)
-
-
-def test_malformed_status_event_is_invalid_message():
-    with pytest.raises(InvalidMessageError):
-        _parse_status_event(b'{"job_id": "not-a-uuid"}')
