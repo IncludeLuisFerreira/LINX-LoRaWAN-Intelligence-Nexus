@@ -7,11 +7,11 @@ Create Date: 2026-11-27 16:45:00.000000
 Normaliza os valores de ``application_instances.status`` para minúsculas,
 alinhando o banco ao modelo compartilhado (``pending``, ``provisioning``,
 ``running``, ``error``), atualiza o ``server_default`` e adiciona o CHECK de
-faixa de porta.
+faixa de porta. Portas fora de ``1..65535`` são zeradas para ``NULL`` antes da
+criação do CHECK.
 
-Nota: o downgrade restaura o CHECK/default em maiúsculas mas, por ser uma
-transformação de dados destrutiva, NÃO reverte o casing dos valores já
-normalizados (um ``ERROR`` original passa a ser ``error`` e permanece assim).
+O downgrade restaura o CHECK/default em maiúsculas e reverte o casing dos
+dados com ``upper()`` (lossless, pois o CHECK antigo só aceitava maiúsculas).
 """
 
 from typing import Sequence, Union
@@ -49,6 +49,14 @@ def upgrade() -> None:
         server_default="pending",
     )
 
+    # O CHECK de porta valida as linhas existentes na criação; sem esta
+    # sanitização, portas inválidas (provisioner defeituoso) abortariam a
+    # migração.
+    op.execute(
+        "UPDATE application_instances SET port = NULL "
+        "WHERE port IS NOT NULL AND (port < 1 OR port > 65535)"
+    )
+
     op.create_check_constraint(
         "ck_application_instances_port",
         "application_instances",
@@ -57,11 +65,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema (sem migração reversa de casing).
+    """Downgrade schema.
 
-    Com linhas já normalizadas em minúsculas o CHECK em maiúsculas não
-    valida, então o downgrade exige que os dados tenham sido previamente
-    recolocados em maiúsculas manualmente.
+    Reverte o casing dos dados com ``upper()`` antes de recriar o CHECK em
+    maiúsculas; como o CHECK antigo só aceitava maiúsculas, a transformação é
+    lossless.
     """
     op.drop_constraint(
         "ck_application_instances_port",
@@ -80,6 +88,9 @@ def downgrade() -> None:
         "application_instances",
         type_="check",
     )
+
+    op.execute("UPDATE application_instances SET status = upper(status)")
+
     op.create_check_constraint(
         "ck_application_instances_status",
         "application_instances",
