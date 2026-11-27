@@ -52,7 +52,7 @@ poetry -C services/identity_api install
 poetry -C services/agent_bridge install
 poetry -C services/docker_provisioner install
 make -C .. build-tenant-image  # imagem mínima provisionada por aplicação
-cp .env.example .env        # ajuste POSTGRES_PASSWORD, SERVICE_TOKEN, DOCKER_GID e CHIRPSTACK_API_TOKEN
+cp .env.example .env        # ajuste POSTGRES_PASSWORD, SERVICE_TOKEN, PROVISIONER_SERVICE_TOKEN, DOCKER_GID e CHIRPSTACK_API_TOKEN
 poetry run task run
 
 # 4. Dashboard web (opcional, em outro terminal)

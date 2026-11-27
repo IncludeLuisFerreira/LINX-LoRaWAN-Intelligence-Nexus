@@ -495,7 +495,8 @@ os `.env` dos stacks `linx_core`, `client` e `infra`):
 | `DATABASE_URL`           | `agent_bridge`, `identity_api` | `postgresql+psycopg://...@db:5432/linx` | Banco do plano de controle.                                      |
 | `PROVISIONER_GRPC_HOST`  | `identity_api`, `jobs_worker` | `docker_provisioner:50052` (vazio desabilita o deprovisionamento) | Endereço gRPC do provisioner.                |
 | `PROVISIONER_GRPC_TIMEOUT_SECONDS` | `identity_api`, `jobs_worker` | `10`                           | Timeout das chamadas `ProvisionApplication`/`DeprovisionApplication`. |
-| `SERVICE_TOKEN`          | `identity_api`, `docker_provisioner` | `openssl rand -hex 32`           | Token Bearer da chamada gRPC e do header `X-Service-Token`.      |
+| `SERVICE_TOKEN`          | `identity_api`, `docker_provisioner` | `openssl rand -hex 32`           | Token do header `X-Service-Token` (REST) e injetado no container do tenant. |
+| `PROVISIONER_SERVICE_TOKEN` | `identity_api`, `jobs_worker`, `docker_provisioner` | `openssl rand -hex 32` | Token Bearer da chamada gRPC ao provisioner; distinto de `SERVICE_TOKEN` e nunca injetado no tenant. |
 | `DOCKER_GID`             | `docker_provisioner`       | `990`                                      | GID do grupo dono de `/var/run/docker.sock`.                     |
 | `PROVISION_IMAGE`        | `docker_provisioner`       | `linx-tenant-app:latest`                   | Imagem provisionada por aplicação.                               |
 | `PROVISION_PORT_MIN` / `PROVISION_PORT_MAX` | `docker_provisioner` | `8100` / `9100`                    | Range de portas publicado no host.                               |
