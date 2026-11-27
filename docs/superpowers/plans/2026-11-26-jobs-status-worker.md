@@ -955,7 +955,7 @@ git commit -m "chore(devops): sobe jobs_status_worker no compose e run.sh (#232)
 - Modify: `.github/workflows/k8s-ci.yml`
 
 **Interfaces:**
-- Consumes: imagem `includeluisferreira/jobs-status-worker:dev`; ConfigMap `linx-config`; Secret `linx-secrets`.
+- Consumes: imagem `includeluisferreira/jobs-status-worker:dev`; chaves `DATABASE_URL` e `RABBITMQ_AMQP_URL` do Secret `linx-secrets` (sem `envFrom`).
 - Produces: Deployment `jobs-status-worker` com 2 réplicas, apenas consumidor (sem Service/Lease).
 
 - [ ] **Step 1: Criar o Deployment**
@@ -981,6 +981,7 @@ spec:
       labels:
         app: jobs-status-worker
     spec:
+      automountServiceAccountToken: false
       initContainers:
         - name: wait-for-db
           image: includeluisferreira/jobs-status-worker:dev
@@ -989,20 +990,27 @@ spec:
             - python
             - -m
             - linx_shared.db.wait
-          envFrom:
-            - configMapRef:
-                name: linx-config
-            - secretRef:
-                name: linx-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: linx-secrets
+                  key: DATABASE_URL
       containers:
         - name: jobs-status-worker
           image: includeluisferreira/jobs-status-worker:dev
           imagePullPolicy: Always
-          envFrom:
-            - configMapRef:
-                name: linx-config
-            - secretRef:
-                name: linx-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: linx-secrets
+                  key: DATABASE_URL
+            - name: RABBITMQ_AMQP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: linx-secrets
+                  key: RABBITMQ_AMQP_URL
 ```
 
 - [ ] **Step 2: Registrar no kustomization e no overlay ECR**

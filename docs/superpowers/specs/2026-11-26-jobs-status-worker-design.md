@@ -182,9 +182,11 @@ migram para `linx_core/shared/tests/test_job_consumer.py`.
   `jobs_status_worker`, build a partir do novo Dockerfile, `depends_on` db e
   rabbitmq saudáveis, healthcheck próprio.
 - **Kubernetes** (`infra/kubernetes/base/jobs-status-worker.yaml`):
-  Deployment com 2 réplicas, `initContainer` `wait-for-db`, `envFrom`
-  `linx-config` + `linx-secrets`. Sem ServiceAccount, Role, Service ou Lease.
-  Adicionar ao `kustomization.yaml` e ao overlay ECR.
+  Deployment com 2 réplicas, `initContainer` `wait-for-db` e apenas as chaves
+  `DATABASE_URL`/`RABBITMQ_AMQP_URL` do Secret `linx-secrets` via
+  `secretKeyRef` (sem `envFrom`); `automountServiceAccountToken: false`. Sem
+  ServiceAccount, Role, Service ou Lease. Adicionar ao `kustomization.yaml` e
+  ao overlay ECR.
 - **Publicação**: `.github/workflows/publish-jobs-status-worker-image.yml`,
   imagem `includeluisferreira/jobs-status-worker`, paths do serviço e de
   `linx_core/shared/**`.
