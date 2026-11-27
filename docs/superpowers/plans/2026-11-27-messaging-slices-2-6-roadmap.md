@@ -14,7 +14,8 @@
 | 6 | Observabilidade, runbook e fechamento | #306 | PR #315 aberta (empilhada na #311) |
 
 Itens de produto criados: HA #312, convergência k8s #313, métricas #314.
-TLS #78 e DR #128 já existiam.
+TLS #78 e DR #128 já existiam. A quarentena de outbox fica observável por
+log/SQL nesta entrega; o contador dedicado está no escopo de #314.
 
 ## Como este documento é usado
 

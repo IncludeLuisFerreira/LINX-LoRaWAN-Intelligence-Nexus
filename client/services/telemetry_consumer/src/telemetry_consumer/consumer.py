@@ -212,6 +212,7 @@ class RabbitConsumer:
                 if not self._is_connected():
                     self.close()
                     if not self.connect():
+                        self._record_reconnect("falha ao conectar")
                         continue
                 if self._queue is None:
                     continue
@@ -223,11 +224,11 @@ class RabbitConsumer:
                         break
                     self._handle_message(message)
             except Exception as exc:  # noqa: BLE001
+                if self._stop_event.is_set():
+                    break
                 logger.warning("conexão com RabbitMQ perdida: %s", exc)
                 self._record_reconnect(str(exc))
                 self.close()
-                if self._stop_event.is_set():
-                    break
                 self._stop_event.wait(
                     self._settings.rabbit_connect_backoff_seconds
                 )
@@ -347,11 +348,6 @@ class RabbitConsumer:
             self._processed += 1
             self._last_processed_at = datetime.now(timezone.utc).isoformat()
             self._last_error = None
-
-    def _record_failure(self, reason: str) -> None:
-        with self._state_lock:
-            self._failed += 1
-            self._last_error = reason
 
     def _record_dead_letter(self, reason: str) -> None:
         with self._state_lock:

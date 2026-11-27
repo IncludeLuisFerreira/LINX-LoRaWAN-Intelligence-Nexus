@@ -14,6 +14,8 @@ runbook executável e issues dos itens de produto.
 - `telemetry_consumer/health`: contadores `dead_lettered` e `reconnects`
   (já existiam `processed`, `failed`, `last_error`, `rabbitmq_connected`).
 - Runbook `docs/devops/messaging-runbook.md` e entrada no `mkdocs.yml`.
+- Quarentena de outbox: visível via log + SQL no runbook; contador dedicado
+  fica na issue #314.
 - Issues de produto: HA (#312), k8s (#313), métricas (#314). TLS (#78) e DR
   (#128) já existiam.
 - Fechamento do épico após o merge das fatias.

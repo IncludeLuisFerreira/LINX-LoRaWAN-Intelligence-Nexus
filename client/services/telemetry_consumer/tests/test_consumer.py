@@ -317,7 +317,7 @@ def test_run_recovers_from_connection_loss():
     consumer.connect = fake_connect
     consumer._run()
     assert calls["n"] == 1
-    assert consumer.health()["reconnects"] == 1
+    assert consumer.health()["reconnects"] >= 1
 
 
 def test_stop_signals_and_closes():

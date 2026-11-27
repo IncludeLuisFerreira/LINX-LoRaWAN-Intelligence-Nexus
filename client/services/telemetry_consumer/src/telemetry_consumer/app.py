@@ -167,6 +167,8 @@ def create_app(
             "rabbitmq_connected": mqtt_ok,
             "processed": consumer_state["processed"],
             "failed": consumer_state["failed"],
+            "dead_lettered": consumer_state["dead_lettered"],
+            "reconnects": consumer_state["reconnects"],
             "last_processed_at": consumer_state["last_processed_at"],
             "ws_connections": state.broadcaster.count,
         }

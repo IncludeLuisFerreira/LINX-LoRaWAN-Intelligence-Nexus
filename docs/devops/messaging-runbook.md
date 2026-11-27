@@ -5,19 +5,28 @@ design `docs/superpowers/specs/2026-11-27-messaging-consolidation-design.md`.
 
 ## 1. Saúde
 
-Telemetria (HTTP `/health` do `telemetry_consumer`):
+Telemetria (`/health` dentro do container; a porta 8000 não é publicada no host):
 
 ```bash
-curl -fsS -H "X-Service-Token: $SERVICE_TOKEN" \
-  http://localhost:8011/health | jq
+docker compose -f client/docker-compose.yml exec -T telemetry_consumer \
+  python - <<'PY'
+import urllib.error
+import urllib.request
+
+try:
+    print(urllib.request.urlopen("http://localhost:8000/health").read().decode())
+except urllib.error.HTTPError as exc:
+    print(exc.read().decode())
+PY
 ```
 
 Campos úteis: `rabbitmq_connected`, `processed`, `failed`, `dead_lettered`,
-`reconnects`, `last_error`.
+`reconnects`, `last_processed_at`. `last_error` não é exposto; use os logs.
 
-Jobs: health dos containers (`docker compose ps`) e logs:
+Jobs: health dos containers e logs:
 
 ```bash
+docker compose -f linx_core/docker-compose.yml ps
 docker compose -f linx_core/docker-compose.yml logs -f jobs_worker jobs_status_worker
 ```
 
@@ -64,10 +73,16 @@ docker compose -f client/docker-compose.yml logs --tail=200 telemetry_consumer
 
 3. Corrija a causa (payload, schema, credencial, dependência).
 4. Replay:
-   - **Jobs:** publique de volta na exchange `linx.jobs` com a routing key
-     `<tipo>.requested` (ou use “Move messages” no management UI).
+   - **DLQ de comando de job** (`linx.jobs.<tipo>.dlq`): publique na exchange
+     `linx.jobs` com a routing key `<tipo>.requested`.
+   - **DLQ de status** (`linx.jobs.status.dlq`): publique na exchange
+     `linx.jobs.events` com a routing key original
+     (`<tipo>.succeeded|failed|retry|started`); nunca use a exchange de
+     comandos para um evento de status.
    - **Telemetria:** publique de volta na exchange `linx.telemetry.<app_id>` com
      a routing key original.
+   - O management UI (“Move messages”) serve para os dois casos, desde que a
+     exchange/routing key de destino esteja correta.
 5. Consumidores são idempotentes (status de jobs e `ON CONFLICT` da telemetria);
    duplicatas são seguras, mas monitore `failed`/`dead_lettered`.
 
@@ -81,41 +96,58 @@ ORDER BY failed_at DESC;
 ```
 
 Comando quarentenado marca o job `FAILED` com
-`error.code=command_publish_failed`. Para reprocessar:
+`error.code=command_publish_failed`. Recuperação:
 
 1. Corrija o broker/publicação.
-2. Reenfileire a linha:
-
-```sql
-UPDATE job_outbox
-SET failed_at = NULL, attempts = 0, next_attempt_at = now()
-WHERE id = '<outbox_id>';
-```
-
-3. Se o job já foi marcado `FAILED`, recrie-o pela API (o comando original não
-   será republicado sozinho).
+2. **Job já terminal (`FAILED`):** recrie o job pela API. Limpar `failed_at`
+   sozinho não reabre um job terminal; o `claim_job` ignora jobs terminais.
+3. **Linha de evento de status quarentenada:** reconcilie o job (o status
+   terminal não foi aplicado) e alerte; não há replay automático.
+4. Se precisar reaproveitar o payload, copie-o da linha da outbox e reenvie
+   como um novo job — não altere o status do job antigo no banco.
 
 ## 5. Reconexão
 
 - O consumer reconecta com backoff; `reconnects` no health indica a frequência.
 - Se o broker caiu: verifique `rabbitmq-diagnostics`, logs e espaço em disco;
   suba o broker; os consumers redeclaram a topologia e retomam.
-- Reconexões frequentes: verifique rede, heartbeat, memória do broker e
-  `work_queue_maxsize` (consumers lentos).
+- Reconexões frequentes: verifique rede, heartbeat, memória do broker e os
+  logs do consumer (consumer lento pode atrasar heartbeats).
 
 ## 6. Rotação de credencial
 
-1. Atualize `RABBITMQ_ADMIN_*` em `infra/.env`, `linx_core/.env` e `client/.env`
-   (valores iguais).
-2. Reinicie broker e serviços.
-3. Credenciais de tenant são provisionadas pela `identity_api` na criação da
-   aplicação; para rotação, recrie a aplicação ou use a management API.
+### 6.1 Credencial administrativa do broker
+
+1. Troque a senha no broker (não basta editar `RABBITMQ_DEFAULT_PASS` e
+   reiniciar com volume existente):
+
+```bash
+docker compose -f infra/docker-compose.base.yml exec rabbitmq \
+  rabbitmqctl change_password "$RABBITMQ_ADMIN_USER" "<nova-senha>"
+```
+
+2. Atualize `RABBITMQ_ADMIN_PASSWORD` em `infra/.env` e `linx_core/.env`.
+3. Reinicie o broker e os serviços que usam AMQP.
+4. O `client/.env` não usa `RABBITMQ_ADMIN_*`; a telemetria usa `RABBIT_URL`
+   (credencial do tenant).
+
+### 6.2 Credencial de tenant (telemetria)
+
+1. Re-provisione o usuário via management API
+   (`PUT /api/users/tenant.{app_id}` com a senha derivada) ou recrie a
+   aplicação pela `identity_api`.
+2. Atualize `RABBIT_URL` em `client/.env` (URL-encode caracteres especiais) e
+   reinicie o `telemetry_consumer`.
+3. Se `RABBITMQ_TENANT_SECRET` for rotacionado, todas as senhas derivadas
+   mudam; re-provisione todos os tenants.
 
 ## 7. Alertas mínimos
 
 - DLQ com mensagens crescendo.
-- `dead_lettered`/`reconnects` aumentando no health da telemetria.
-- Outbox com `failed_at` preenchido.
+- `dead_lettered`/`reconnects` aumentando no health da telemetria. São
+  contadores por processo: reiniciar o serviço zera os valores.
+- Outbox com `failed_at` preenchido (consulta SQL da seção 4); o contador
+  dedicado de quarentena fica na issue #314.
 - Broker indisponível ou disco acima de 80%.
 
 ## 8. Lacunas de produto (issues)
