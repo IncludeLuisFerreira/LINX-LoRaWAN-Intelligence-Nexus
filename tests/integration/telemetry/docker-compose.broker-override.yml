@@ -1,0 +1,11 @@
+# Override de portas do broker para a suíte de integração.
+#
+# O serviço `rabbitmq` vem de infra/docker-compose.base.yml. Este arquivo
+# apenas publica as portas em offsets de teste, evitando conflito com um
+# broker de desenvolvimento já em execução no host.
+
+services:
+  rabbitmq:
+    ports: !override
+      - "127.0.0.1:5673:5672"
+      - "127.0.0.1:15673:15672"

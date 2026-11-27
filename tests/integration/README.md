@@ -45,8 +45,14 @@ Requisitos: Docker em execução e Poetry no PATH.
 
 ## Princípios
 
-- **Reúso:** as suítes usam os compose existentes do repositório
-  (`deploy/docker-compose.yml`, etc.) via override mínimo — sem redefinir
-  serviços, o que mantém uma única fonte de verdade.
+- **Serviços reais:** as suítes constroem as imagens a partir dos Dockerfiles
+  reais dos serviços. Cada suíte declara apenas a montagem necessária em um
+  compose próprio de teste (`docker-compose.stack.yml`), sem alterar os
+  composes de aplicação.
+- **Isolamento:** rede, projeto, portas e volumes próprios (`LINX_NETWORK`),
+  para não tocar no ambiente de desenvolvimento.
+- **Framework:** `pytest` para aplicação e integração. `unittest` (stdlib) é
+  reservado às ferramentas de repositório em `scripts/tests/`, que precisam
+  rodar sem dependências.
 - **Diagnóstico:** se um serviço não subir, a suíte aborta listando o
   container fora do ar e como ver os logs.

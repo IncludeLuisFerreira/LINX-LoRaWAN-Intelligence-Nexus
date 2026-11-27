@@ -89,6 +89,10 @@ class ValidateTests(unittest.TestCase):
             )
             self.assertEqual(validate(root), [])
 
+class RepositoryTest(unittest.TestCase):
+    def test_repository_has_single_broker(self):
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual(validate(root), [])
 
 if __name__ == "__main__":
     unittest.main()

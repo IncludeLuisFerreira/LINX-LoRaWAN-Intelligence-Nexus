@@ -132,10 +132,11 @@ services:
       - ./configuration/mosquitto/config/:/mosquitto/config/
 
 networks:
-  # Rede compartilhada com o stack deploy. Criada por
-  # deploy/scripts/bootstrap-network.sh antes de subir os stacks.
+  # Rede compartilhada entre os stacks. Criada por
+  # scripts/bootstrap-network.sh antes de subir os stacks.
   linx-network:
     external: true
+    name: ${LINX_NETWORK:-linx-network}
 
 volumes:
   postgresqldata:
