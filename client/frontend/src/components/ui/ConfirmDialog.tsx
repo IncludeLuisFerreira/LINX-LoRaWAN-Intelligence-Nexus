@@ -1,5 +1,6 @@
 import { Modal } from './Modal';
 import { Button } from './Button';
+import { Alert } from './Alert';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -8,6 +9,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   danger?: boolean;
   loading?: boolean;
+  error?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -19,6 +21,7 @@ export function ConfirmDialog({
   confirmLabel = 'Confirmar',
   danger = true,
   loading = false,
+  error,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -42,7 +45,10 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-sm text-slate-600">{message}</p>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600">{message}</p>
+        {error && <Alert variant="error">{error}</Alert>}
+      </div>
     </Modal>
   );
 }

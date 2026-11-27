@@ -312,6 +312,78 @@ paths:
         '422':
           description: Dados inválidos
 
+  /tenant/{tenant_id}/invite:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    post:
+      summary: Convidar usuário para o tenant
+      operationId: inviteTenantUser
+      description: >
+        Gera um token/link de convite com o papel escolhido. Contrato previsto
+        para o backend (issue #80); o frontend consome este formato.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRequest'
+      responses:
+        '201':
+          description: Convite gerado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteResponse'
+        '401':
+          description: Não autorizado
+        '422':
+          description: Dados inválidos
+
+  /user:
+    get:
+      summary: Listar usuários
+      operationId: listUsers
+      description: Lista os usuários disponíveis para administração do RBAC.
+      responses:
+        '200':
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserOut'
+        '401':
+          description: Não autorizado
+
+  /user/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    patch:
+      summary: Atualizar papel ou status do usuário
+      operationId: updateUser
+      description: >
+        Altera o papel (`role`) ou desativa o usuário (`is_active: false`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '401':
+          description: Não autorizado
+        '404':
+          description: Usuário não encontrado
+        '422':
+          description: Dados inválidos
+
 components:
   securitySchemes:
     BearerAuth:
@@ -325,6 +397,15 @@ components:
       in: path
       required: true
       description: Identificador do tenant
+      schema:
+        type: string
+        format: uuid
+
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      description: Identificador do usuário
       schema:
         type: string
         format: uuid
@@ -366,6 +447,78 @@ components:
         expires_in:
           type: integer
           description: Tempo de vida do access token em segundos.
+
+    UserOut:
+      type: object
+      required:
+        - id
+        - email
+        - is_admin
+        - is_active
+        - email_verified
+        - note
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        is_admin:
+          type: boolean
+        is_active:
+          type: boolean
+        email_verified:
+          type: boolean
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserUpdate:
+      type: object
+      description: >
+        Alteração de papel (`role`) ou desativação (`is_active: false`).
+      properties:
+        role:
+          type: string
+          enum:
+            - admin
+            - member
+        is_active:
+          type: boolean
+
+    InviteRequest:
+      type: object
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum:
+            - admin
+            - member
+
+    InviteResponse:
+      type: object
+      properties:
+        invite_token:
+          type: string
+          description: Token de convite a ser exibido/copiado na UI.
+        invite_link:
+          type: string
+          format: uri
+          description: Link pronto para compartilhamento, quando disponível.
 
     TenantCreate:
       type: object

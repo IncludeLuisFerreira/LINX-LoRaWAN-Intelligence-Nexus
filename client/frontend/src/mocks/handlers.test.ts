@@ -318,12 +318,68 @@ describe('auth handlers', () => {
 
     const payload = decodeJwtPayload(body.access_token);
     expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
-    expect(payload.permissions.length).toBeGreaterThan(0);
+    expect(payload.permissions).toEqual(
+      expect.arrayContaining([
+        'user:read',
+        'user:create',
+        'user:update',
+        'user:delete',
+      ]),
+    );
   });
 
   it('rejects POST /auth/login without credentials', async () => {
     const res = await post(`${base}/auth/login`, {});
 
     expect(res.status).toBe(422);
+  });
+});
+
+describe('user handlers', () => {
+  it('serves GET /user with role and status', async () => {
+    const res = await fetch(`${base}/user`);
+    const users = (await res.json()) as {
+      id: string;
+      email: string;
+      is_admin: boolean;
+      is_active: boolean;
+    }[];
+
+    expect(res.status).toBe(200);
+    expect(users.length).toBeGreaterThan(0);
+    expect(users[0].id).toMatch(UUID_RE);
+    expect(typeof users[0].is_admin).toBe('boolean');
+    expect(typeof users[0].is_active).toBe('boolean');
+  });
+
+  it('updates role and status via PATCH /user/:user_id', async () => {
+    const listRes = await fetch(`${base}/user`);
+    const users = (await listRes.json()) as { id: string }[];
+    const userId = users[0].id;
+
+    const res = await fetch(`${base}/user/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'admin', is_active: false }),
+    });
+    const updated = (await res.json()) as {
+      is_admin: boolean;
+      is_active: boolean;
+    };
+
+    expect(res.status).toBe(200);
+    expect(updated.is_admin).toBe(true);
+    expect(updated.is_active).toBe(false);
+  });
+
+  it('generates an invite token via POST /tenant/:tenant_id/invite', async () => {
+    const res = await post(`${base}/tenant/tenant-1/invite`, {
+      email: 'new@example.com',
+      role: 'member',
+    });
+    const body = (await res.json()) as { invite_token: string };
+
+    expect(res.status).toBe(201);
+    expect(body.invite_token).toBe('mock-invite-token');
   });
 });

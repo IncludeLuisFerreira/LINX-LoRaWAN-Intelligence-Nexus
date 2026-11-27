@@ -53,4 +53,21 @@ describe('ConfirmDialog', () => {
 
     expect(screen.queryByText('Excluir')).not.toBeInTheDocument();
   });
+
+  it('shows an error message inside the dialog when provided', () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Desativar usuário"
+        message="Tem certeza?"
+        error="Não foi possível desativar o usuário."
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Não foi possível desativar o usuário.',
+    );
+  });
 });

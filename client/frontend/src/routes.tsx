@@ -3,6 +3,7 @@ import { Navigate, Routes, Route } from 'react-router-dom';
 import { Spinner } from './components/ui/Spinner';
 import { AppShell } from './components/layout/AppShell';
 import { AuthGuard } from './components/AuthGuard';
+import { Can } from './components/Can';
 
 const TenantListPage = lazy(() => import('./pages/tenants/TenantListPage'));
 const TenantDetailPage = lazy(() => import('./pages/tenants/TenantDetailPage'));
@@ -10,6 +11,7 @@ const ApplicationDetailPage = lazy(
   () => import('./pages/applications/ApplicationDetailPage'),
 );
 const DeviceListPage = lazy(() => import('./pages/devices/DeviceListPage'));
+const Users = lazy(() => import('./pages/users/Users'));
 const Rules = lazy(() => import('./pages/rules/Rules'));
 const OnboardingWizard = lazy(
   () => import('./pages/onboarding/OnboardingWizard'),
@@ -48,6 +50,14 @@ export function AppRoutes() {
           */}
           <Route path="/orgs" element={<Navigate to="/tenants" replace />} />
           <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
+          <Route
+            path="/tenants/:tenantId/users"
+            element={
+              <Can permission="user:read">
+                <Users />
+              </Can>
+            }
+          />
           <Route
             path="/tenants/:tenantId/applications/:appId"
             element={<ApplicationDetailPage />}
