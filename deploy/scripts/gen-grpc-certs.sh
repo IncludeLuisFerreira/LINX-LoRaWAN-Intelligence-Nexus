@@ -10,6 +10,10 @@ CERT_DIR="${GRPC_CERT_DIR:-$SCRIPT_DIR/../certs/grpc}"
 DAYS="${GRPC_CERT_DAYS:-365}"
 SERVER_HOST="${GRPC_SERVER_HOST:-agent_bridge}"
 CLIENT_NAME="${GRPC_CLIENT_NAME:-linx-client-agent}"
+# UID/GID do usuário dos containers (appuser, UID 1000 nos Dockerfiles).
+# As chaves/diretórios são gerados com o owner de quem executa este script;
+# o chown abaixo garante que o container consiga ler os arquivos montados.
+CERT_UID="${GRPC_CERT_UID:-1000}"
 
 CA_DIR="$CERT_DIR/ca"
 SERVER_DIR="$CERT_DIR/server"
@@ -85,6 +89,11 @@ openssl x509 -req -in "$CLIENT_DIR/client.csr" \
 chmod 700 "$CA_DIR" "$SERVER_DIR" "$CLIENT_DIR"
 chmod 600 "$CA_KEY" "$SERVER_DIR/server.key" "$CLIENT_DIR/client.key"
 chmod 644 "$CA_CERT" "$SERVER_DIR/server.crt" "$CLIENT_DIR/client.crt"
+# Garante que o container (appuser, UID 1000) consiga ler as chaves 0600 e
+# atravessar os diretórios 0700 montados em /etc/linx/grpc. Ignora falha
+# (ex.: sem privilégio para chown): nesse caso gere com sudo ou ajuste a
+# propriedade manualmente (`sudo chown -R 1000:1000 deploy/certs/grpc`).
+chown -R "$CERT_UID":"$CERT_UID" "$CERT_DIR" 2>/dev/null || true
 
 openssl verify -CAfile "$CA_CERT" \
   "$SERVER_DIR/server.crt" "$CLIENT_DIR/client.crt"
