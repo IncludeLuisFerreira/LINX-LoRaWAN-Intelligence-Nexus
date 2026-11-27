@@ -4,10 +4,10 @@ import { ProvisioningStatus } from './ProvisioningStatus';
 
 describe('ProvisioningStatus', () => {
   it.each([
-    ['PENDING', 'Pendente', 'bg-gray-100', 'text-gray-600'],
-    ['PROVISIONING', 'Provisionando', 'bg-yellow-100', 'text-yellow-700'],
-    ['RUNNING', 'Em execução', 'bg-green-100', 'text-green-700'],
-    ['ERROR', 'Erro', 'bg-red-100', 'text-red-700'],
+    ['pending', 'Pendente', 'bg-gray-100', 'text-gray-600'],
+    ['provisioning', 'Provisionando', 'bg-yellow-100', 'text-yellow-700'],
+    ['running', 'Em execução', 'bg-green-100', 'text-green-700'],
+    ['error', 'Erro', 'bg-red-100', 'text-red-700'],
   ] as const)(
     'renders %s with the expected label and colors',
     (status, label, backgroundClass, textClass) => {
@@ -21,25 +21,25 @@ describe('ProvisioningStatus', () => {
   );
 
   it('pulses while provisioning', () => {
-    render(<ProvisioningStatus status="PROVISIONING" />);
+    render(<ProvisioningStatus status="provisioning" />);
 
     expect(screen.getByRole('status')).toHaveClass('animate-pulse');
   });
 
   it('does not pulse for the other states', () => {
-    const { rerender } = render(<ProvisioningStatus status="PENDING" />);
+    const { rerender } = render(<ProvisioningStatus status="pending" />);
 
     expect(screen.getByRole('status')).not.toHaveClass('animate-pulse');
 
-    rerender(<ProvisioningStatus status="RUNNING" />);
+    rerender(<ProvisioningStatus status="running" />);
     expect(screen.getByRole('status')).not.toHaveClass('animate-pulse');
 
-    rerender(<ProvisioningStatus status="ERROR" />);
+    rerender(<ProvisioningStatus status="error" />);
     expect(screen.getByRole('status')).not.toHaveClass('animate-pulse');
   });
 
   it('is announced as a polite status and keeps custom classes', () => {
-    render(<ProvisioningStatus status="RUNNING" className="custom-class" />);
+    render(<ProvisioningStatus status="running" className="custom-class" />);
 
     const badge = screen.getByRole('status');
 

@@ -196,7 +196,7 @@ describe('device nickname handlers', () => {
 });
 
 describe('provisioning status handler', () => {
-  it('progresses PENDING -> PROVISIONING -> RUNNING per application', async () => {
+  it('progresses pending -> provisioning -> running per application', async () => {
     const tenantId = crypto.randomUUID();
     const appId = crypto.randomUUID();
     const readStatus = async () =>
@@ -206,16 +206,16 @@ describe('provisioning status handler', () => {
         ).json()) as { status: string }
       ).status;
 
-    expect(await readStatus()).toBe('PENDING');
-    expect(await readStatus()).toBe('PROVISIONING');
-    expect(await readStatus()).toBe('RUNNING');
-    expect(await readStatus()).toBe('RUNNING');
+    expect(await readStatus()).toBe('pending');
+    expect(await readStatus()).toBe('provisioning');
+    expect(await readStatus()).toBe('running');
+    expect(await readStatus()).toBe('running');
   });
 
   it('honors the localStorage status override', async () => {
     const tenantId = crypto.randomUUID();
     const appId = crypto.randomUUID();
-    localStorage.setItem('linx:mock-provisioning-status', 'ERROR');
+    localStorage.setItem('linx:mock-provisioning-status', 'error');
 
     try {
       const res = await fetch(
@@ -223,7 +223,7 @@ describe('provisioning status handler', () => {
       );
       const body = (await res.json()) as { status: string };
 
-      expect(body.status).toBe('ERROR');
+      expect(body.status).toBe('error');
     } finally {
       localStorage.removeItem('linx:mock-provisioning-status');
     }

@@ -73,13 +73,13 @@ describe('applicationService', () => {
 
   it('gets the provisioning status of an application', async () => {
     mocked.get.mockResolvedValue({
-      data: { app_id: 'a1', status: 'RUNNING', container_id: 'c1' },
+      data: { app_id: 'a1', status: 'running', container_id: 'c1' },
     });
 
     const status = await applicationService.getStatus('t1', 'a1');
 
     expect(mocked.get).toHaveBeenCalledWith('/tenant/t1/applications/a1/status');
-    expect(status).toBe('RUNNING');
+    expect(status).toBe('running');
   });
 
   it('rejects a status outside the provisioning contract', async () => {

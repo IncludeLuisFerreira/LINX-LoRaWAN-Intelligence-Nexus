@@ -11,19 +11,19 @@ interface ProvisioningStatusProps {
  * seguem o contrato definido na issue #54.
  */
 const STATUS_CONFIG = {
-  PENDING: {
+  pending: {
     label: 'Pendente',
     styles: 'bg-gray-100 text-gray-600',
   },
-  PROVISIONING: {
+  provisioning: {
     label: 'Provisionando',
     styles: 'bg-yellow-100 text-yellow-700 animate-pulse',
   },
-  RUNNING: {
+  running: {
     label: 'Em execução',
     styles: 'bg-green-100 text-green-700',
   },
-  ERROR: {
+  error: {
     label: 'Erro',
     styles: 'bg-red-100 text-red-700',
   },

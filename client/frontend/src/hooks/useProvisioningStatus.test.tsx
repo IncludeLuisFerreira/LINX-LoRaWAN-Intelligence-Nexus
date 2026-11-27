@@ -55,7 +55,7 @@ describe('useProvisioningStatus', () => {
   afterEach(() => vi.useRealTimers());
 
   it('polls immediately on mount', async () => {
-    mockedGetStatus.mockResolvedValue('PENDING');
+    mockedGetStatus.mockResolvedValue('pending');
 
     render(<Probe tenantId={TENANT} appId="app-1" />);
 
@@ -64,30 +64,30 @@ describe('useProvisioningStatus', () => {
 
     await advance(0);
 
-    expect(screen.getByTestId('status')).toHaveTextContent('PENDING');
+    expect(screen.getByTestId('status')).toHaveTextContent('pending');
   });
 
   it('keeps polling every 3s while pending or provisioning', async () => {
     mockedGetStatus
-      .mockResolvedValueOnce('PENDING')
-      .mockResolvedValueOnce('PROVISIONING')
-      .mockResolvedValueOnce('RUNNING');
+      .mockResolvedValueOnce('pending')
+      .mockResolvedValueOnce('provisioning')
+      .mockResolvedValueOnce('running');
 
     render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
-    expect(screen.getByTestId('status')).toHaveTextContent('PENDING');
+    expect(screen.getByTestId('status')).toHaveTextContent('pending');
 
     await advance(PROVISIONING_POLL_INTERVAL_MS);
-    expect(screen.getByTestId('status')).toHaveTextContent('PROVISIONING');
+    expect(screen.getByTestId('status')).toHaveTextContent('provisioning');
 
     await advance(PROVISIONING_POLL_INTERVAL_MS);
-    expect(screen.getByTestId('status')).toHaveTextContent('RUNNING');
+    expect(screen.getByTestId('status')).toHaveTextContent('running');
     expect(mockedGetStatus).toHaveBeenCalledTimes(3);
   });
 
-  it('stops polling when the status reaches RUNNING', async () => {
-    mockedGetStatus.mockResolvedValue('RUNNING');
+  it('stops polling when the status reaches running', async () => {
+    mockedGetStatus.mockResolvedValue('running');
 
     render(<Probe tenantId={TENANT} appId="app-1" />);
 
@@ -99,21 +99,21 @@ describe('useProvisioningStatus', () => {
     expect(mockedGetStatus).toHaveBeenCalledTimes(1);
   });
 
-  it('stops polling when the status reaches ERROR', async () => {
-    mockedGetStatus.mockResolvedValue('ERROR');
+  it('stops polling when the status reaches error', async () => {
+    mockedGetStatus.mockResolvedValue('error');
 
     render(<Probe tenantId={TENANT} appId="app-1" />);
 
     await advance(0);
 
     expect(mockedGetStatus).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('status')).toHaveTextContent('ERROR');
+    expect(screen.getByTestId('status')).toHaveTextContent('error');
   });
 
   it('keeps polling and clears error after a transient failure', async () => {
     mockedGetStatus
       .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce('PENDING');
+      .mockResolvedValueOnce('pending');
 
     render(<Probe tenantId={TENANT} appId="app-1" />);
 
@@ -124,7 +124,7 @@ describe('useProvisioningStatus', () => {
     await advance(PROVISIONING_POLL_INTERVAL_MS);
 
     expect(screen.getByTestId('error')).toHaveTextContent('none');
-    expect(screen.getByTestId('status')).toHaveTextContent('PENDING');
+    expect(screen.getByTestId('status')).toHaveTextContent('pending');
   });
 
   it('stops and signals after consecutive failures', async () => {
@@ -159,7 +159,7 @@ describe('useProvisioningStatus', () => {
     unmount();
 
     await act(async () => {
-      resolve('RUNNING');
+      resolve('running');
       await Promise.resolve();
     });
 
@@ -173,19 +173,19 @@ describe('useProvisioningStatus', () => {
         resolve = r;
       }),
     );
-    mockedGetStatus.mockResolvedValue('PROVISIONING');
+    mockedGetStatus.mockResolvedValue('provisioning');
 
     const { rerender } = render(<Probe tenantId={TENANT} appId="app-1" />);
 
     rerender(<Probe tenantId={TENANT} appId="app-2" />);
 
     await act(async () => {
-      resolve('RUNNING');
+      resolve('running');
       await Promise.resolve();
     });
     await advance(0);
 
-    expect(screen.getByTestId('status')).toHaveTextContent('PROVISIONING');
+    expect(screen.getByTestId('status')).toHaveTextContent('provisioning');
   });
 
   it('does nothing without an application id', async () => {
@@ -197,7 +197,7 @@ describe('useProvisioningStatus', () => {
   });
 
   it('restarts polling when the application changes', async () => {
-    mockedGetStatus.mockResolvedValue('PENDING');
+    mockedGetStatus.mockResolvedValue('pending');
 
     const { rerender } = render(<Probe tenantId={TENANT} appId="app-1" />);
 

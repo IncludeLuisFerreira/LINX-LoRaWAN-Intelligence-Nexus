@@ -11,10 +11,10 @@ export interface ApplicationOutput {
 }
 
 export const PROVISIONING_STATUS_VALUES = [
-  'PENDING',
-  'PROVISIONING',
-  'RUNNING',
-  'ERROR',
+  'pending',
+  'provisioning',
+  'running',
+  'error',
 ] as const;
 
 /** Estados de provisionamento definidos pelo contrato da aplicação. */

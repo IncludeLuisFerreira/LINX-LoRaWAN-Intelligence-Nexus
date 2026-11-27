@@ -86,14 +86,14 @@ const mockUsers: MockUser[] = [
 
 /**
  * Simula a evolução do provisionamento no MSW. Sem override, cada consulta
- * avança PENDING -> PROVISIONING -> RUNNING. Use a chave abaixo no
- * localStorage para forçar um estado específico, inclusive ERROR.
+ * avança pending -> provisioning -> running. Use a chave abaixo no
+ * localStorage para forçar um estado específico, inclusive error.
  */
 const MOCK_PROVISIONING_OVERRIDE_KEY = 'linx:mock-provisioning-status';
 const MOCK_PROVISIONING_SEQUENCE: ProvisioningStatusValue[] = [
-  'PENDING',
-  'PROVISIONING',
-  'RUNNING',
+  'pending',
+  'provisioning',
+  'running',
 ];
 const mockProvisioningStep: Record<string, number> = {};
 
@@ -102,10 +102,10 @@ function nextMockProvisioningStatus(appId: string): ProvisioningStatusValue {
     MOCK_PROVISIONING_OVERRIDE_KEY,
   );
   if (
-    override === 'PENDING' ||
-    override === 'PROVISIONING' ||
-    override === 'RUNNING' ||
-    override === 'ERROR'
+    override === 'pending' ||
+    override === 'provisioning' ||
+    override === 'running' ||
+    override === 'error'
   ) {
     return override;
   }

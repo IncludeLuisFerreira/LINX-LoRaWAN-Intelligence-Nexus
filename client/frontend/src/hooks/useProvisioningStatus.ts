@@ -23,8 +23,8 @@ export interface ProvisioningStatusState {
  * Consulta o status de provisionamento da aplicação a cada 3s, com a primeira
  * consulta imediata no mount.
  *
- * O polling continua enquanto o status for `PENDING` ou `PROVISIONING` e para
- * ao atingir `RUNNING` ou `ERROR`. O intervalo é limpo ao desmontar ou quando
+ * O polling continua enquanto o status for `pending` ou `provisioning` e para
+ * ao atingir `running` ou `error`. O intervalo é limpo ao desmontar ou quando
  * o `appId` muda. Falhas de rede são toleradas individualmente, mas falhas
  * consecutivas (`MAX_CONSECUTIVE_FAILURES`) interrompem o polling, limpam o
  * intervalo e são sinalizadas em `error`.
@@ -81,7 +81,7 @@ export function useProvisioningStatus(
           loading: false,
           error: null,
         });
-        if (nextStatus === 'RUNNING' || nextStatus === 'ERROR') stop();
+        if (nextStatus === 'running' || nextStatus === 'error') stop();
       } catch (error) {
         if (!active) return;
 
