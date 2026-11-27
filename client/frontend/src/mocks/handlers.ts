@@ -96,6 +96,16 @@ interface MockDevice {
 
 const mockDevices: MockDevice[] = [];
 
+interface MockRule {
+  id: string;
+  sensor_field: string;
+  operator: string;
+  threshold: number;
+  action_type: string;
+}
+
+const mockRules: MockRule[] = [];
+
 const mockDeviceProfiles = [{ id: crypto.randomUUID(), name: 'Perfil Teste' }];
 
 function findTenant(tenantId: string): MockTenant | undefined {
@@ -442,6 +452,32 @@ export const handlers = [
     }
     mockDevices[index].updated_at = now();
     return HttpResponse.json(mockDevices[index]);
+  }),
+
+  // --- RULES (#86) ---
+  // O endpoint REST ainda não existe no backend (issue #90); o MSW permite
+  // demonstrar e testar o fluxo completo da tela de regras.
+  http.get('*/api/v1/rules', () => {
+    return HttpResponse.json(mockRules);
+  }),
+
+  http.post('*/api/v1/rules', async ({ request }) => {
+    const payload = (await request.json()) as Omit<MockRule, 'id'>;
+    if (
+      !payload?.sensor_field?.trim() ||
+      !payload.operator ||
+      !Number.isFinite(payload.threshold) ||
+      !payload.action_type
+    ) {
+      return validationError('Regra inválida');
+    }
+    const rule: MockRule = {
+      ...payload,
+      sensor_field: payload.sensor_field.trim(),
+      id: crypto.randomUUID(),
+    };
+    mockRules.push(rule);
+    return HttpResponse.json(rule, { status: 201 });
   }),
 
   // --- TELEMETRY ---

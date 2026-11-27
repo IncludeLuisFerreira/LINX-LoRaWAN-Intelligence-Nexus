@@ -202,9 +202,7 @@ describe('provisioning status handler', () => {
     const readStatus = async () =>
       (
         (await (
-          await fetch(
-            `${base}/tenant/${tenantId}/applications/${appId}/status`,
-          )
+          await fetch(`${base}/tenant/${tenantId}/applications/${appId}/status`)
         ).json()) as { status: string }
       ).status;
 
@@ -229,6 +227,39 @@ describe('provisioning status handler', () => {
     } finally {
       localStorage.removeItem('linx:mock-provisioning-status');
     }
+  });
+});
+
+describe('rule handlers', () => {
+  it('persists a created rule in the listing', async () => {
+    const sensorField = `temperatura-${crypto.randomUUID()}`;
+    const created = await post(`${base}/rules`, {
+      sensor_field: sensorField,
+      operator: '>',
+      threshold: 40,
+      action_type: 'downlink',
+    });
+    const rule = (await created.json()) as { id: string };
+
+    expect(created.status).toBe(201);
+    expect(rule.id).toMatch(UUID_RE);
+
+    const listed = (await (await fetch(`${base}/rules`)).json()) as {
+      sensor_field: string;
+    }[];
+
+    expect(listed.some((item) => item.sensor_field === sensorField)).toBe(true);
+  });
+
+  it('rejects a rule with an invalid threshold with 422', async () => {
+    const res = await post(`${base}/rules`, {
+      sensor_field: 'temperatura',
+      operator: '>',
+      threshold: Number.NaN,
+      action_type: 'downlink',
+    });
+
+    expect(res.status).toBe(422);
   });
 });
 

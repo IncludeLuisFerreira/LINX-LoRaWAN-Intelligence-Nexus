@@ -12,7 +12,7 @@ function renderSidebar() {
 }
 
 describe('Sidebar', () => {
-  it('renders navigation links to tenants and devices', () => {
+  it('renders navigation links to tenants, devices and rules', () => {
     renderSidebar();
 
     expect(screen.getByRole('link', { name: 'Tenants' })).toHaveAttribute(
@@ -22,6 +22,10 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Devices' })).toHaveAttribute(
       'href',
       '/devices',
+    );
+    expect(screen.getByRole('link', { name: 'Regras' })).toHaveAttribute(
+      'href',
+      '/rules',
     );
   });
 });
