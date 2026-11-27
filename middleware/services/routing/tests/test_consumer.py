@@ -52,6 +52,28 @@ def test_on_connect_failure_does_not_subscribe():
     consumer.on_connect(consumer.client, None, None, rc, None)
 
     consumer.client.subscribe.assert_not_called()
+    consumer.client.disconnect.assert_called_once()
+
+
+def test_on_connect_failure_is_fatal_for_stop_event():
+    stop_event = threading.Event()
+    consumer, _ = _consumer(stop_event=stop_event)
+    rc = mqtt.convert_connack_rc_to_reason_code(5)
+
+    consumer.on_connect(consumer.client, None, None, rc, None)
+
+    assert consumer._connection_failed.is_set()
+    assert stop_event.is_set()
+    consumer.client.disconnect.assert_called_once()
+
+
+def test_on_connect_fail_is_fatal_for_handshake_error():
+    consumer, _ = _consumer()
+
+    consumer.on_connect_fail(consumer.client, None)
+
+    assert consumer._connection_failed.is_set()
+    consumer.client.disconnect.assert_called_once()
 
 
 def test_on_message_enqueues_pending_uplink():
@@ -149,6 +171,22 @@ def test_start_configures_manual_ack_and_persistent_session(monkeypatch):
     assert kwargs["manual_ack"] is True
     fake_client.connect.assert_called_once_with("h", 1883)
     fake_client.loop_forever.assert_called_once()
+
+
+def test_start_returns_false_when_connack_is_refused(monkeypatch):
+    """CONNACK negado (CA/hostname errados) nao pode deixar o servico 'up'."""
+    consumer, _ = _consumer()
+    fake_client = MagicMock()
+    rc = mqtt.convert_connack_rc_to_reason_code(5)
+    fake_client.loop_forever.side_effect = lambda: consumer.on_connect(
+        fake_client, None, None, rc, None
+    )
+    monkeypatch.setattr(
+        consumer_module.mqtt, "Client", MagicMock(return_value=fake_client)
+    )
+
+    assert consumer.start() is False
+    fake_client.disconnect.assert_called_once()
 
 
 def test_start_sets_credentials_when_username_present(monkeypatch):

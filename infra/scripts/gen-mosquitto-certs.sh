@@ -4,22 +4,25 @@
 # Uso:
 #   MQTT_TLS_HOST=mosquitto infra/scripts/gen-mosquitto-certs.sh
 #
-# Arquivos gerados em infra/configuration/mosquitto/certs/ (NAO versionados):
-#   ca.crt, ca.key, server.crt, server.key
+# Arquivos gerados (NAO versionados):
+#   configuration/mosquitto/certs/{ca.crt,server.crt,server.key}
+#   configuration/mosquitto/private/ca.key   (nunca montada em container)
 #
 # O listener 8883 usa server.crt/server.key; os clientes (ChirpStack, gateway
-# bridge, routing e probes) confiam na CA via ca.crt. `MQTT_TLS_HOST` define o
-# host extra incluido no SAN — o padrao `mosquitto` e o nome do servico no
-# Compose. `FORCE=1` regenera tudo (invalida certificados ja distribuidos).
+# bridge, routing e probes) confiam na CA via ca.crt. A chave privada da CA fica
+# em `private/`, fora de qualquer bind mount. `MQTT_TLS_HOST` define o host
+# extra incluido no SAN — o padrao `mosquitto` e o nome do servico no Compose.
+# `FORCE=1` regenera tudo (invalida certificados ja distribuidos).
 set -euo pipefail
 umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CERT_DIR="${MQTT_TLS_CERT_DIR:-$SCRIPT_DIR/../configuration/mosquitto/certs}"
+CA_KEY_DIR="${MQTT_TLS_CA_KEY_DIR:-$SCRIPT_DIR/../configuration/mosquitto/private}"
 CERT_HOST="${MQTT_TLS_HOST:-mosquitto}"
 CERT_DAYS="${MQTT_TLS_DAYS:-365}"
 
-CA_KEY="$CERT_DIR/ca.key"
+CA_KEY="$CA_KEY_DIR/ca.key"
 CA_CERT="$CERT_DIR/ca.crt"
 SERVER_KEY="$CERT_DIR/server.key"
 SERVER_CERT="$CERT_DIR/server.crt"
@@ -31,11 +34,12 @@ if ! command -v openssl >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$CERT_DIR"
+mkdir -p "$CERT_DIR" "$CA_KEY_DIR"
 # Com umask 077 o diretorio ficaria 0700 e o broker (uid 1883, em bind mount)
-# nao conseguiria ler os certificados gerados pelo host/CI. Apenas a ca.key
-# permanece restrita (0600); os certificados e a chave do servidor sao 0644.
+# nao conseguiria ler os certificados gerados pelo host/CI. O diretorio da CA
+# privada permanece 0700 e nunca e montado nos containers.
 chmod 0755 "$CERT_DIR"
+chmod 0700 "$CA_KEY_DIR"
 
 if [ -f "$CA_KEY" ] && [ -f "$CA_CERT" ] &&
    [ -f "$SERVER_KEY" ] && [ -f "$SERVER_CERT" ] &&
@@ -81,13 +85,19 @@ rm -f "$SERVER_CSR" "$CA_SRL"
 
 chmod 0600 "$CA_KEY"
 chmod 0644 "$CA_CERT" "$SERVER_CERT"
-# O broker roda como uid 1883 e o compose monta o diretorio read-only; a
-# chave do servidor precisa ser legivel por ele (mesma abordagem do
-# mosquitto.passwd). A ca.key nunca e montada nos containers.
-chmod 0644 "$SERVER_KEY"
+# Chave do servidor (#81): 0640 no host (nao legivel por outros usuarios) e
+# owner 1883 quando possivel. O servico `mosquitto-init` do compose ajusta o
+# owner para 1883 dentro do container antes de subir o broker.
+chmod 0640 "$SERVER_KEY"
+if [ "$(id -u)" -eq 0 ]; then
+  chown 1883:1883 "$SERVER_KEY"
+elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+  sudo -n chown 1883:1883 "$SERVER_KEY"
+fi
 
 echo "Certificados TLS gerados em $CERT_DIR:"
 echo "  CA:    $CA_CERT"
+echo "  CA key: $CA_KEY (fora dos containers)"
 echo "  cert:  $SERVER_CERT"
 echo "  key:   $SERVER_KEY"
 echo "  SAN:   $SAN"

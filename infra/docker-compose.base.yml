@@ -23,13 +23,43 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      # TLS obrigatorio (#81): a 1883 plaintext foi removida do listener.
-      - "8883:8883"
+      # TLS (#81): listener 8883; a 1883 plaintext foi removida.
+      - "127.0.0.1:${MQTT_HOST_PORT:-8883}:8883"
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
-      # Gerados por infra/scripts/gen-mosquitto-certs.sh (#81).
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      # Somente os arquivos necessarios ao broker: a ca.key fica no host (#81).
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
+      - ./configuration/mosquitto/certs/server.crt:/mosquitto/certs/server.crt:ro
+      - ./configuration/mosquitto/certs/server.key:/mosquitto/certs/server.key:ro
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    hostname: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RABBITMQ_AMQP_PORT:-5672}:5672"   # AMQP
+      - "127.0.0.1:${RABBITMQ_MGMT_PORT:-15672}:15672" # Painel de gerenciamento
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_ADMIN_USER:-linx}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}
+    volumes:
+      - rabbitmqdata_base:/var/lib/rabbitmq
+    networks:
+      - linx-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+
+networks:
+  linx-network:
+    external: true
+    name: ${LINX_NETWORK:-linx-network}
 
 volumes:
   postgresqldata_base:
   redisdata_base:
+  rabbitmqdata_base:

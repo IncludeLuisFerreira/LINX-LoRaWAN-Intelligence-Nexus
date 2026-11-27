@@ -19,23 +19,6 @@ services:
       timeout: 5s
       retries: 5
 
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    restart: unless-stopped
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_ADMIN_USER:-linx}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmqdata:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   identity_api:
     build:
       context: .
@@ -56,6 +39,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - linx-network
     healthcheck:
       test:
         - CMD
@@ -141,10 +127,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
       docker_provisioner:
         condition: service_started
+    networks:
+      - default
+      - linx-network
     healthcheck:
       test: ["CMD", "python", "-c", "from jobs_worker.health import check; check()"]
       interval: 30s
@@ -152,6 +139,39 @@ services:
       retries: 3
       start_period: 10s
 
+  jobs_status_worker:
+    build:
+      context: .
+      dockerfile: services/jobs_status_worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-linx}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-linx}
+      - RABBITMQ_AMQP_URL=amqp://${RABBITMQ_ADMIN_USER:-linx}:${RABBITMQ_ADMIN_PASSWORD:?RABBITMQ_ADMIN_PASSWORD must be set}@rabbitmq:5672/
+      - STATUS_QUEUE=${STATUS_QUEUE:-linx.jobs.status}
+      - STATUS_CONCURRENCY=${STATUS_CONCURRENCY:-2}
+      - STATUS_PREFETCH=${STATUS_PREFETCH:-4}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
+      - linx-network
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from jobs_status_worker.health import check; check()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 volumes:
   pgdata:
-  rabbitmqdata:
+
+networks:
+  linx-network:
+    external: true
+    name: ${LINX_NETWORK:-linx-network}

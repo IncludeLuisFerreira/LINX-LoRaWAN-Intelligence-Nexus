@@ -74,10 +74,12 @@ infra/scripts/gen-mosquitto-certs.sh
 # opcional: MQTT_TLS_HOST=<ip-ou-hostname-publico> infra/scripts/gen-mosquitto-certs.sh
 ```
 
-This writes `infra/configuration/mosquitto/certs/{ca.crt,ca.key,server.crt,server.key}`
-(gitignored). Only the CA certificate is mounted into the client containers;
-`ca.key` never leaves the host. The script is idempotent — use `FORCE=1` to
-regenerate. The broker listens only on `8883` (published on `127.0.0.1`);
+This writes `infra/configuration/mosquitto/certs/{ca.crt,server.crt,server.key}`
+and the CA private key in `infra/configuration/mosquitto/private/ca.key`
+(both gitignored). Only `ca.crt` is mounted into the client containers;
+`ca.key` never leaves the host and the broker gets only `ca.crt`, `server.crt`
+and `server.key` (0640, owned by uid 1883). The script is idempotent — use
+`FORCE=1` to regenerate. The broker listens only on `8883` (published on `127.0.0.1`);
 ChirpStack, both gateway bridges and the routing service connect with
 `ssl://mosquitto:8883` and validate the server against `ca.crt`.
 Username/password + ACL from issue #208 remain in force.

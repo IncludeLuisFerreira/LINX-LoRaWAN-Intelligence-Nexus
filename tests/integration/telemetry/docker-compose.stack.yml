@@ -1,0 +1,96 @@
+# Stack de integração de telemetria.
+#
+# Usa as imagens reais de `routing` e `telemetry_consumer` e o broker do
+# stack base (`infra/docker-compose.base.yml`). É uma montagem de teste:
+# não substitui os composes de aplicação.
+#
+# Uso (via conftest.py):
+#   LINX_NETWORK=lynx-it-network docker compose -p lynx-integration \
+#     --env-file test.env \
+#     -f docker-compose.stack.yml \
+#     -f ../../../infra/docker-compose.base.yml \
+#     up -d --wait rabbitmq timescaledb telemetry_consumer routing
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.13.1-pg14
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ../../../client/db/schema.sql:/docker-entrypoint-initdb.d/0_schema.sql:ro
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - linx-network
+
+  telemetry_consumer:
+    build:
+      context: ../../../client/services/telemetry_consumer
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - APP_ID=${APP_ID}
+      - RABBIT_URL=amqp://${RABBITMQ_ADMIN_USER}:${RABBITMQ_ADMIN_PASSWORD}@rabbitmq:5672/%2f
+      - DB_HOST=timescaledb
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:?SERVICE_TOKEN must be set}
+    ports:
+      - "127.0.0.1:8011:8000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - linx-network
+
+  routing:
+    build:
+      context: ../../..
+      dockerfile: middleware/services/routing/Dockerfile
+    restart: unless-stopped
+    environment:
+      - MQTT_BROKER_HOST=mosquitto
+      - MQTT_BROKER_PORT=8883
+      - MQTT_TLS_ENABLED=true
+      - MQTT_CA_CERT=/mosquitto/certs/ca.crt
+      - MQTT_TOPIC=${MQTT_TOPIC}
+      - MQTT_USERNAME=${MQTT_ROUTING_USER}
+      - MQTT_PASSWORD=${MQTT_ROUTING_PASSWORD}
+      - RABBIT_URL=amqp://${RABBITMQ_ADMIN_USER}:${RABBITMQ_ADMIN_PASSWORD}@rabbitmq:5672/%2f
+      - RABBIT_EXCHANGE_PREFIX=${RABBIT_EXCHANGE_PREFIX:-linx.telemetry}
+      - RABBIT_AUDIT_QUEUE=${RABBIT_AUDIT_QUEUE:-linx.telemetry.audit}
+    volumes:
+      # Somente a CA publica (#81); a chave privada fica fora do container.
+      - ../../../infra/configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - linx-network
+
+volumes:
+  timescaledb_data:
+
+networks:
+  linx-network:
+    external: true
+    name: ${LINX_NETWORK:-linx-network}

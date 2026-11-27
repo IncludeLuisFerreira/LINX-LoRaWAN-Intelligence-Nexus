@@ -96,6 +96,16 @@ interface MockDevice {
 
 const mockDevices: MockDevice[] = [];
 
+interface MockRule {
+  id: string;
+  sensor_field: string;
+  operator: string;
+  threshold: number;
+  action_type: string;
+}
+
+const mockRules: MockRule[] = [];
+
 const mockDeviceProfiles = [{ id: crypto.randomUUID(), name: 'Perfil Teste' }];
 
 function findTenant(tenantId: string): MockTenant | undefined {
@@ -141,7 +151,64 @@ function createdLocation(request: Request, path: string) {
   return `${new URL(request.url).origin}${path}`;
 }
 
+/**
+ * Gera um JWT sintético (sem assinatura real) para a demo com
+ * `VITE_ENABLE_MOCKS=true`. Inclui `exp` futuro para não ser tratado como
+ * expirado pelo AuthGuard e permissões para o RBAC da UI.
+ */
+function mockAccessToken(): string {
+  const encode = (value: object) =>
+    btoa(JSON.stringify(value))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+  const header = encode({ alg: 'none', typ: 'JWT' });
+  const payload = encode({
+    sub: 'mock-user',
+    email: 'demo@linx.local',
+    permissions: [
+      'tenant:read',
+      'application:read',
+      'device:read',
+      'device:create',
+      'telemetry:read',
+    ],
+    exp: Math.floor(Date.now() / 1000) + 60 * 60,
+  });
+
+  return `${header}.${payload}.mock-signature`;
+}
+
 export const handlers = [
+  // --- AUTH ---
+  // Aceita qualquer credencial não vazia para permitir a demo local sem
+  // backend (`VITE_ENABLE_MOCKS=true`).
+  http.post('*/api/v1/auth/login', async ({ request }) => {
+    const body = (await request.json()) as {
+      email?: string;
+      password?: string;
+    };
+
+    if (!body.email || !body.password) {
+      return validationError('email and password are required');
+    }
+
+    return HttpResponse.json(
+      {
+        access_token: mockAccessToken(),
+        token_type: 'bearer',
+        expires_in: 3600,
+      },
+      {
+        headers: {
+          'Set-Cookie':
+            'refresh_token=mock-refresh-token; HttpOnly; Path=/; SameSite=Lax',
+        },
+      },
+    );
+  }),
+
   // --- TENANTS ---
   http.get('*/api/v1/tenant', () => {
     return HttpResponse.json(mockTenants);
@@ -385,6 +452,32 @@ export const handlers = [
     }
     mockDevices[index].updated_at = now();
     return HttpResponse.json(mockDevices[index]);
+  }),
+
+  // --- RULES (#86) ---
+  // O endpoint REST ainda não existe no backend (issue #90); o MSW permite
+  // demonstrar e testar o fluxo completo da tela de regras.
+  http.get('*/api/v1/rules', () => {
+    return HttpResponse.json(mockRules);
+  }),
+
+  http.post('*/api/v1/rules', async ({ request }) => {
+    const payload = (await request.json()) as Omit<MockRule, 'id'>;
+    if (
+      !payload?.sensor_field?.trim() ||
+      !payload.operator ||
+      !Number.isFinite(payload.threshold) ||
+      !payload.action_type
+    ) {
+      return validationError('Regra inválida');
+    }
+    const rule: MockRule = {
+      ...payload,
+      sensor_field: payload.sensor_field.trim(),
+      id: crypto.randomUUID(),
+    };
+    mockRules.push(rule);
+    return HttpResponse.json(rule, { status: 201 });
   }),
 
   // --- TELEMETRY ---

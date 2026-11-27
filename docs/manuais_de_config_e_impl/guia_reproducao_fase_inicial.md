@@ -121,7 +121,10 @@ services:
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
       #gere antes: infra/scripts/gen-mosquitto-certs.sh (#81)
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      # so os arquivos do broker; a ca.key fica em configuration/mosquitto/private/
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
+      - ./configuration/mosquitto/certs/server.crt:/mosquitto/certs/server.crt:ro
+      - ./configuration/mosquitto/certs/server.key:/mosquitto/certs/server.key:ro
 
 volumes:
   postgresqldata:

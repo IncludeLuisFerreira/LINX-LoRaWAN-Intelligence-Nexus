@@ -6,9 +6,11 @@ on:
       - "tests/integration/**"
       - "client/services/telemetry_consumer/**"
       - "middleware/services/routing/**"
-      - "deploy/docker-compose.yml"
+      # TLS do Mosquitto (#81): qualquer mudanca em infra/ (composes,
+      # mosquitto.conf, script de certificados) deve disparar a suite.
+      - "infra/**"
       - "client/db/**"
-      - "deploy/.env.example"
+      - "scripts/bootstrap-network.sh"
       - ".github/workflows/integration-ci.yml"
   push:
     branches:
@@ -18,9 +20,11 @@ on:
       - "tests/integration/**"
       - "client/services/telemetry_consumer/**"
       - "middleware/services/routing/**"
-      - "deploy/docker-compose.yml"
+      # TLS do Mosquitto (#81): qualquer mudanca em infra/ (composes,
+      # mosquitto.conf, script de certificados) deve disparar a suite.
+      - "infra/**"
       - "client/db/**"
-      - "deploy/.env.example"
+      - "scripts/bootstrap-network.sh"
       - ".github/workflows/integration-ci.yml"
 
 env:
@@ -51,9 +55,13 @@ jobs:
 
       - name: Dump compose logs on failure
         if: failure()
-        run: >-
-          docker compose -p lynx-integration
-          --env-file tests/integration/telemetry/test.env
-          -f deploy/docker-compose.yml
-          -f tests/integration/telemetry/docker-compose.override.yml
-          logs --tail 120
+        run: |
+          docker compose -p lynx-integration \
+            --env-file tests/integration/telemetry/test.env \
+            -f tests/integration/telemetry/docker-compose.stack.yml \
+            -f infra/docker-compose.base.yml \
+            logs --tail 120 || true
+          docker compose -p lynx-integration-infra \
+            --env-file tests/integration/telemetry/test.env \
+            -f infra/docker-compose.yml \
+            logs --tail 120 mosquitto || true

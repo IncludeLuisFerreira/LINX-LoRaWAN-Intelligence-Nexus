@@ -10,6 +10,7 @@ const ApplicationDetailPage = lazy(
   () => import('./pages/applications/ApplicationDetailPage'),
 );
 const DeviceListPage = lazy(() => import('./pages/devices/DeviceListPage'));
+const Rules = lazy(() => import('./pages/rules/Rules'));
 const OnboardingWizard = lazy(
   () => import('./pages/onboarding/OnboardingWizard'),
 );
@@ -41,7 +42,10 @@ export function AppRoutes() {
           }
         >
           <Route path="/tenants" element={<TenantListPage />} />
-          {/* Alias do critério de aceite do login: /orgs é a rota real de tenants */}
+          {/*
+            Alias aceito como destino pós-login (/orgs) por compatibilidade com o
+            critério de aceite; a rota canônica de organizações/tenants é /tenants.
+          */}
           <Route path="/orgs" element={<Navigate to="/tenants" replace />} />
           <Route path="/tenants/:tenantId" element={<TenantDetailPage />} />
           <Route
@@ -49,6 +53,7 @@ export function AppRoutes() {
             element={<ApplicationDetailPage />}
           />
           <Route path="/devices" element={<DeviceListPage />} />
+          <Route path="/rules" element={<Rules />} />
           <Route path="/dashboard" element={<DashboardSelectPage />} />
           <Route path="/dashboard/:appId" element={<Dashboard />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />

@@ -11,7 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GUARD = ROOT / "scripts" / "check_security_headers.py"
-FILES = ("deploy/nginx/nginx.conf", "client/frontend/nginx.conf")
+FILES = (
+    "client/frontend/nginx.conf",
+    "client/frontend/nginx-tls.conf",
+)
 
 
 def run_guard(root: Path) -> subprocess.CompletedProcess[str]:
@@ -46,20 +49,6 @@ def main() -> int:
         result = run_guard(root)
         assert result.returncode == 0, result.stderr
 
-        deploy = root / "deploy/nginx/nginx.conf"
-        original = deploy.read_text()
-        deploy.write_text(
-            original.replace(
-                '    add_header Content-Security-Policy "default-src '
-                "'none'; frame-ancestors 'none'; base-uri 'none'\" "
-                "always;\n",
-                "",
-                1,
-            )
-        )
-        expect_fail(root, "CSP removida de um server do deploy")
-        deploy.write_text(original)
-
         frontend = root / "client/frontend/nginx.conf"
         original = frontend.read_text()
         frontend.write_text(
@@ -92,6 +81,17 @@ def main() -> int:
         )
         expect_fail(root, "CSP server-level comentada, mas presente em location")
         frontend.write_text(original)
+
+        tls = root / "client/frontend/nginx-tls.conf"
+        original_tls = tls.read_text()
+        hsts = (
+            '    add_header Strict-Transport-Security '
+            '"max-age=31536000; includeSubDomains; preload" always;\n'
+        )
+        assert hsts in original_tls
+        tls.write_text(original_tls.replace(hsts, "", 1))
+        expect_fail(root, "HSTS removido da borda TLS")
+        tls.write_text(original_tls)
 
     print("OK: guarda de headers rejeita as fixtures negativas.")
     return 0

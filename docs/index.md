@@ -42,15 +42,14 @@ LINX/
 │   └── db/                 #   Schema TimescaleDB
 ├── infra/                  # Infraestrutura base (Compose, Kubernetes e Terraform)
 │   ├── docker-compose.yml         # Stack completa ChirpStack v4
-│   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto
+│   ├── docker-compose.base.yml    # Base dev: PostgreSQL 15 + Redis 7 + Mosquitto + RabbitMQ
 │   ├── configuration/      # chirpstack, gateway-bridge, mosquitto, postgresql
 │   ├── kubernetes/         # Manifestos K8s (kustomize) e overlays
 │   └── terraform/          # Cluster K3s na AWS Sandbox
 ├── proto/                  # Contrato gRPC compartilhado (AgentBridge)
 │   └── linx_agent.proto    # service AgentBridge (proto3)
-├── deploy/                 # Stack full-stack (nginx + TLS + todos os serviços) + schema
-├── scripts/                # gen_proto.sh, update_progress.py, docker_install.sh
-├── tests/                  # Testes de integração ponta-a-ponta
+├── scripts/                # bootstrap-network.sh, check_messaging_topology.py, gen_proto.sh
+├── tests/                  # Testes de integração ponta-a-ponta (montagem de teste)
 ├── website/                # Site institucional (Astro)
 ├── docs/
 │   ├── estrutura_de_pastas/
@@ -79,7 +78,7 @@ make up
 ou
 
 ```bash
-bash deploy/scripts/bootstrap-network.sh   # cria a rede compartilhada
+bash scripts/bootstrap-network.sh   # cria a rede compartilhada
 docker compose -f infra/docker-compose.yml up -d
 ```
 
@@ -163,7 +162,10 @@ services:
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
       # gere antes: infra/scripts/gen-mosquitto-certs.sh (#81)
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      # so os arquivos do broker; a ca.key fica em configuration/mosquitto/private/
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
+      - ./configuration/mosquitto/certs/server.crt:/mosquitto/certs/server.crt:ro
+      - ./configuration/mosquitto/certs/server.key:/mosquitto/certs/server.key:ro
 
 volumes:
   postgresqldata:
@@ -172,10 +174,11 @@ volumes:
 
 > Os topic templates do gateway bridge usam o prefixo `au915_0` (região AU915).
 
-> O `mosquitto` do `infra` também entra na rede nomeada `linx-network`. O stack
-> `deploy` não sobe broker próprio: o `routing` consome esse Mosquitto pela rede
-> compartilhada (#188). Suba `infra` antes de `deploy`; `make up-infra` e
-> `make up-deploy` garantem a rede com `deploy/scripts/bootstrap-network.sh`.
+> O `mosquitto` do `infra` entra na rede nomeada `linx-network`. O `routing`
+> consome esse broker pela rede compartilhada (#188). A suíte de integração
+> monta `routing` + `telemetry_consumer` e sobe o Mosquitto do `infra` na mesma
+> rede. `make up-infra` e `make up-base` garantem a rede com
+> `scripts/bootstrap-network.sh`.
 
 #### Referência: `configuration/chirpstack/chirpstack.toml`
 

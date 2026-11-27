@@ -16,6 +16,7 @@ infra/configuration/mosquitto/config/mosquitto.passwd
 # Certificados TLS do Mosquitto (issue #81) — gerar via gen-mosquitto-certs.sh.
 # Nunca versionar CA key, certificado de servidor ou chave privada.
 infra/configuration/mosquitto/certs/
+infra/configuration/mosquitto/private/
 
 # === Build / Compilação ===
 # Byte-compiled / optimized / DLL files
@@ -263,7 +264,11 @@ lorawan-devices/
 infra/chirpstack-device-profiles/
 
 # Certificados TLS gerados localmente (self-signed)
-deploy/certs/
+certs/
+
+# Borda HTTPS do frontend (issue #73): certificados e estado do Certbot
+client/certs/
+client/certbot/
 
 # === Logs ===
 *.log

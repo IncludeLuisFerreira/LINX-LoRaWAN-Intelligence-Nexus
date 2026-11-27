@@ -6,6 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from linx_shared.jobs.broker import JobPublisher
+from linx_shared.jobs.constants import JOB_EVENTS_EXCHANGE, JobStatus
+from linx_shared.models.job import Job
 from linx_shared.models.job_outbox import JobOutbox
 
 logger = logging.getLogger(__name__)
@@ -77,6 +79,27 @@ def relay_pending_outbox(
                     row.job_id,
                     row.last_error,
                 )
+                if row.exchange != JOB_EVENTS_EXCHANGE:
+                    job = session.get(Job, row.job_id)
+                    if job is not None and job.status not in (
+                        JobStatus.SUCCEEDED.value,
+                        JobStatus.FAILED.value,
+                    ):
+                        job.status = JobStatus.FAILED.value
+                        job.error = {
+                            "code": "command_publish_failed",
+                            "message": row.last_error,
+                            "retryable": False,
+                        }
+                        job.finished_at = reference
+                        job.locked_until = None
+                        job.next_attempt_at = None
+                        logger.error(
+                            "job marked failed after command quarantine "
+                            "job_id=%s outbox_id=%s",
+                            job.id,
+                            row.id,
+                        )
                 continue
             delay = _backoff_seconds(row.attempts)
             row.next_attempt_at = reference + timedelta(seconds=delay)

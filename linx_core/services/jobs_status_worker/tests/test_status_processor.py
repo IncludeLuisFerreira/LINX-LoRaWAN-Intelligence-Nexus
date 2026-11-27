@@ -6,7 +6,7 @@ from linx_shared.jobs.constants import (
 )
 from linx_shared.jobs.envelope import JobError, JobStatusEvent
 
-from jobs_worker.status import StatusProcessor
+from jobs_status_worker.status import StatusProcessor
 
 
 def _event(job, status, *, attempt=None, result=None, error=None):

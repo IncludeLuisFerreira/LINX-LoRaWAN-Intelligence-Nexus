@@ -4,35 +4,46 @@ Verifica que uma telemetria percorre o caminho real até o que o frontend
 consome:
 
 ```
-mosquitto do infra (uplink MQTT) -> routing (deploy) -> rabbitmq
+mosquitto do infra (uplink MQTT) -> routing -> rabbitmq
   (exchange por tenant) -> telemetry_consumer (TimescaleDB + WebSocket)
 ```
 
 Contratos do frontend cobertos: `GET /telemetry` (histórico REST) e
 `WS /ws/telemetry/{app_id}` (tempo real, RNF-003).
 
-## Reúso da stack real
+## Montagem da stack
 
-Esta suíte **não define serviços próprios**. Usa o Mosquitto real de
-`infra/docker-compose.yml` e o compose de `deploy/docker-compose.yml` como base,
-aplicando overrides para:
+A suíte usa os **serviços reais**, mas em uma montagem própria de teste:
 
-- publicar portas em offsets de teste (loopback) — o Mosquitto TLS usa
-  `127.0.0.1:11883 -> 8883` (#81);
-- fixar `APP_ID=integration-app` e apontar o consumer para a credencial
-  administrativa do broker (sem provisionamento por-tenant).
+| Serviço | Origem |
+|---|---|
+| Mosquitto | `infra/docker-compose.yml` |
+| RabbitMQ | `infra/docker-compose.base.yml` |
+| `routing` | build de `middleware/services/routing/Dockerfile` |
+| `telemetry_consumer` | build de `client/services/telemetry_consumer/Dockerfile` |
+| TimescaleDB | imagem pública + `client/db/schema.sql` |
 
-O broker não tem mais listener plaintext na 1883: os probes usam `mosquitto_pub`
+O arquivo que junta esses serviços é
+`tests/integration/telemetry/docker-compose.stack.yml`. Ele **não substitui**
+os composes de aplicação: apenas declara o conjunto que a suíte sobe, com
+portas em offsets de teste e rede isolada.
+
+O broker não tem listener plaintext na 1883: os probes usam `mosquitto_pub`
 com `-p 8883 --cafile /mosquitto/certs/ca.crt` e o routing sobe com
 `MQTT_TLS_ENABLED=true`. A suíte gera CA/certificado automaticamente (se ainda
-não existirem) via `infra/scripts/gen-mosquitto-certs.sh`; em execução manual,
-o script também pode ser chamado diretamente.
+não existirem) via `infra/scripts/gen-mosquitto-certs.sh`. Há também casos
+negativos: 1883 rejeitada, CA não confiável e hostname divergente.
 
-Sobe apenas os serviços do caminho: `mosquitto` (infra), `routing`, `rabbitmq`,
-`timescaledb`, `telemetry_consumer` (deploy), conectados pela rede
-`linx-network`.
+A stack roda na rede `lynx-it-network` (parametrizada por `LINX_NETWORK`),
+separada do ambiente de desenvolvimento. As portas publicadas no host vêm do
+`test.env`:
 
-Variáveis exigidas pelo compose base ficam em `test.env` (valores de teste).
+- `RABBITMQ_AMQP_PORT=5673`
+- `RABBITMQ_MGMT_PORT=15673`
+- `MQTT_HOST_PORT=11883`
+
+O compose base lê essas variáveis; não há mais override de portas com
+`!override`.
 
 ## Casos de teste
 
@@ -41,6 +52,9 @@ Variáveis exigidas pelo compose base ficam em `test.env` (valores de teste).
 3. Deduplicação por `(app_id, dev_eui, time, event_type)`
 4. Payload inválido → não persiste (DLQ)
 5. Regressão: `timestamp` string ISO aceito pelo consumer
+6. TLS: conexão plaintext na 1883 é recusada
+7. TLS: certificado de CA não confiável é recusado na 8883
+8. TLS: hostname fora do SAN do certificado é recusado na 8883
 
 ## Rodar
 
@@ -53,16 +67,16 @@ tests/integration/run.sh
 Inspecionar a stack manualmente:
 
 ```bash
-bash deploy/scripts/bootstrap-network.sh
-docker compose -p lynx-integration \
+bash scripts/bootstrap-network.sh lynx-it-network
+LINX_NETWORK=lynx-it-network docker compose -p lynx-integration \
   --env-file tests/integration/telemetry/test.env \
-  -f deploy/docker-compose.yml \
-  -f tests/integration/telemetry/docker-compose.override.yml \
-  up -d --build --wait routing rabbitmq timescaledb telemetry_consumer
-docker compose -p lynx-integration ... ps
-docker compose -p lynx-integration ... down -v
+  -f tests/integration/telemetry/docker-compose.stack.yml \
+  -f infra/docker-compose.base.yml \
+  up -d --build --wait rabbitmq timescaledb telemetry_consumer routing
+LINX_NETWORK=lynx-it-network docker compose -p lynx-integration ... ps
+LINX_NETWORK=lynx-it-network docker compose -p lynx-integration ... down -v
 ```
 
 O Mosquitto é gerenciado separadamente pelo projeto `lynx-integration-infra`,
-usando `infra/docker-compose.yml` e
-`tests/integration/telemetry/docker-compose.infra-override.yml`.
+usando `infra/docker-compose.yml` (a porta de teste vem de `MQTT_HOST_PORT` no
+`test.env`). Ele sobe na mesma rede isolada.

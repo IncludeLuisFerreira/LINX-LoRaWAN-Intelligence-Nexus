@@ -202,9 +202,7 @@ describe('provisioning status handler', () => {
     const readStatus = async () =>
       (
         (await (
-          await fetch(
-            `${base}/tenant/${tenantId}/applications/${appId}/status`,
-          )
+          await fetch(`${base}/tenant/${tenantId}/applications/${appId}/status`)
         ).json()) as { status: string }
       ).status;
 
@@ -232,6 +230,39 @@ describe('provisioning status handler', () => {
   });
 });
 
+describe('rule handlers', () => {
+  it('persists a created rule in the listing', async () => {
+    const sensorField = `temperatura-${crypto.randomUUID()}`;
+    const created = await post(`${base}/rules`, {
+      sensor_field: sensorField,
+      operator: '>',
+      threshold: 40,
+      action_type: 'downlink',
+    });
+    const rule = (await created.json()) as { id: string };
+
+    expect(created.status).toBe(201);
+    expect(rule.id).toMatch(UUID_RE);
+
+    const listed = (await (await fetch(`${base}/rules`)).json()) as {
+      sensor_field: string;
+    }[];
+
+    expect(listed.some((item) => item.sensor_field === sensorField)).toBe(true);
+  });
+
+  it('rejects a rule with an invalid threshold with 422', async () => {
+    const res = await post(`${base}/rules`, {
+      sensor_field: 'temperatura',
+      operator: '>',
+      threshold: Number.NaN,
+      action_type: 'downlink',
+    });
+
+    expect(res.status).toBe(422);
+  });
+});
+
 describe('telemetry handlers', () => {
   it('returns a paginated history envelope for a dev_eui', async () => {
     const res = await fetch(
@@ -255,6 +286,43 @@ describe('telemetry handlers', () => {
 
   it('rejects a missing dev_eui with 422', async () => {
     const res = await fetch(`${base}/telemetry`);
+
+    expect(res.status).toBe(422);
+  });
+});
+
+function decodeJwtPayload(token: string): {
+  exp: number;
+  permissions: string[];
+} {
+  const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+  return JSON.parse(atob(padded)) as { exp: number; permissions: string[] };
+}
+
+describe('auth handlers', () => {
+  it('accepts POST /auth/login and returns a usable access token', async () => {
+    const res = await post(`${base}/auth/login`, {
+      email: 'demo@linx.local',
+      password: 'demo',
+    });
+    const body = (await res.json()) as {
+      access_token: string;
+      token_type: string;
+      expires_in: number;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.token_type).toBe('bearer');
+    expect(body.expires_in).toBe(3600);
+
+    const payload = decodeJwtPayload(body.access_token);
+    expect(payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(payload.permissions.length).toBeGreaterThan(0);
+  });
+
+  it('rejects POST /auth/login without credentials', async () => {
+    const res = await post(`${base}/auth/login`, {});
 
     expect(res.status).toBe(422);
   });

@@ -39,6 +39,7 @@ Drill-down hierárquico com breadcrumbs:
 /tenants/:tenantId                           → workspace (Applications | Configurações)
 /tenants/:tenantId/applications/:appId       → workspace (Devices | Configurações)
 /devices                                     → lista global de devices
+/rules                                       → regras de negócio (formulário + listagem)
 /dashboard                                   → menu de aplicações para escolher o dashboard
 /dashboard/:appId                            → dashboard de telemetria (gráfico de linha)
 /onboarding                                  → wizard de cadastro de device (3 passos; aceita `?app=<id>` para pré-selecionar a aplicação)
@@ -66,16 +67,17 @@ frontend/
 │   │   └── AuthContext.tsx  # provider/hook de autenticação JWT
 │   ├── hooks/
 │   │   └── useAsyncData.ts  # loading/erro/reload para fetches de página
-│   ├── mocks/               # handlers MSW (tenant, application, device)
+│   ├── mocks/               # handlers MSW (tenant, application, device, rule)
 │   ├── pages/
 │   │   ├── Login.tsx        # login JWT (redireciona para /orgs)
 │   │   ├── tenants/         # TenantListPage, TenantDetailPage, TenantFormModal
 │   │   ├── applications/    # ApplicationDetailPage, ApplicationFormModal
 │   │   ├── devices/         # DeviceListPage, DeviceNicknameModal
+│   │   ├── rules/           # Rules (formulário e listagem de regras)
 │   │   ├── dashboard/       # DashboardSelectPage, Dashboard (telemetria)
 │   │   ├── onboarding/      # OnboardingWizard (scan → confirm → select app)
 │   │   └── NotFound.tsx
-│   ├── services/            # api, auth, tenant, app, device
+│   ├── services/            # api, auth, tenant, app, device, rule
 │   ├── utils/               # cn, format, tr005, jwt (exp/claims)
 │   ├── routes.tsx
 │   └── main.tsx
@@ -93,12 +95,12 @@ O fluxo de login segue o RNF-005 e usa a API real:
 3. O backend devolve o `access_token` no corpo e define o `refresh_token` em um cookie `httpOnly`.
 4. O `AuthContext` mantém o `access_token` **apenas em memória** (estado do React + módulo `api.ts`). Nada é gravado em `localStorage` ou `sessionStorage`.
 5. O interceptor do Axios injeta `Authorization: Bearer <access_token>`; o `withCredentials: true` garante que o cookie de refresh seja enviado nas requisições.
-6. Após o login, a aplicação redireciona para `/orgs` (alias de `/tenants`).
+6. Após o login, a aplicação redireciona para `/orgs`. A rota canônica de organizações/tenants é `/tenants`; `/orgs` é mantida como alias aceito (destino pós-login e compatibilidade com o critério de aceite) para não criar dívida silenciosa enquanto a nomenclatura não é consolidada.
 
 Em caso de `401`, o token em memória é limpo e o usuário é redirecionado para `/login`.
 Como o `refresh_token` é `httpOnly`, ele não é acessível por JavaScript — não é necessário (nem possível) lê-lo com `js-cookie`.
 
-> O endpoint `POST /auth/login` precisa estar disponível no backend. Mesmo com o MSW ativo, não há handler de autenticação: a chamada segue para a API real.
+> O endpoint `POST /auth/login` precisa estar disponível no backend para o fluxo real. Com `VITE_ENABLE_MOCKS=true`, o MSW expõe um handler de `POST /auth/login` que aceita qualquer credencial não vazia e devolve um `access_token` sintético (com cookie `httpOnly` simulado no mock) para a demo local. Sem mocks, a chamada segue para a API real.
 
 ### AuthGuard
 
@@ -134,9 +136,14 @@ O front consome o `identity_api` via `baseURL` `/api/v1`:
 | Tenant      | `POST/GET /tenant`, `GET/PATCH/DELETE /tenant/{id}`                                    |
 | Application | `POST/GET /tenant/{tid}/applications`, `GET/PATCH/DELETE .../applications/{aid}`       |
 | Device      | `GET /devices?app_id=`, `POST /devices`, `PATCH /devices/{id}`, `DELETE /devices/{id}` |
+| Rule        | `GET /rules`, `POST /rules` (`sensor_field`, `operator`, `threshold`, `action_type`)   |
 | Telemetry   | `GET /telemetry?dev_eui=&limit=&before=`                                               |
 
 > O `PATCH /devices/{id}` aceita apenas `nickname`.
+
+> **`GET/POST /rules`:** o endpoint REST ainda não existe no `identity_api`
+> (issue #90). Os handlers MSW (`VITE_ENABLE_MOCKS=true`) simulam a persistência
+> em memória para permitir o uso e os testes da tela até o backend ser entregue.
 
 > **Contratos OpenAPI (#217):** há dois artefatos com papéis distintos:
 > `client/frontend/openapi-stub.yaml` é o subconjunto REST que o front consome,
@@ -365,3 +372,79 @@ Para habilitar mocks em um container de demonstração:
 ```bash
 docker build --build-arg VITE_ENABLE_MOCKS=true -t frontend:demo .
 ```
+
+> **Atenção:** o `docker run -p 8080:80` acima serve apenas para
+> desenvolvimento. O nginx interno confia no header `X-Forwarded-Proto` para
+> propagar o esquema ao `/api` e ao `/ws`; em produção exponha o dashboard
+> somente atrás da borda TLS (`frontend-tls`), que sobrescreve esse header.
+> Com a porta acessível diretamente, um cliente poderia forjá-lo.
+
+## HTTPS no deploy (issue #73)
+
+O compose de `client/` expõe o dashboard somente pela borda `frontend-tls`
+(`nginx:1.27-alpine`): a porta `80` serve somente o desafio HTTP-01 do Certbot
+e redireciona todo o resto para `https://$host$request_uri`; a porta `443`
+termina o TLS e faz proxy para o nginx interno do serviço `frontend` (que
+continua cuidando de `/api`, `/ws` e do fallback da SPA). O certificado é
+emitido pelo Let's Encrypt via **webroot** e renovado por
+`scripts/frontend-cert.sh`.
+
+### Pré-requisitos
+
+- domínio público com registro **A** apontando para o host (não é possível
+  obter certificado válido sem um domínio);
+- portas `80` e `443` liberadas no Security Group/firewall;
+- Docker + Compose V2 e `openssl` no host.
+
+### Emissão
+
+```bash
+cd client
+cp .env.example .env   # preencha FRONTEND_DOMAIN e LE_EMAIL
+export FRONTEND_DOMAIN=dashboard.seudominio.com
+export LE_EMAIL=admin@seudominio.com
+
+# cria um certificado autoassinado de 1 dia só para o nginx subir e responder
+# ao desafio, emite o certificado real e recarrega a borda:
+./scripts/frontend-cert.sh issue
+```
+
+Use `LE_STAGING=1` enquanto testar (evita o limite de requisições do Let's
+Encrypt). Os PEMs publicados ficam em `client/certs/` (gitignored) e o estado
+do Certbot em `client/certbot/` (gitignored).
+
+### Verificação
+
+```bash
+curl -I http://$FRONTEND_DOMAIN    # 301 -> https://$FRONTEND_DOMAIN
+curl -I https://$FRONTEND_DOMAIN   # 200
+curl -vkI https://$FRONTEND_DOMAIN # handshake TLSv1.2/1.3, emissor Let's Encrypt
+FRONTEND_DOMAIN=$FRONTEND_DOMAIN ./scripts/frontend-cert.sh status
+```
+
+### Renovação
+
+O certificado vale 90 dias. Agende no host (cron), no mesmo diretório:
+
+```bash
+0 3 * * * cd /caminho/LINX/client && FRONTEND_DOMAIN=dashboard.seudominio.com ./scripts/frontend-cert.sh renew
+```
+
+O comando renova via certbot, republica os PEMs e recarrega o nginx da borda.
+
+### Sem domínio (apenas desenvolvimento local)
+
+É possível subir a borda com certificado **autoassinado** para validar o
+config localmente; o navegador exibirá aviso e o critério "certificado válido"
+da issue **não** é atendido nesse modo:
+
+```bash
+# na raiz do repositório
+TLS_CERT_DIR="$PWD/client/certs" TLS_CERT_HOST=localhost \
+  ./deploy/scripts/gen-self-signed-cert.sh
+docker compose -f client/docker-compose.yml up -d --build frontend-tls
+curl -kI https://localhost   # 200 com certificado autoassinado
+```
+
+A validação de CI da borda roda `scripts/check-nginx-tls.sh` (diretivas +
+`nginx -t`) e a guarda de headers de segurança cobre o HSTS do bloco TLS.

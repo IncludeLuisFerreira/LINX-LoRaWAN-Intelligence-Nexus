@@ -149,7 +149,7 @@ def main() -> None:  # pragma: no cover
 
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
-    if not service.start() and not service.stopped:
+    if not service.start():
         logger.error("Serviço não iniciou; saindo com código 1")
         sys.exit(1)
 

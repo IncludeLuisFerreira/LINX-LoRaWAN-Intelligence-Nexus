@@ -2,9 +2,10 @@
 
 Agente por tenant do LINX — valida a conectividade gRPC com o Linx Core no
 startup e resolve a configuração de cada tenant sob demanda via
-`GetAppConfig(app_id)`, com cache TTL. **Não** valida JWT nem roteia
-requisições; a autenticação do plano de controle é do `identity_api`
-(`linx_core/`).
+`GetAppConfig(app_id)`, com cache TTL. O endpoint protegido
+`/api/v1/agent/me` valida JWT RS256 emitido pelo `identity_api` usando a
+chave pública de `JWT_PUBLIC_KEY`. O roteamento de requisições de usuários
+continua no `identity_api` (`linx_core/`); `/health` permanece público.
 
 > A ingestão de telemetria é feita pelo serviço **routing**
 > (`middleware/services/routing`): ele consome os uplinks do ChirpStack via MQTT e
@@ -26,12 +27,13 @@ requisições; a autenticação do plano de controle é do `identity_api`
 
 | Método | Rota      | Descrição                                                        |
 | :----: | --------- | ---------------------------------------------------------------- |
-| `GET`  | `/health` | Health check: `{"status":"ok","saas_grpc":true}` (503 e `degraded` quando o SaaS está inacessível). |
+| `GET`  | `/health` | Health check: `{"status":"ok","saas_grpc":true}` (503 e `degraded` quando o SaaS está inacessível). Público. |
+| `GET`  | `/api/v1/agent/me` | Endpoint protegido por JWT: devolve as claims do token. Sem token/inválido retorna `401`. |
 
 > A ingestão de telemetria **não** passa por REST: o `client_agent` deixa de expor
-> `POST /ingest`. Ele fica com o cliente gRPC (`GetAppConfig`) e `GET /health`.
-> A ingestão é feita pelo `routing` (MQTT → RabbitMQ) e persistida pelo
-> `telemetry_consumer`.
+> `POST /ingest`. Ele fica com o cliente gRPC (`GetAppConfig`), `GET /health` e
+> `GET /api/v1/agent/me`. A ingestão é feita pelo `routing` (MQTT → RabbitMQ) e
+> persistida pelo `telemetry_consumer`.
 
 ## 🌐 Fluxo ponta-a-ponta com `curl`
 
@@ -90,6 +92,20 @@ curl -i http://<agent>:8001/health
 # esperado: 200 {"status":"ok","saas_grpc":true}
 ```
 
+### 3. Validar o endpoint protegido por JWT
+
+```bash
+# Sem token: 401
+curl -i http://<agent>:8001/api/v1/agent/me
+
+# Com token válido (RS256, assinado pelo SaaS): 200 + claims
+curl -i http://<agent>:8001/api/v1/agent/me \
+  -H "Authorization: Bearer <access_token>"
+```
+
+> O token é o `access_token` emitido pelo `identity_api`. A chave pública
+> RS256 correspondente deve estar em `JWT_PUBLIC_KEY` no ambiente do agente.
+
 ### Reproduzindo na AWS
 
 Os comandos são os mesmos; mude apenas o host:
@@ -120,10 +136,12 @@ Os comandos são os mesmos; mude apenas o host:
 | `pyproject.toml`              | Dependências, pacote `agent` e tasks de dev.    |
 | `poetry.lock`                 | Versões travadas das dependências.              |
 | `src/agent/main.py`           | Aplicação FastAPI, lifespan gRPC e `/health`.   |
-| `src/agent/config.py`         | `AgentSettings` (host gRPC, timeout, TTL do cache) via env. |
+| `src/agent/config.py`         | `AgentSettings` (host gRPC, timeout, TTL do cache, chave pública JWT) via env. |
+| `src/agent/auth.py`           | Dependency `get_current_user`: valida `Authorization: Bearer` (RS256) contra `JWT_PUBLIC_KEY`. |
 | `src/agent/grpc_client.py`    | `SaasGrpcClient` (`GetAppConfig` + cache TTL + conectividade). |
 | `linx_shared.grpc`            | Stubs gRPC do contrato `linx_agent.proto` (pacote compartilhado). |
 | `tests/test_main.py`          | Testes do `/health` e do lifespan com `TestClient`. |
+| `tests/test_auth.py`          | Testes do JWT: token válido, 401 e chave via env. |
 | `tests/test_config.py`        | Testes dos defaults de `AgentSettings`.         |
 | `tests/test_grpc_client.py`   | Testes do `SaasGrpcClient` (mapeamento, cache, erros). |
 | `Dockerfile`                  | Imagem mínima para rodar o serviço (porta 8001). |
@@ -160,6 +178,7 @@ Configuração por variáveis de ambiente:
 | `SAAS_GRPC_HOST`           | `agent_bridge:50051` | Endereço `host:porta` do gRPC do Linx Core. |
 | `GRPC_TIMEOUT_SECONDS`     | `5`             | Timeout (s) das chamadas/checagem gRPC.        |
 | `CONFIG_CACHE_TTL_SECONDS` | `60`            | TTL (s) do cache de `GetAppConfig` por `app_id`. |
+| `JWT_PUBLIC_KEY`           | `""`            | Chave pública RS256 do SaaS usada em `/api/v1/agent/me`. Use `\n` para quebras de linha. |
 
 > `SAAS_GRPC_HOST` precisa apontar para um endereço alcançável de dentro do
 > container do middleware. `localhost:50051` só funciona em dev na mesma máquina;
@@ -206,3 +225,21 @@ docker run --rm -p 8001:8001 --env-file middleware/services/client_agent/.env cl
 Em produção use o compose unificado `deploy/docker-compose.yml` (serviço
 `client_agent`), com o `SAAS_GRPC_HOST` apontando para o endereço acessível do
 Linx Core.
+
+### mTLS no canal gRPC (#82)
+
+O cliente apresenta certificado ao `agent_bridge` e valida o servidor pela CA:
+
+```bash
+bash scripts/gen-grpc-certs.sh
+# Gera certs/grpc/{ca,server,client}. O .env.example aponta para esses caminhos.
+SAAS_GRPC_HOST=agent_bridge:50051
+GRPC_CA_CERT_PATH=../../../certs/grpc/ca/ca.crt
+GRPC_CLIENT_CERT_PATH=../../../certs/grpc/client/client.crt
+GRPC_CLIENT_KEY_PATH=../../../certs/grpc/client/client.key
+```
+
+Os três caminhos devem ser configurados juntos. Com nenhum deles o canal cai
+para `insecure_channel` (apenas dev); com apenas parte deles o startup falha.
+O log do `agent_bridge` registra `Handshake mTLS confirmado: peer=linx-client-agent`
+a cada chamada autenticada.

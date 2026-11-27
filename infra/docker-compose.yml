@@ -7,7 +7,7 @@ services:
       - ./configuration/chirpstack:/etc/chirpstack
       # CA do broker para as conexões ssl:// do integration e gateway backend
       # (#81). Somente leitura; a chave da CA nunca é montada.
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
     depends_on:
       - postgres
       - mosquitto
@@ -31,7 +31,7 @@ services:
     volumes:
       - ./configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
       # CA do broker para o MQTT over TLS (#81).
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
     environment:
       - INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/event/{{ .EventType }}
       - INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE=au915_0/gateway/{{ .GatewayID }}/state/{{ .StateType }}
@@ -52,7 +52,7 @@ services:
     volumes:
       - ./configuration/chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
       # CA do broker para o MQTT over TLS (#81).
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
     environment:
       - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${MQTT_CHIRPSTACK_USER:?defina em infra/.env (veja .env.example)}
       - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${MQTT_CHIRPSTACK_PASSWORD:?defina em infra/.env (veja .env.example)}
@@ -90,17 +90,16 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      # TLS (#81): 8883 publicada somente em loopback; ChirpStack, bridge e
-      # routing alcançam o broker pela rede interna, não pela porta do host.
-      # A 1883 plaintext não existe mais (listener removido no mosquitto.conf).
-      - "127.0.0.1:8883:8883"
+      # TLS (#81): 8883 em loopback; o listener plaintext 1883 nao existe.
+      - "127.0.0.1:${MQTT_HOST_PORT:-8883}:8883"
     volumes:
       # config/ traz mosquitto.conf + mosquitto.passwd + mosquitto.acl
       # (gerados por infra/scripts/gen-mosquitto-passwd.sh). Read-only.
       - ./configuration/mosquitto/config/:/mosquitto/config/:ro
-      # CA + certificado de servidor gerados por gen-mosquitto-certs.sh (#81).
-      # A ca.key fica fora do container.
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      # Somente os arquivos que o broker usa: ca.key nunca e montada (#81).
+      - ./configuration/mosquitto/certs/ca.crt:/mosquitto/certs/ca.crt:ro
+      - ./configuration/mosquitto/certs/server.crt:/mosquitto/certs/server.crt:ro
+      - ./configuration/mosquitto/certs/server.key:/mosquitto/certs/server.key:ro
     depends_on:
       mosquitto-init:
         condition: service_completed_successfully
@@ -124,6 +123,8 @@ services:
         [ -f /mosquitto/certs/server.crt ] &&
         [ -f /mosquitto/certs/server.key ] ||
         { echo "ERROR: certificados TLS ausentes; rode infra/scripts/gen-mosquitto-certs.sh" >&2; exit 1; } &&
+        chown 1883:1883 /mosquitto/certs/server.key &&
+        chmod 0640 /mosquitto/certs/server.key &&
         { [ -f /mosquitto/config/mosquitto.passwd ] || {
         mosquitto_passwd -c -b /mosquitto/config/mosquitto.passwd
         "$$MQTT_CHIRPSTACK_USER" "$$MQTT_CHIRPSTACK_PASSWORD" &&
@@ -145,14 +146,16 @@ services:
       - MQTT_HEALTHCHECK_PASSWORD=${MQTT_HEALTHCHECK_PASSWORD:?defina em infra/.env (veja .env.example)}
     volumes:
       - ./configuration/mosquitto/config/:/mosquitto/config/
-      # Necessario para validar os certificados antes de subir o broker (#81).
-      - ./configuration/mosquitto/certs/:/mosquitto/certs/:ro
+      # O init ajusta o owner da chave do servidor para uid 1883 (#81). A
+      # ca.key fica em configuration/mosquitto/private/, fora deste bind.
+      - ./configuration/mosquitto/certs/:/mosquitto/certs/
 
 networks:
-  # Rede compartilhada com o stack deploy. Criada por
-  # deploy/scripts/bootstrap-network.sh antes de subir os stacks.
+  # Rede compartilhada entre os stacks. Criada por
+  # scripts/bootstrap-network.sh antes de subir os stacks.
   linx-network:
     external: true
+    name: ${LINX_NETWORK:-linx-network}
 
 volumes:
   postgresqldata:
